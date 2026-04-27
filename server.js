@@ -11,7 +11,7 @@ const STAFF_NUMBER = process.env.STAFF_NUMBER;
 
 const BUSINESS_NAME_SPACED = "I C O N I C   H A I R   C A R E";
 const BUSINESS_NAME = "Iconic Hair Care";
-const CALL_NUMBER = "+971 4 396 3333";
+const CALL_NUMBER = "04 396 3333";
 const WEBSITE = "https://iconichaircare.com";
 
 /* حساب توقيت دبي */
@@ -120,14 +120,14 @@ app.post("/webhook", async (req, res) => {
         "تم استلام رسالتك بنجاح، وسيقوم فريقنا بالرد عليك في أقرب وقت خلال ساعات العمل.\n\n" +
         "ساعات العمل:\n" +
         "10:00 صباحاً إلى 7:00 مساءً\n\n" +
-        `📞 للاتصال المباشر:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Thank you for contacting us.\n\n" +
         "Your message has been received successfully, and our team will get back to you as soon as possible during working hours.\n\n" +
         "Working hours:\n" +
         "10:00 AM to 7:00 PM\n\n" +
-        `📞 Direct call:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
     /* 1 — حجز استشارة */
@@ -136,12 +136,12 @@ app.post("/webhook", async (req, res) => {
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "تم استلام طلب الاستشارة الخاص بك ✅\n\n" +
         "سيقوم أحد أعضاء فريقنا بالتواصل معك قريباً لمعرفة التفاصيل ومساعدتك في اختيار الخدمة الأنسب.\n\n" +
-        `📞 للاتصال المباشر:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Your consultation request has been received ✅\n\n" +
-        "One of our team members will contact you shortly to understand your needs and guide you to the most suitable service.\n\n" +
-        `📞 Direct call:\n${CALL_NUMBER}`;
+        "A member of our team will contact you shortly to understand your needs and guide you to the most suitable service.\n\n" +
+        `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
     /* 2 — الخدمات */
@@ -164,7 +164,7 @@ app.post("/webhook", async (req, res) => {
         "للمساعدة بشكل أدق، اختر:\n\n" +
         "1️⃣ حجز استشارة\n" +
         "6️⃣ التحدث مع أحد أعضاء الفريق\n\n" +
-        `📞 للاتصال المباشر:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "At Iconic Hair Care, we provide personalized hair care solutions based on your needs.\n\n" +
@@ -176,7 +176,7 @@ app.post("/webhook", async (req, res) => {
         "For better assistance, please choose:\n\n" +
         "1️⃣ Book a consultation\n" +
         "6️⃣ Talk to our team\n\n" +
-        `📞 Direct call:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
     /* 3 — الأسعار والعروض */
@@ -201,7 +201,7 @@ app.post("/webhook", async (req, res) => {
         "اختر:\n" +
         "1️⃣ حجز استشارة\n" +
         "6️⃣ التحدث مع أحد أعضاء الفريق\n\n" +
-        `📞 للاتصال المباشر:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Prices vary depending on the service and your specific needs.\n\n" +
@@ -209,7 +209,7 @@ app.post("/webhook", async (req, res) => {
         "Please choose:\n" +
         "1️⃣ Book a consultation\n" +
         "6️⃣ Talk to our team\n\n" +
-        `📞 Direct call:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
     /* 4 — صور ونتائج */
@@ -226,18 +226,14 @@ app.post("/webhook", async (req, res) => {
     ) {
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "يمكن لفريقنا مشاركة التفاصيل المناسبة والنتائج المتاحة حسب نوع الخدمة المطلوبة.\n\n" +
-        "للحصول على توجيه أدق، اختر:\n\n" +
-        "1️⃣ حجز استشارة\n" +
-        "6️⃣ التحدث مع أحد أعضاء الفريق\n\n" +
-        `📞 للاتصال المباشر:\n${CALL_NUMBER}\n\n` +
+        "تم استلام طلبك بخصوص الصور والنتائج ✅\n\n" +
+        "سيقوم أحد أعضاء فريقنا بالتواصل معك ومشاركة التفاصيل المناسبة حسب الخدمة المطلوبة.\n\n" +
+        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Our team can share suitable details and available results based on the service you are interested in.\n\n" +
-        "For better guidance, please choose:\n\n" +
-        "1️⃣ Book a consultation\n" +
-        "6️⃣ Talk to our team\n\n" +
-        `📞 Direct call:\n${CALL_NUMBER}`;
+        "Your request for before / after results has been received ✅\n\n" +
+        "A member of our team will contact you shortly and share the suitable details based on the service you are interested in.\n\n" +
+        `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
     /* 5 — المواقع وساعات العمل */
@@ -261,7 +257,7 @@ app.post("/webhook", async (req, res) => {
         "https://maps.google.com/?q=Iconic+Hair+Care+Abu+Dhabi\n\n" +
         "ساعات العمل:\n" +
         "10:00 صباحاً إلى 7:00 مساءً\n\n" +
-        `📞 للاتصال المباشر:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
         `الموقع الرسمي:\n${WEBSITE}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
@@ -272,7 +268,7 @@ app.post("/webhook", async (req, res) => {
         "https://maps.google.com/?q=Iconic+Hair+Care+Abu+Dhabi\n\n" +
         "Working hours:\n" +
         "10:00 AM to 7:00 PM\n\n" +
-        `📞 Direct call:\n${CALL_NUMBER}\n\n` +
+        `📞 To call us directly:\n${CALL_NUMBER}\n\n` +
         `Website:\n${WEBSITE}`;
     }
 
@@ -281,13 +277,13 @@ app.post("/webhook", async (req, res) => {
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "تم استلام طلبك بنجاح ✅\n\n" +
-        "سيتم تحويل طلبك إلى أحد أعضاء فريقنا، وسنتواصل معك في أقرب وقت ممكن.\n\n" +
-        `📞 للاتصال المباشر:\n${CALL_NUMBER}\n\n` +
+        "سيقوم أحد أعضاء فريقنا بالتواصل معك في أقرب وقت ممكن.\n\n" +
+        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Your request has been received successfully ✅\n\n" +
-        "Your request has been forwarded to our team, and we will contact you as soon as possible.\n\n" +
-        `📞 Direct call:\n${CALL_NUMBER}`;
+        "A member of our team will contact you shortly.\n\n" +
+        `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
     /* القائمة الرئيسية */
@@ -303,7 +299,7 @@ app.post("/webhook", async (req, res) => {
         "4️⃣ صور ونتائج قبل/بعد\n" +
         "5️⃣ الموقع وساعات العمل\n" +
         "6️⃣ التحدث مع أحد أعضاء الفريق\n\n" +
-        `📞 للاتصال المباشر:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Welcome to Iconic Hair Care.\n\n" +
@@ -315,35 +311,60 @@ app.post("/webhook", async (req, res) => {
         "4️⃣ Before / after results\n" +
         "5️⃣ Location and working hours\n" +
         "6️⃣ Talk to our team\n\n" +
-        `📞 Direct call:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
     /* إرسال الرد للعميل */
     await sendWhatsAppMessage(from, replyText);
 
-    /* إشعار الموظف عند طلب استشارة أو موظف */
-    if (text === "1" || text === "١" || text === "6" || text === "٦") {
+    /* إشعار الموظف عند طلب استشارة أو صور قبل/بعد أو موظف */
+    const shouldNotifyStaff =
+      text === "1" || text === "١" ||
+      text === "4" || text === "٤" ||
+      text === "6" || text === "٦";
+
+    if (shouldNotifyStaff) {
       try {
-        const staffBody =
-          text === "1" || text === "١"
-            ? "طلب استشارة جديد من واتساب\n\n" +
-              "رقم العميل:\n" +
-              from +
-              "\n\n" +
-              "يرجى التواصل مع العميل في أقرب وقت.\n\n" +
-              "------------------------------\n\n" +
-              "New WhatsApp Consultation Request\n\n" +
-              "Customer Number:\n" +
-              from
-            : "طلب تواصل مباشر مع موظف من واتساب\n\n" +
-              "رقم العميل:\n" +
-              from +
-              "\n\n" +
-              "العميل يرغب بالتحدث مع أحد أعضاء الفريق.\n\n" +
-              "------------------------------\n\n" +
-              "Direct Staff Request from WhatsApp\n\n" +
-              "Customer Number:\n" +
-              from;
+        let staffBody = "";
+
+        if (text === "1" || text === "١") {
+          staffBody =
+            "طلب استشارة جديد من واتساب\n\n" +
+            "رقم العميل:\n" +
+            from +
+            "\n\n" +
+            "يرجى التواصل مع العميل في أقرب وقت.\n\n" +
+            "------------------------------\n\n" +
+            "New WhatsApp Consultation Request\n\n" +
+            "Customer Number:\n" +
+            from;
+        } else if (text === "4" || text === "٤") {
+          staffBody =
+            "طلب صور ونتائج قبل/بعد من واتساب\n\n" +
+            "رقم العميل:\n" +
+            from +
+            "\n\n" +
+            "يرجى التواصل مع العميل ومشاركة التفاصيل المناسبة.\n\n" +
+            "------------------------------\n\n" +
+            "Before / After Results Request from WhatsApp\n\n" +
+            "Customer Number:\n" +
+            from +
+            "\n\n" +
+            "Please contact the customer and share the suitable details.";
+        } else {
+          staffBody =
+            "طلب تواصل مباشر مع موظف من واتساب\n\n" +
+            "رقم العميل:\n" +
+            from +
+            "\n\n" +
+            "العميل يرغب بالتحدث مع أحد أعضاء الفريق.\n\n" +
+            "------------------------------\n\n" +
+            "Direct Staff Request from WhatsApp\n\n" +
+            "Customer Number:\n" +
+            from +
+            "\n\n" +
+            "The customer would like to speak with a team member.";
+        }
 
         await sendWhatsAppMessage(STAFF_NUMBER, staffBody);
       } catch (staffError) {
