@@ -212,30 +212,6 @@ app.post("/webhook", async (req, res) => {
         `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
-    /* 4 — صور ونتائج */
-    else if (
-      text === "4" ||
-      text === "٤" ||
-      text.includes("before") ||
-      text.includes("after") ||
-      text.includes("results") ||
-      text.includes("نتائج") ||
-      text.includes("صور") ||
-      text.includes("قبل") ||
-      text.includes("بعد")
-    ) {
-      replyText =
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "تم استلام طلبك بخصوص الصور والنتائج ✅\n\n" +
-        "سيقوم أحد أعضاء فريقنا بالتواصل معك ومشاركة التفاصيل المناسبة حسب الخدمة المطلوبة.\n\n" +
-        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
-        "------------------------------\n\n" +
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Your request for before / after results has been received ✅\n\n" +
-        "A member of our team will contact you shortly and share the suitable details based on the service you are interested in.\n\n" +
-        `📞 To call us directly:\n${CALL_NUMBER}`;
-    }
-
     /* 5 — المواقع وساعات العمل */
     else if (
       text === "5" ||
@@ -296,7 +272,6 @@ app.post("/webhook", async (req, res) => {
         "1️⃣ حجز استشارة\n" +
         "2️⃣ خدمات الشعر والتكثيف\n" +
         "3️⃣ الأسعار والعروض\n" +
-        "4️⃣ صور ونتائج قبل/بعد\n" +
         "5️⃣ الموقع وساعات العمل\n" +
         "6️⃣ التحدث مع أحد أعضاء الفريق\n\n" +
         `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
@@ -308,7 +283,6 @@ app.post("/webhook", async (req, res) => {
         "1️⃣ Book a consultation\n" +
         "2️⃣ Hair care & hair volume services\n" +
         "3️⃣ Prices and offers\n" +
-        "4️⃣ Before / after results\n" +
         "5️⃣ Location and working hours\n" +
         "6️⃣ Talk to our team\n\n" +
         `📞 To call us directly:\n${CALL_NUMBER}`;
@@ -317,10 +291,9 @@ app.post("/webhook", async (req, res) => {
     /* إرسال الرد للعميل */
     await sendWhatsAppMessage(from, replyText);
 
-    /* إشعار الموظف عند طلب استشارة أو صور قبل/بعد أو موظف */
+    /* إشعار الموظف عند طلب استشارة أو موظف */
     const shouldNotifyStaff =
       text === "1" || text === "١" ||
-      text === "4" || text === "٤" ||
       text === "6" || text === "٦";
 
     if (shouldNotifyStaff) {
@@ -338,19 +311,6 @@ app.post("/webhook", async (req, res) => {
             "New WhatsApp Consultation Request\n\n" +
             "Customer Number:\n" +
             from;
-        } else if (text === "4" || text === "٤") {
-          staffBody =
-            "طلب صور ونتائج قبل/بعد من واتساب\n\n" +
-            "رقم العميل:\n" +
-            from +
-            "\n\n" +
-            "يرجى التواصل مع العميل ومشاركة التفاصيل المناسبة.\n\n" +
-            "------------------------------\n\n" +
-            "Before / After Results Request from WhatsApp\n\n" +
-            "Customer Number:\n" +
-            from +
-            "\n\n" +
-            "Please contact the customer and share the suitable details.";
         } else {
           staffBody =
             "طلب تواصل مباشر مع موظف من واتساب\n\n" +
