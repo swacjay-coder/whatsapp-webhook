@@ -10,7 +10,6 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
 
 const BUSINESS_NAME_SPACED = "I C O N I C   H A I R   C A R E";
-const BUSINESS_NAME = "Iconic Hair Care";
 const CALL_NUMBER = "04 396 3333";
 const WEBSITE = "https://iconichaircare.com";
 
@@ -31,6 +30,11 @@ function normalizeText(value) {
     .toString()
     .toLowerCase()
     .trim();
+}
+
+/* رابط محادثة مباشر مع العميل */
+function getCustomerChatLink(customerNumber) {
+  return `https://wa.me/${customerNumber}`;
 }
 
 /* إرسال رسالة واتساب */
@@ -124,7 +128,7 @@ app.post("/webhook", async (req, res) => {
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Thank you for contacting us.\n\n" +
-        "Your message has been received successfully, and our team will get back to you as soon as possible during working hours.\n\n" +
+        "Your message has been received successfully. A member of our team will get back to you as soon as possible during working hours.\n\n" +
         "Working hours:\n" +
         "10:00 AM to 7:00 PM\n\n" +
         `📞 To call us directly:\n${CALL_NUMBER}`;
@@ -170,12 +174,12 @@ app.post("/webhook", async (req, res) => {
         "At Iconic Hair Care, we provide personalized hair care solutions based on your needs.\n\n" +
         "Our services include:\n" +
         "• Hair and scalp consultation\n" +
-        "• Natural-looking hair volume solutions\n" +
+        "• Natural-looking volume solutions\n" +
         "• Personalized hair care guidance\n" +
         "• Professional support from our team\n\n" +
         "For better assistance, please choose:\n\n" +
         "1️⃣ Book a consultation\n" +
-        "6️⃣ Talk to our team\n\n" +
+        "6️⃣ Speak with our team\n\n" +
         `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
@@ -208,7 +212,7 @@ app.post("/webhook", async (req, res) => {
         "We recommend booking a short consultation so our team can guide you to the most suitable option and explain the details clearly.\n\n" +
         "Please choose:\n" +
         "1️⃣ Book a consultation\n" +
-        "6️⃣ Talk to our team\n\n" +
+        "6️⃣ Speak with our team\n\n" +
         `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
@@ -278,13 +282,13 @@ app.post("/webhook", async (req, res) => {
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Welcome to Iconic Hair Care.\n\n" +
-        "We’ll be happy to assist you and guide you to the most suitable service based on your needs.\n\n" +
+        "Our team will be happy to guide you to the most suitable service based on your needs.\n\n" +
         "Please choose one of the following options:\n\n" +
         "1️⃣ Book a consultation\n" +
-        "2️⃣ Hair care & hair volume services\n" +
-        "3️⃣ Prices and offers\n" +
-        "5️⃣ Location and working hours\n" +
-        "6️⃣ Talk to our team\n\n" +
+        "2️⃣ Hair care & volume solutions\n" +
+        "3️⃣ Prices & offers\n" +
+        "5️⃣ Locations & working hours\n" +
+        "6️⃣ Speak with our team\n\n" +
         `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
@@ -298,32 +302,50 @@ app.post("/webhook", async (req, res) => {
 
     if (shouldNotifyStaff) {
       try {
+        const customerChatLink = getCustomerChatLink(from);
+
         let staffBody = "";
 
         if (text === "1" || text === "١") {
           staffBody =
-            "طلب استشارة جديد من واتساب\n\n" +
+            "طلب استشارة جديد عبر واتساب\n\n" +
             "رقم العميل:\n" +
             from +
+            "\n\n" +
+            "رابط محادثة العميل:\n" +
+            customerChatLink +
             "\n\n" +
             "يرجى التواصل مع العميل في أقرب وقت.\n\n" +
             "------------------------------\n\n" +
             "New WhatsApp Consultation Request\n\n" +
             "Customer Number:\n" +
-            from;
+            from +
+            "\n\n" +
+            "Open customer chat:\n" +
+            customerChatLink +
+            "\n\n" +
+            "Please contact the customer as soon as possible.";
         } else {
           staffBody =
-            "طلب تواصل مباشر مع موظف من واتساب\n\n" +
+            "طلب تواصل مباشر مع أحد أعضاء الفريق عبر واتساب\n\n" +
             "رقم العميل:\n" +
             from +
             "\n\n" +
-            "العميل يرغب بالتحدث مع أحد أعضاء الفريق.\n\n" +
+            "رابط محادثة العميل:\n" +
+            customerChatLink +
+            "\n\n" +
+            "العميل يرغب بالتحدث مع أحد أعضاء الفريق.\n" +
+            "يرجى التواصل معه في أقرب وقت.\n\n" +
             "------------------------------\n\n" +
-            "Direct Staff Request from WhatsApp\n\n" +
+            "Direct Team Contact Request via WhatsApp\n\n" +
             "Customer Number:\n" +
             from +
             "\n\n" +
-            "The customer would like to speak with a team member.";
+            "Open customer chat:\n" +
+            customerChatLink +
+            "\n\n" +
+            "The customer would like to speak with a member of our team.\n" +
+            "Please contact the customer as soon as possible.";
         }
 
         await sendWhatsAppMessage(STAFF_NUMBER, staffBody);
