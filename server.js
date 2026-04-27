@@ -5,17 +5,56 @@ const app = express();
 app.use(express.json());
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-
-/* ضع التوكن الخاص بك هنا */
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
-/* رقم الهاتف ID */
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
-/* رقم الموظف */
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
+
+/* حساب وقت دبي */
+function getDubaiHour() {
+  const now = new Date();
+
+  const dubaiTime = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Dubai" })
+  );
+
+  return dubaiTime.getHours();
+}
+
+/* إرسال رسالة واتساب */
+async function sendWhatsAppMessage(to, body) {
+  const url = `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`;
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: { body }
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    console.log("WhatsApp API send failed:");
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log("WhatsApp message sent successfully:");
+    console.log(JSON.stringify(result, null, 2));
+  }
+
+  return result;
+}
+
 /* تحقق من Webhook */
-
 app.get('/webhook', (req, res) => {
-
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
@@ -26,18 +65,14 @@ app.get('/webhook', (req, res) => {
   }
 
   return res.sendStatus(403);
-
 });
 
 /* استقبال الرسائل */
-
 app.post('/webhook', async (req, res) => {
-
   console.log("New webhook payload:");
   console.log(JSON.stringify(req.body, null, 2));
 
   try {
-
     const message =
       req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
@@ -50,18 +85,14 @@ app.post('/webhook', async (req, res) => {
       .toLowerCase()
       .trim();
 
-    const url =
-      `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`;
+    const hour = getDubaiHour();
 
-    const now = new Date();
-    const hour = now.getHours();
+    console.log("Dubai hour:", hour);
 
     let replyText = "";
 
-    /* خارج أوقات العمل */
-
+    /* خارج أوقات العمل - توقيت دبي */
     if (hour < 10 || hour >= 19) {
-
       replyText =
         "شكراً لتواصلك مع Iconic Hair Care ✨\n\n" +
         "يسعدنا خدمتك خلال ساعات العمل:\n" +
@@ -72,43 +103,34 @@ app.post('/webhook', async (req, res) => {
         "We are available during our working hours:\n" +
         "10:00 AM to 7:00 PM\n\n" +
         "Your message has been received, and our team will get back to you as soon as possible during working hours.";
-
     }
 
     /* 1 — طلب استشارة */
-
     else if (text === "1") {
-
       replyText =
         "تم استلام طلب الاستشارة الخاص بك ✅\n\n" +
         "سيقوم أحد أعضاء فريقنا بالتواصل معك قريباً لمساعدتك بشكل مناسب.\n\n" +
         "------------------------------\n\n" +
         "Your consultation request has been received ✅\n\n" +
         "One of our team members will contact you shortly to assist you.";
-
     }
 
     /* 6 — التحدث مع موظف */
-
     else if (text === "6") {
-
       replyText =
         "تم استلام طلبك بنجاح ✅\n\n" +
         "سيتم تحويل طلبك إلى أحد موظفينا، وسنتواصل معك في أقرب وقت ممكن.\n\n" +
         "------------------------------\n\n" +
         "Your request has been received successfully ✅\n\n" +
         "It has been forwarded to one of our staff members, and we will contact you as soon as possible.";
-
     }
 
     /* 5 — المواقع */
-
     else if (
       text === "5" ||
       text.includes("location") ||
       text.includes("موقع")
     ) {
-
       replyText =
         "فروع Iconic Hair Care:\n\n" +
         "دبي:\n" +
@@ -125,11 +147,9 @@ app.post('/webhook', async (req, res) => {
         "https://maps.google.com/?q=Iconic+Hair+Care+Abu+Dhabi\n\n" +
         "Working Hours:\n" +
         "10:00 AM to 7:00 PM";
-
     }
 
     /* الأسعار */
-
     else if (
       text.includes("price") ||
       text.includes("prices") ||
@@ -137,7 +157,6 @@ app.post('/webhook', async (req, res) => {
       text.includes("سعر") ||
       text.includes("الاسعار")
     ) {
-
       replyText =
         "تختلف الأسعار حسب نوع الخدمة والحالة المطلوبة.\n\n" +
         "يسعدنا مساعدتك في اختيار الخدمة المناسبة لك.\n\n" +
@@ -150,13 +169,10 @@ app.post('/webhook', async (req, res) => {
         "Please select one of the following options:\n\n" +
         "1️⃣ Consultation\n" +
         "6️⃣ Talk to Staff";
-
     }
 
     /* القائمة الرئيسية */
-
     else {
-
       replyText =
         "مرحباً بك في Iconic Hair Care ✨\n\n" +
         "يسعدنا خدمتك ومساعدتك في اختيار الأنسب لك.\n\n" +
@@ -171,42 +187,16 @@ app.post('/webhook', async (req, res) => {
         "1️⃣ Consultation\n" +
         "5️⃣ Locations and Working Hours\n" +
         "6️⃣ Talk to Staff";
-
     }
 
     /* إرسال الرد للعميل */
-
-    const customerPayload = {
-
-      messaging_product: "whatsapp",
-      to: from,
-      type: "text",
-      text: { body: replyText }
-
-    };
-
-    await fetch(url, {
-
-      method: "POST",
-
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
-        "Content-Type": "application/json"
-      },
-
-      body: JSON.stringify(customerPayload)
-
-    });
+    await sendWhatsAppMessage(from, replyText);
 
     /* إشعار الموظف */
-
     if (text === "1" || text === "6") {
-
       try {
-
         const staffBody =
           text === "1"
-
             ? "طلب استشارة جديد\n\n" +
               "رقم العميل:\n" +
               from +
@@ -216,7 +206,6 @@ app.post('/webhook', async (req, res) => {
               "New Consultation Request\n\n" +
               "Customer Number:\n" +
               from
-
             : "طلب تواصل مباشر مع موظف\n\n" +
               "رقم العميل:\n" +
               from +
@@ -227,58 +216,24 @@ app.post('/webhook', async (req, res) => {
               "Customer Number:\n" +
               from;
 
-        const staffPayload = {
-
-          messaging_product: "whatsapp",
-          to: STAFF_NUMBER,
-          type: "text",
-          text: { body: staffBody }
-
-        };
-
-        await fetch(url, {
-
-          method: "POST",
-
-          headers: {
-            Authorization: `Bearer ${ACCESS_TOKEN}`,
-            "Content-Type": "application/json"
-          },
-
-          body: JSON.stringify(staffPayload)
-
-        });
-
-      }
-
-      catch (staffError) {
-
+        await sendWhatsAppMessage(STAFF_NUMBER, staffBody);
+      } catch (staffError) {
         console.log("Staff notification failed:");
         console.log(staffError);
-
       }
-
     }
 
     return res.sendStatus(200);
-
-  }
-
-  catch (error) {
-
-    console.error("Error sending reply:");
+  } catch (error) {
+    console.error("Error handling webhook:");
     console.error(error);
 
     return res.sendStatus(500);
-
   }
-
 });
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-
   console.log(`Server running on port ${PORT}`);
-
 });
