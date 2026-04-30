@@ -191,6 +191,23 @@ app.post("/api/send", protectInbox, async (req, res) => {
   }
 });
 
+
+app.post("/api/status", protectInbox, (req, res) => {
+  const phone = (req.body?.phone || "").toString().trim();
+  const status = (req.body?.status || "").toString().trim();
+
+  if (!phone || !status) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing phone or status"
+    });
+  }
+
+  setConversationStatus(phone, status);
+
+  return res.json({ ok: true });
+});
+
 app.get("/inbox", protectInbox, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
 
@@ -199,146 +216,156 @@ app.get("/inbox", protectInbox, (req, res) => {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Iconic WhatsApp Inbox</title>
+  <title>Iconic Hair Care Team Inbox</title>
   <style>
-    body { margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; color: #111827; }
-    header { background: #0f172a; color: white; padding: 16px 22px; font-size: 20px; font-weight: 700; }
-    .wrap { display: grid; grid-template-columns: 1fr 360px; gap: 16px; padding: 16px; }
-    .card { background: white; border-radius: 14px; box-shadow: 0 2px 12px rgba(15,23,42,.08); overflow: hidden; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; font-size: 14px; }
-    th { background: #f8fafc; color: #475569; }
-    .customer { color: #047857; font-weight: 700; }
-    .bot { color: #2563eb; font-weight: 700; }
-    .staff { color: #7c3aed; font-weight: 700; }
-    .status { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #e0f2fe; color: #075985; font-size: 12px; }
-    textarea, input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; margin-top: 6px; font-size: 14px; }
-    label { font-size: 13px; color: #475569; font-weight: 700; }
-    button { width: 100%; padding: 12px; border: 0; border-radius: 10px; background: #16a34a; color: white; font-weight: 700; cursor: pointer; margin-top: 10px; }
-    .small { color: #64748b; font-size: 12px; padding: 10px 12px; }
-    .msg { max-width: 520px; white-space: pre-wrap; }
-    @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+    :root {
+      --bg: #eef2f6;
+      --card: #ffffff;
+      --ink: #101828;
+      --muted: #667085;
+      --line: #e4e7ec;
+      --green: #128c4a;
+      --green-dark: #0b6f3a;
+      --shadow: 0 18px 50px rgba(16, 24, 40, .08);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, Arial, sans-serif; background: radial-gradient(circle at top left, #dff7ea 0, transparent 30%), var(--bg); color: var(--ink); }
+    header { background: linear-gradient(135deg, #0b1f18, #123b2a 52%, #0f172a); color: white; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 10px 35px rgba(15, 23, 42, .18); }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo { width: 44px; height: 44px; border-radius: 14px; background: white; color: #101828; display: grid; place-items: center; font-weight: 900; letter-spacing: -1px; box-shadow: 0 10px 25px rgba(0,0,0,.16); }
+    .brand h1 { margin: 0; font-size: 19px; line-height: 1.1; }
+    .brand p { margin: 4px 0 0; color: rgba(255,255,255,.75); font-size: 12px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .pill { border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.1); padding: 8px 10px; border-radius: 999px; color: white; font-size: 12px; }
+    .container { padding: 16px; max-width: 1500px; margin: 0 auto; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .stat { background: rgba(255,255,255,.86); backdrop-filter: blur(10px); border: 1px solid rgba(228,231,236,.9); border-radius: var(--radius); padding: 14px; box-shadow: 0 10px 30px rgba(16,24,40,.05); }
+    .stat .label { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .stat .value { margin-top: 5px; font-size: 25px; font-weight: 900; letter-spacing: -.5px; }
+    .layout { display: grid; grid-template-columns: 350px minmax(0, 1fr) 370px; gap: 14px; align-items: stretch; }
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); min-height: 680px; overflow: hidden; }
+    .panel-head { padding: 14px; border-bottom: 1px solid var(--line); background: #fbfcfd; }
+    .panel-head h2 { margin: 0; font-size: 15px; }
+    .panel-head p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+    .toolbar { display: grid; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); }
+    input, textarea, select { width: 100%; border: 1px solid #d0d5dd; border-radius: 12px; padding: 11px 12px; font-size: 14px; outline: none; background: white; color: var(--ink); }
+    input:focus, textarea:focus, select:focus { border-color: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,.10); }
+    .filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .customer-list { overflow-y: auto; max-height: 560px; padding: 8px; }
+    .customer-card { border: 1px solid transparent; border-radius: 16px; padding: 12px; cursor: pointer; margin-bottom: 8px; transition: .15s ease; background: #fff; }
+    .customer-card:hover { background: #f7fbf8; border-color: #d9f0e1; }
+    .customer-card.active { background: #ecfdf3; border-color: #86efac; }
+    .customer-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .phone { font-weight: 900; font-size: 14px; }
+    .preview { color: var(--muted); font-size: 12px; margin-top: 8px; line-height: 1.35; max-height: 36px; overflow: hidden; }
+    .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    .tag { font-size: 11px; border-radius: 999px; padding: 5px 8px; font-weight: 800; background: #f2f4f7; color: #344054; }
+    .tag.green { background: #dcfae6; color: #067647; }
+    .tag.blue { background: #dbeafe; color: #1d4ed8; }
+    .tag.purple { background: #ede9fe; color: #6d28d9; }
+    .tag.amber { background: #fef3c7; color: #92400e; }
+    .tag.red { background: #fee4e2; color: #b42318; }
+    .chat-panel { display: flex; flex-direction: column; }
+    .conversation-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .chat-area { flex: 1; padding: 18px; overflow-y: auto; background: linear-gradient(180deg, #f8fafc, #ffffff); max-height: 560px; min-height: 560px; }
+    .empty { height: 100%; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 30px; }
+    .bubble-row { display: flex; margin-bottom: 12px; }
+    .bubble-row.customer { justify-content: flex-start; }
+    .bubble-row.bot, .bubble-row.staff { justify-content: flex-end; }
+    .bubble { max-width: min(680px, 82%); border-radius: 18px; padding: 11px 13px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; border: 1px solid var(--line); box-shadow: 0 5px 18px rgba(16,24,40,.05); }
+    .bubble.customer { background: #ffffff; }
+    .bubble.bot { background: #eff6ff; border-color: #bfdbfe; }
+    .bubble.staff { background: #ecfdf3; border-color: #bbf7d0; }
+    .bubble small { display: block; margin-bottom: 6px; color: var(--muted); font-weight: 800; }
+    .reply-panel { padding: 14px; }
+    .reply-panel h3 { margin: 0 0 10px; font-size: 16px; }
+    label { display: block; color: #344054; font-size: 12px; font-weight: 900; margin: 12px 0 6px; }
+    button { border: 0; border-radius: 12px; padding: 12px 14px; font-weight: 900; cursor: pointer; background: var(--green); color: white; transition: .15s ease; width: 100%; }
+    button:hover { background: var(--green-dark); transform: translateY(-1px); }
+    button.secondary { background: #f2f4f7; color: #344054; border: 1px solid #d0d5dd; }
+    button.secondary:hover { background: #e4e7ec; }
+    .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .quick-grid button { padding: 10px; font-size: 12px; }
+    .result { min-height: 20px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .note { font-size: 12px; color: var(--muted); line-height: 1.45; background: #f8fafc; border: 1px dashed #d0d5dd; border-radius: 14px; padding: 10px; }
+    @media (max-width: 1180px) { .layout { grid-template-columns: 320px 1fr; } .reply-panel-wrap { grid-column: 1 / -1; } }
+    @media (max-width: 800px) { .stats { grid-template-columns: repeat(2, 1fr); } .layout { grid-template-columns: 1fr; } header { align-items: flex-start; flex-direction: column; } .panel { min-height: auto; } .chat-area { min-height: 430px; max-height: 430px; } }
   </style>
 </head>
 <body>
-  <header>Iconic Hair Care — Mini WhatsApp Inbox</header>
-  <div class="wrap">
-    <div class="card">
-      <div class="small">Auto refresh every 3 seconds. Open this page to see customer messages, bot replies, and staff replies.</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Phone</th>
-            <th>Branch</th>
-            <th>Sender</th>
-            <th>Message</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="rows">
-          <tr><td colspan="6">Loading...</td></tr>
-        </tbody>
-      </table>
-    </div>
+  <header>
+    <div class="brand"><div class="logo">IC</div><div><h1>Iconic Hair Care Team Inbox</h1><p>Dubai & Abu Dhabi WhatsApp Cloud API inbox</p></div></div>
+    <div class="header-actions"><div class="pill">Dubai: +971 4 396 3333</div><div class="pill">Abu Dhabi: +971 2 562 2778</div><div class="pill" id="lastRefresh">Loading...</div></div>
+  </header>
 
-    <div class="card" style="padding:16px;">
-      <h3>Reply from landline</h3>
-      <p class="small" style="padding:0;">اكتب رقم العميل والرسالة. الرد سيخرج من رقم الأرضي Cloud API.</p>
+  <main class="container">
+    <section class="stats">
+      <div class="stat"><div class="label">Customers</div><div class="value" id="statCustomers">0</div></div>
+      <div class="stat"><div class="label">Messages</div><div class="value" id="statMessages">0</div></div>
+      <div class="stat"><div class="label">Dubai Threads</div><div class="value" id="statDubai">0</div></div>
+      <div class="stat"><div class="label">Abu Dhabi Threads</div><div class="value" id="statAuh">0</div></div>
+    </section>
 
-      <label>Customer phone</label>
-      <input id="to" placeholder="97150xxxxxxx" />
+    <section class="layout">
+      <aside class="panel">
+        <div class="panel-head"><h2>Conversations</h2><p>اختار العميل من القائمة للرد من نفس الفرع.</p></div>
+        <div class="toolbar">
+          <input id="search" placeholder="Search phone, name, message..." oninput="render()" />
+          <div class="filter-row"><select id="branchFilter" onchange="render()"><option value="all">All branches</option><option value="Dubai">Dubai</option><option value="Abu Dhabi">Abu Dhabi</option></select><select id="statusFilter" onchange="render()"><option value="all">All statuses</option><option value="Bot">Bot</option><option value="Consultation Request">Consultation</option><option value="Talk to Team">Talk to Team</option><option value="Human Reply">Human Reply</option><option value="Need Follow-up">Need Follow-up</option><option value="Booked">Booked</option><option value="Closed">Closed</option></select></div>
+        </div>
+        <div id="customerList" class="customer-list"></div>
+      </aside>
 
-      <label style="display:block;margin-top:12px;">Reply from</label>
-      <select id="phoneNumberId" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:10px;margin-top:6px;font-size:14px;">
-        <option value="">Auto — نفس الرقم الذي استقبل رسالة العميل</option>
-        <option value="${DUBAI_PHONE_NUMBER_ID}">Dubai +971 4 396 3333</option>
-        <option value="${ABU_DHABI_PHONE_NUMBER_ID}">Abu Dhabi +971 2 562 2778</option>
-      </select>
+      <section class="panel chat-panel">
+        <div class="panel-head conversation-title"><div><h2 id="chatTitle">Select a conversation</h2><p id="chatSubtitle">No customer selected yet.</p></div><span class="tag green" id="chatBranch">Branch</span></div>
+        <div id="chatArea" class="chat-area"><div class="empty">Select a customer from the left side.<br />اختار عميل من القائمة.</div></div>
+      </section>
 
-      <label style="display:block;margin-top:12px;">Message</label>
-      <textarea id="body" rows="7" placeholder="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟"></textarea>
-
-      <button onclick="sendReply()">Send reply</button>
-      <div id="result" class="small"></div>
-    </div>
-  </div>
+      <aside class="panel reply-panel-wrap">
+        <div class="reply-panel">
+          <h3>Reply Panel</h3>
+          <div class="note">الرد الافتراضي يطلع من نفس رقم الفرع الذي استقبل رسالة العميل. لا تغيّر الفرع إلا إذا كنت متأكد.</div>
+          <label>Customer phone</label><input id="to" placeholder="97150xxxxxxx" />
+          <label>Reply from</label><select id="phoneNumberId"><option value="">Auto — same receiving branch</option><option value="${DUBAI_PHONE_NUMBER_ID}">Dubai +971 4 396 3333</option><option value="${ABU_DHABI_PHONE_NUMBER_ID}">Abu Dhabi +971 2 562 2778</option></select>
+          <label>Status</label><select id="statusSelect" onchange="updateStatusFromSelect()"><option value="Bot">Bot</option><option value="Consultation Request">Consultation Request</option><option value="Talk to Team">Talk to Team</option><option value="Human Reply">Human Reply</option><option value="Need Follow-up">Need Follow-up</option><option value="Booked">Booked</option><option value="Closed">Closed</option></select>
+          <label>Quick replies</label><div class="quick-grid"><button class="secondary" onclick="useTemplate('greeting')">Greeting</button><button class="secondary" onclick="useTemplate('consult')">Consultation</button><button class="secondary" onclick="useTemplate('location')">Location</button><button class="secondary" onclick="useTemplate('followup')">Follow-up</button></div>
+          <label>Message</label><textarea id="body" rows="8" placeholder="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟"></textarea>
+          <div class="button-row"><button onclick="sendReply()">Send reply</button><button class="secondary" onclick="clearComposer()">Clear</button></div><div id="result" class="result"></div>
+        </div>
+      </aside>
+    </section>
+  </main>
 
 <script>
-async function loadMessages() {
-  const res = await fetch('/api/messages');
-  const data = await res.json();
-  const rows = document.getElementById('rows');
-
-  if (!data.messages || data.messages.length === 0) {
-    rows.innerHTML = '<tr><td colspan="6">No messages yet.</td></tr>';
-    return;
-  }
-
-  rows.innerHTML = data.messages.map(m => {
-    const senderClass = m.sender === 'customer' ? 'customer' : (m.sender === 'bot' ? 'bot' : 'staff');
-    return '<tr>' +
-      '<td>' + escapeHtml(m.time) + '</td>' +
-      '<td><button style="width:auto;padding:6px 8px;margin:0;background:#0ea5e9" data-phone="' + escapeHtml(m.phone) + '" data-phone-number-id="' + escapeHtml(m.phoneNumberId || '') + '" onclick="fillPhoneFromButton(this)">' + escapeHtml(m.phone) + '</button></td>' +
-      '<td>' + escapeHtml(m.branch || '') + '</td>' +
-      '<td class="' + senderClass + '">' + escapeHtml(m.sender) + '</td>' +
-      '<td class="msg">' + escapeHtml(m.body) + '</td>' +
-      '<td><span class="status">' + escapeHtml(m.status) + '</span></td>' +
-      '</tr>';
-  }).join('');
-}
-
-function fillPhoneFromButton(button) {
-  fillPhone(button.dataset.phone || '', button.dataset.phoneNumberId || '');
-}
-
-function fillPhone(phone, phoneNumberId) {
-  document.getElementById('to').value = phone;
-  if (phoneNumberId) {
-    document.getElementById('phoneNumberId').value = phoneNumberId;
-  }
-}
-
-function escapeHtml(value) {
-  return (value || '').toString()
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-async function sendReply() {
-  const to = document.getElementById('to').value.trim();
-  const body = document.getElementById('body').value.trim();
-  const phoneNumberId = document.getElementById('phoneNumberId').value.trim();
-  const result = document.getElementById('result');
-
-  result.textContent = 'Sending...';
-
-  const res = await fetch('/api/send', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({to, body, phoneNumberId})
-  });
-
-  const data = await res.json();
-
-  if (data.ok) {
-    result.textContent = 'Sent successfully.';
-    document.getElementById('body').value = '';
-    loadMessages();
-  } else {
-    result.textContent = 'Failed: ' + (data.error || 'Unknown error');
-  }
-}
-
-loadMessages();
-setInterval(loadMessages, 3000);
+let allMessages = [];
+let conversations = [];
+let selectedPhone = '';
+const DUBAI_ID = '${DUBAI_PHONE_NUMBER_ID}';
+const AUH_ID = '${ABU_DHABI_PHONE_NUMBER_ID}';
+function branchClass(branch) { return branch === 'Abu Dhabi' ? 'blue' : 'green'; }
+function statusClass(status) { if (status === 'Consultation Request' || status === 'Talk to Team') return 'amber'; if (status === 'Need Follow-up') return 'red'; if (status === 'Booked') return 'purple'; if (status === 'Closed') return 'green'; return 'blue'; }
+async function loadMessages() { try { const res = await fetch('/api/messages'); const data = await res.json(); allMessages = data.messages || []; buildConversations(); render(); document.getElementById('lastRefresh').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-US'); } catch (e) { document.getElementById('lastRefresh').textContent = 'Connection issue'; } }
+function buildConversations() { const map = {}; allMessages.forEach(function(m) { if (!map[m.phone]) { map[m.phone] = { phone: m.phone, branch: m.branch || 'Dubai', phoneNumberId: m.phoneNumberId || DUBAI_ID, status: m.status || 'Bot', lastTime: m.time || '', lastBody: m.body || '', messages: [] }; } map[m.phone].messages.push(m); if (m.phoneNumberId) map[m.phone].phoneNumberId = m.phoneNumberId; if (m.branch) map[m.phone].branch = m.branch; if (m.status) map[m.phone].status = m.status; }); conversations = Object.values(map).map(function(c) { c.messages.sort(function(a, b) { return new Date(a.time) - new Date(b.time); }); const latest = c.messages[c.messages.length - 1] || {}; c.lastTime = latest.time || c.lastTime; c.lastBody = latest.body || c.lastBody; c.status = latest.status || c.status; c.branch = latest.branch || c.branch; c.phoneNumberId = latest.phoneNumberId || c.phoneNumberId; return c; }); conversations.sort(function(a, b) { return b.messages.length - a.messages.length; }); }
+function renderStats() { const phones = new Set(allMessages.map(function(m) { return m.phone; })); const dubaiPhones = new Set(conversations.filter(function(c) { return c.branch === 'Dubai'; }).map(function(c) { return c.phone; })); const auhPhones = new Set(conversations.filter(function(c) { return c.branch === 'Abu Dhabi'; }).map(function(c) { return c.phone; })); document.getElementById('statCustomers').textContent = phones.size; document.getElementById('statMessages').textContent = allMessages.length; document.getElementById('statDubai').textContent = dubaiPhones.size; document.getElementById('statAuh').textContent = auhPhones.size; }
+function render() { const q = document.getElementById('search').value.toLowerCase().trim(); const branch = document.getElementById('branchFilter').value; const status = document.getElementById('statusFilter').value; let filtered = conversations.filter(function(c) { const hay = (c.phone + ' ' + c.branch + ' ' + c.status + ' ' + c.lastBody).toLowerCase(); if (q && hay.indexOf(q) === -1) return false; if (branch !== 'all' && c.branch !== branch) return false; if (status !== 'all' && c.status !== status) return false; return true; }); renderStats(); renderCustomerList(filtered); renderChat(); }
+function renderCustomerList(list) { const el = document.getElementById('customerList'); if (!list.length) { el.innerHTML = '<div class="empty">No conversations found.</div>'; return; } el.innerHTML = list.map(function(c) { const active = c.phone === selectedPhone ? ' active' : ''; return '<div class="customer-card' + active + '" onclick="selectConversation(\'' + escapeAttr(c.phone) + '\')"><div class="customer-top"><div class="phone">' + escapeHtml(c.phone) + '</div><span class="tag ' + branchClass(c.branch) + '">' + escapeHtml(c.branch) + '</span></div><div class="preview">' + escapeHtml(cleanPreview(c.lastBody)) + '</div><div class="meta"><span class="tag ' + statusClass(c.status) + '">' + escapeHtml(c.status) + '</span><span class="tag">' + escapeHtml(c.messages.length + ' msgs') + '</span></div></div>'; }).join(''); }
+function renderChat() { const c = conversations.find(function(x) { return x.phone === selectedPhone; }); const area = document.getElementById('chatArea'); if (!c) { document.getElementById('chatTitle').textContent = 'Select a conversation'; document.getElementById('chatSubtitle').textContent = 'No customer selected yet.'; document.getElementById('chatBranch').textContent = 'Branch'; area.innerHTML = '<div class="empty">Select a customer from the left side.<br />اختار عميل من القائمة.</div>'; return; } document.getElementById('chatTitle').textContent = c.phone; document.getElementById('chatSubtitle').textContent = c.status + ' • ' + c.lastTime; document.getElementById('chatBranch').textContent = c.branch; document.getElementById('chatBranch').className = 'tag ' + branchClass(c.branch); area.innerHTML = c.messages.map(function(m) { const sender = m.sender || 'bot'; return '<div class="bubble-row ' + sender + '"><div class="bubble ' + sender + '"><small>' + escapeHtml(sender.toUpperCase() + ' • ' + (m.time || '')) + '</small>' + escapeHtml(m.body || '') + '</div></div>'; }).join(''); area.scrollTop = area.scrollHeight; }
+function selectConversation(phone) { selectedPhone = phone; const c = conversations.find(function(x) { return x.phone === phone; }); if (!c) return; document.getElementById('to').value = c.phone; document.getElementById('phoneNumberId').value = c.phoneNumberId || ''; document.getElementById('statusSelect').value = c.status || 'Bot'; render(); }
+function cleanPreview(value) { return (value || '').replace(/\s+/g, ' ').slice(0, 120); }
+function useTemplate(type) { const templates = { greeting: 'مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟\n\nHello, this is Iconic Hair Care team. How can we help you?', consult: 'تم استلام طلب الاستشارة الخاص بك ✅\n\nيرجى إرسال صورة واضحة أو شرح قصير للحالة، وسيقوم الفريق بمساعدتك بالخيار الأنسب.\n\nYour consultation request has been received ✅\nPlease send a clear photo or short description, and our team will guide you to the best option.', location: 'فروعنا:\nDubai: https://maps.google.com/?q=Iconic+Hair+Care+Dubai\nAbu Dhabi: https://maps.google.com/?q=Iconic+Hair+Care+Abu+Dhabi\n\nWorking hours: 10:00 AM to 7:00 PM', followup: 'شكراً لتواصلك مع Iconic Hair Care. هل تحب نحجز لك استشارة أو تفضل أن يتواصل معك أحد أعضاء الفريق؟\n\nThank you for contacting Iconic Hair Care. Would you like to book a consultation, or should our team contact you?' }; document.getElementById('body').value = templates[type] || ''; }
+async function updateStatusFromSelect() { const phone = document.getElementById('to').value.trim(); const status = document.getElementById('statusSelect').value; const result = document.getElementById('result'); if (!phone) return; result.textContent = 'Updating status...'; const res = await fetch('/api/status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({phone: phone, status: status}) }); const data = await res.json(); if (data.ok) { result.textContent = 'Status updated.'; selectedPhone = phone; await loadMessages(); } else { result.textContent = 'Failed: ' + (data.error || 'Unknown error'); } }
+async function sendReply() { const to = document.getElementById('to').value.trim(); const body = document.getElementById('body').value.trim(); const phoneNumberId = document.getElementById('phoneNumberId').value.trim(); const result = document.getElementById('result'); if (!to || !body) { result.textContent = 'Please enter customer phone and message.'; return; } result.textContent = 'Sending...'; const res = await fetch('/api/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({to: to, body: body, phoneNumberId: phoneNumberId}) }); const data = await res.json(); if (data.ok) { result.textContent = 'Sent successfully.'; document.getElementById('body').value = ''; selectedPhone = to; await loadMessages(); } else { result.textContent = 'Failed: ' + (data.error || 'Unknown error'); } }
+function clearComposer() { document.getElementById('body').value = ''; document.getElementById('result').textContent = ''; }
+function escapeHtml(value) { return (value || '').toString().replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
+function escapeAttr(value) { return escapeHtml(value).replaceAll('\\', '\\\\'); }
+loadMessages(); setInterval(loadMessages, 3000);
 </script>
 </body>
 </html>`);
 });
+
 /* تحقق من Webhook */
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
