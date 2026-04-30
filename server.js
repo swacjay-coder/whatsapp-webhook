@@ -37,8 +37,41 @@ function protectInbox(req, res, next) {
 const BUSINESS_NAME_SPACED = "I C O N I C   H A I R   C A R E";
 const WEBSITE = "https://iconichaircare.com";
 
-function getLineConfig(phoneNumberId) {
-  if (phoneNumberId === ABU_DHABI_PHONE_NUMBER_ID) {
+function normalizePhoneNumberId(value) {
+  return (value || "").toString().trim();
+}
+
+function normalizePhoneDigits(value) {
+  return (value || "").toString().replace(/\D/g, "");
+}
+
+function isAbuDhabiLine(phoneNumberId, displayPhoneNumber = "") {
+  const id = normalizePhoneNumberId(phoneNumberId);
+  const abuDhabiId = normalizePhoneNumberId(ABU_DHABI_PHONE_NUMBER_ID);
+  const displayDigits = normalizePhoneDigits(displayPhoneNumber);
+
+  return (
+    id === abuDhabiId ||
+    displayDigits.endsWith("97125622778") ||
+    displayDigits.endsWith("25622778")
+  );
+}
+
+function getIncomingPhoneNumberId(value) {
+  const incomingId = normalizePhoneNumberId(value?.metadata?.phone_number_id);
+  const displayPhoneNumber = value?.metadata?.display_phone_number || "";
+
+  if (isAbuDhabiLine(incomingId, displayPhoneNumber)) {
+    return ABU_DHABI_PHONE_NUMBER_ID;
+  }
+
+  return incomingId || DUBAI_PHONE_NUMBER_ID;
+}
+
+function getLineConfig(phoneNumberId, displayPhoneNumber = "") {
+  const id = normalizePhoneNumberId(phoneNumberId);
+
+  if (isAbuDhabiLine(id, displayPhoneNumber)) {
     return {
       phoneNumberId: ABU_DHABI_PHONE_NUMBER_ID,
       branch: "Abu Dhabi",
@@ -48,7 +81,7 @@ function getLineConfig(phoneNumberId) {
   }
 
   return {
-    phoneNumberId: phoneNumberId || DUBAI_PHONE_NUMBER_ID,
+    phoneNumberId: id || DUBAI_PHONE_NUMBER_ID,
     branch: "Dubai",
     callNumber: "04 396 3333",
     displayNumber: "+971 4 396 3333"
@@ -61,7 +94,7 @@ const conversationStatus = {};
 const conversationPhoneNumberId = {};
 
 function addInboxMessage(phone, sender, body, status = "Bot", phoneNumberId = null) {
-  const finalPhoneNumberId = phoneNumberId || conversationPhoneNumberId[phone] || DUBAI_PHONE_NUMBER_ID;
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || conversationPhoneNumberId[phone] || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
 
   const item = {
@@ -110,7 +143,7 @@ function getCustomerChatLink(customerNumber) {
 }
 
 async function sendWhatsAppMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
-  const finalPhoneNumberId = phoneNumberId || DUBAI_PHONE_NUMBER_ID;
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
 
@@ -169,10 +202,11 @@ app.post("/api/send", protectInbox, async (req, res) => {
       });
     }
 
-    const phoneNumberId =
+    const phoneNumberId = normalizePhoneNumberId(
       (req.body?.phoneNumberId || "").toString().trim() ||
       conversationPhoneNumberId[to] ||
-      DUBAI_PHONE_NUMBER_ID;
+      DUBAI_PHONE_NUMBER_ID
+    );
 
     conversationPhoneNumberId[to] = phoneNumberId;
 
@@ -1136,6 +1170,7 @@ app.get("/inbox", protectInbox, (req, res) => {
 let allMessages = [];
 let selectedPhone = "";
 let selectedPhoneNumberId = "";
+let selectedConversationKey = "";
 let readMap = {};
 
 try {
@@ -1180,6 +1215,10 @@ function avatarText(phone) {
   return clean ? clean.slice(-2) : "IC";
 }
 
+function conversationKey(phone, phoneNumberId, branch) {
+  return (phone || "unknown") + "::" + (phoneNumberId || branch || "line");
+}
+
 function branchBadge(branch) {
   if (branch === "Abu Dhabi") return '<span class="branch branch-abu">Abu Dhabi</span>';
   return '<span class="branch branch-dubai">Dubai</span>';
@@ -1199,9 +1238,12 @@ function buildConversations() {
   const map = {};
 
   (allMessages || []).forEach(function(m) {
+    const key = conversationKey(m.phone || "unknown", m.phoneNumberId || "", m.branch || "");
     const phone = m.phone || "unknown";
-    if (!map[phone]) {
-      map[phone] = {
+
+    if (!map[key]) {
+      map[key] = {
+        key,
         phone,
         messages: [],
         latest: m,
@@ -1211,17 +1253,20 @@ function buildConversations() {
       };
     }
 
-    map[phone].messages.push(m);
+    map[key].messages.push(m);
 
-    if (!map[phone].latest) map[phone].latest = m;
+    if (!map[key].latest) map[key].latest = m;
 
-    if (m.sender === "customer" && m.phoneNumberId) {
-      map[phone].phoneNumberId = m.phoneNumberId;
-      map[phone].branch = m.branch || map[phone].branch;
+    if (m.phoneNumberId) {
+      map[key].phoneNumberId = m.phoneNumberId;
+    }
+
+    if (m.branch) {
+      map[key].branch = m.branch;
     }
 
     if (m.status) {
-      map[phone].status = m.status;
+      map[key].status = m.status;
     }
   });
 
@@ -1231,13 +1276,13 @@ function buildConversations() {
 function isUnreadConversation(c) {
   const latest = c.latest || {};
   if (latest.sender !== "customer") return false;
-  return readMap[c.phone] !== messageKey(latest);
+  return readMap[c.key] !== messageKey(latest);
 }
 
-function markConversationRead(phone) {
-  const c = buildConversations().find(function(item) { return item.phone === phone; });
+function markConversationRead(key) {
+  const c = buildConversations().find(function(item) { return item.key === key; });
   if (!c || !c.latest) return;
-  readMap[phone] = messageKey(c.latest);
+  readMap[key] = messageKey(c.latest);
   saveReadMap();
 }
 
@@ -1285,22 +1330,24 @@ function renderConversationList() {
   if (!conversations.length) {
     conversationList.innerHTML = '<div class="empty">No conversations yet.</div>';
     selectedPhone = "";
+    selectedConversationKey = "";
     renderChat();
     return;
   }
 
-  if (!selectedPhone || !conversations.some(function(c) { return c.phone === selectedPhone; })) {
+  if (!selectedConversationKey || !conversations.some(function(c) { return c.key === selectedConversationKey; })) {
+    selectedConversationKey = conversations[0].key;
     selectedPhone = conversations[0].phone;
     selectedPhoneNumberId = conversations[0].phoneNumberId || "";
   }
 
   conversationList.innerHTML = conversations.map(function(c) {
-    const active = c.phone === selectedPhone ? " active" : "";
+    const active = c.key === selectedConversationKey ? " active" : "";
     const unread = isUnreadConversation(c) ? " unread" : "";
     const latest = c.latest || {};
     const preview = latest.sender ? latest.sender + ": " + (latest.body || "") : (latest.body || "");
 
-    return '<button type="button" class="conversation-card' + active + unread + '" data-phone="' + escapeHtml(c.phone) + '">' +
+    return '<button type="button" class="conversation-card' + active + unread + '" data-key="' + escapeHtml(c.key) + '">' +
       '<div class="avatar">' + escapeHtml(avatarText(c.phone)) + '</div>' +
       '<div style="min-width:0;">' +
         '<div class="conv-top">' +
@@ -1315,26 +1362,27 @@ function renderConversationList() {
 
   Array.from(document.querySelectorAll(".conversation-card")).forEach(function(btn) {
     btn.addEventListener("click", function() {
-      selectConversation(btn.dataset.phone || "");
+      selectConversation(btn.dataset.key || "");
     });
   });
 }
 
-function selectConversation(phone) {
-  const c = buildConversations().find(function(item) { return item.phone === phone; });
+function selectConversation(key) {
+  const c = buildConversations().find(function(item) { return item.key === key; });
   if (!c) return;
 
+  selectedConversationKey = c.key;
   selectedPhone = c.phone;
   selectedPhoneNumberId = c.phoneNumberId || "";
   inputTo.value = c.phone;
   inputLine.value = c.phoneNumberId || "";
-  markConversationRead(c.phone);
+  markConversationRead(c.key);
   renderAll();
   inputBody.focus();
 }
 
 function renderChat() {
-  const c = buildConversations().find(function(item) { return item.phone === selectedPhone; });
+  const c = buildConversations().find(function(item) { return item.key === selectedConversationKey; });
 
   if (!c) {
     chatTitle.textContent = "Select a conversation";
@@ -1412,7 +1460,8 @@ async function sendReply() {
       resultBox.textContent = "Sent successfully.";
       inputBody.value = "";
       selectedPhone = to;
-      markConversationRead(to);
+      selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
+      markConversationRead(selectedConversationKey);
       loadMessages();
     } else {
       resultBox.textContent = "Failed: " + (data.error || "Unknown error");
@@ -1463,7 +1512,7 @@ document.getElementById("copyPhoneBtn").addEventListener("click", function() {
 document.getElementById("markReadBtn").addEventListener("click", function() {
   const phone = inputTo.value.trim() || selectedPhone;
   if (!phone) return;
-  markConversationRead(phone);
+  markConversationRead(selectedConversationKey);
   resultBox.textContent = "Marked as read.";
   renderAll();
 });
@@ -1519,13 +1568,13 @@ app.post("/webhook", async (req, res) => {
     }
 
     const from = message.from;
-    const incomingPhoneNumberId = value?.metadata?.phone_number_id || DUBAI_PHONE_NUMBER_ID;
-    const lineConfig = getLineConfig(incomingPhoneNumberId);
+    const incomingPhoneNumberId = getIncomingPhoneNumberId(value);
+    const lineConfig = getLineConfig(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
     const profileName = value?.contacts?.[0]?.profile?.name || "";
 
     conversationPhoneNumberId[from] = incomingPhoneNumberId;
 
-    console.log("Incoming message received on:", lineConfig.branch, incomingPhoneNumberId);
+    console.log("Incoming message received on:", lineConfig.branch, incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
 
     let text = "";
 
