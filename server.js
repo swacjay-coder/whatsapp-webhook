@@ -1,4 +1,4 @@
-const express = require("express");
+شconst express = require("express");
 const fetch = require("node-fetch");
 
 const app = express();
@@ -1234,6 +1234,37 @@ function messageKey(m) {
   return [m.phone || "", m.time || "", m.sender || "", (m.body || "").slice(0, 30)].join("|");
 }
 
+function getConversationReplyFilterStatus(messages) {
+  const msgs = messages || [];
+
+  // allMessages is newest-first because the server uses inboxMessages.unshift(item).
+  // So the first staff/bot message here is the latest real reply from the team or bot.
+  const latestResponder = msgs.find(function(m) {
+    return m.sender === "staff" || m.sender === "bot";
+  });
+
+  if (latestResponder && latestResponder.sender === "staff") return "Human Reply";
+  if (latestResponder && latestResponder.sender === "bot") return "Bot Reply";
+
+  return "Bot Reply";
+}
+
+function getConversationBusinessStatus(messages, fallbackStatus) {
+  const msgs = messages || [];
+
+  // Keep manual workflow statuses separate from reply-type filters.
+  const manualStatusMessage = msgs.find(function(m) {
+    const s = (m.status || "").toString().trim();
+    return s && s !== "Bot" && s !== "Bot Reply" && s !== "Human Reply";
+  });
+
+  if (manualStatusMessage && manualStatusMessage.status) {
+    return manualStatusMessage.status;
+  }
+
+  return fallbackStatus || getConversationReplyFilterStatus(msgs);
+}
+
 function buildConversations() {
   const map = {};
 
@@ -1249,7 +1280,8 @@ function buildConversations() {
         latest: m,
         branch: m.branch || "Dubai",
         phoneNumberId: m.phoneNumberId || "",
-        status: m.status || "Bot"
+        status: "Bot Reply",
+        replyFilterStatus: "Bot Reply"
       };
     }
 
@@ -1264,13 +1296,13 @@ function buildConversations() {
     if (m.branch) {
       map[key].branch = m.branch;
     }
-
-    if (m.status) {
-      map[key].status = m.status;
-    }
   });
 
-  return Object.values(map);
+  return Object.values(map).map(function(c) {
+    c.replyFilterStatus = getConversationReplyFilterStatus(c.messages);
+    c.status = getConversationBusinessStatus(c.messages, c.replyFilterStatus);
+    return c;
+  });
 }
 
 function isUnreadConversation(c) {
@@ -1288,9 +1320,22 @@ function markConversationRead(key) {
 
 function buildStatusOptions() {
   const current = statusFilter.value;
-  const statuses = Array.from(new Set((allMessages || []).map(function(m) {
+
+  // Fixed options stay visible even before a message with that status exists.
+  const fixedStatuses = [
+    "Human Reply",
+    "Bot Reply",
+    "Consultation Request",
+    "Talk to Team",
+    "Need Follow-up",
+    "Closed"
+  ];
+
+  const dynamicStatuses = Array.from(new Set((allMessages || []).map(function(m) {
     return (m.status || "").toString().trim();
   }).filter(Boolean)));
+
+  const statuses = Array.from(new Set(fixedStatuses.concat(dynamicStatuses)));
 
   statusFilter.innerHTML = '<option value="">All status</option>' + statuses.map(function(s) {
     return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>';
@@ -1313,13 +1358,18 @@ function filteredConversations() {
   const status = statusFilter.value;
 
   return buildConversations().filter(function(c) {
-    const hay = [c.phone, c.branch, c.status].concat(c.messages.map(function(m) {
+    const hay = [c.phone, c.branch, c.status, c.replyFilterStatus].concat(c.messages.map(function(m) {
       return m.body || "";
     })).join(" ").toLowerCase();
 
     if (q && !hay.includes(q)) return false;
     if (branch && c.branch !== branch) return false;
-    if (status && c.status !== status) return false;
+
+    // Human/Bot filters use the latest real responder, not the mixed conversation status.
+    if (status === "Human Reply" && c.replyFilterStatus !== "Human Reply") return false;
+    if (status === "Bot Reply" && c.replyFilterStatus !== "Bot Reply") return false;
+    if (status && status !== "Human Reply" && status !== "Bot Reply" && c.status !== status) return false;
+
     return true;
   });
 }
