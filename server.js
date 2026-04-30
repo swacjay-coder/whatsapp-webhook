@@ -663,7 +663,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       background-repeat: no-repeat;
       background-position: center center;
       background-size: min(680px, 68%);
-      opacity: .08;
+      opacity: .16;
       pointer-events: none;
       z-index: 0;
       filter: saturate(1.05);
@@ -756,13 +756,13 @@ app.get("/inbox", protectInbox, (req, res) => {
       align-items: center;
       pointer-events: none;
       z-index: -1;
-      opacity: .24;
+      opacity: .42;
       transform: translateY(-50%);
       margin-bottom: 0;
     }
 
     .chat-watermark img {
-      width: min(520px, 68%);
+      width: min(640px, 78%);
       max-height: 360px;
       object-fit: contain;
       filter: saturate(1.08);
@@ -806,18 +806,18 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .bubble.customer {
-      background: rgba(255,255,255,.94);
+      background: rgba(255,255,255,.90);
       border-bottom-left-radius: 7px;
     }
 
     .bubble.bot {
-      background: rgba(220,248,198,.94);
+      background: rgba(220,248,198,.90);
       border-color: rgba(37,211,102,.26);
       border-bottom-right-radius: 7px;
     }
 
     .bubble.staff {
-      background: rgba(238,242,255,.94);
+      background: rgba(238,242,255,.90);
       border-color: rgba(124,58,237,.20);
       border-bottom-right-radius: 7px;
     }
