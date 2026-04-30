@@ -6,7 +6,10 @@ app.use(express.json());
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+// Keep PHONE_NUMBER_ID as your default/Dubai number so old setup keeps working.
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+const DUBAI_PHONE_NUMBER_ID = process.env.DUBAI_PHONE_NUMBER_ID || PHONE_NUMBER_ID || "1100042333191350";
+const ABU_DHABI_PHONE_NUMBER_ID = process.env.ABU_DHABI_PHONE_NUMBER_ID || "1000146433192239";
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
 const INBOX_USER = process.env.INBOX_USER || "admin";
 const INBOX_PASS = process.env.INBOX_PASS || "123456";
@@ -32,20 +35,43 @@ function protectInbox(req, res, next) {
 
 
 const BUSINESS_NAME_SPACED = "I C O N I C   H A I R   C A R E";
-const CALL_NUMBER = "04 396 3333";
 const WEBSITE = "https://iconichaircare.com";
+
+function getLineConfig(phoneNumberId) {
+  if (phoneNumberId === ABU_DHABI_PHONE_NUMBER_ID) {
+    return {
+      phoneNumberId: ABU_DHABI_PHONE_NUMBER_ID,
+      branch: "Abu Dhabi",
+      callNumber: "02 562 2778",
+      displayNumber: "+971 2 562 2778"
+    };
+  }
+
+  return {
+    phoneNumberId: phoneNumberId || DUBAI_PHONE_NUMBER_ID,
+    branch: "Dubai",
+    callNumber: "04 396 3333",
+    displayNumber: "+971 4 396 3333"
+  };
+}
 
 /* Mini Inbox مؤقت للعرض والتجربة */
 const inboxMessages = [];
 const conversationStatus = {};
+const conversationPhoneNumberId = {};
 
-function addInboxMessage(phone, sender, body, status = "Bot") {
+function addInboxMessage(phone, sender, body, status = "Bot", phoneNumberId = null) {
+  const finalPhoneNumberId = phoneNumberId || conversationPhoneNumberId[phone] || DUBAI_PHONE_NUMBER_ID;
+  const lineConfig = getLineConfig(finalPhoneNumberId);
+
   const item = {
     time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
     phone,
     sender,
     body,
-    status: conversationStatus[phone] || status
+    status: conversationStatus[phone] || status,
+    phoneNumberId: finalPhoneNumberId,
+    branch: lineConfig.branch
   };
 
   inboxMessages.unshift(item);
@@ -83,8 +109,10 @@ function getCustomerChatLink(customerNumber) {
   return `https://wa.me/${customerNumber}`;
 }
 
-async function sendWhatsAppMessage(to, body) {
-  const url = `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`;
+async function sendWhatsAppMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+  const finalPhoneNumberId = phoneNumberId || DUBAI_PHONE_NUMBER_ID;
+  const lineConfig = getLineConfig(finalPhoneNumberId);
+  const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
 
   const payload = {
     messaging_product: "whatsapp",
@@ -92,6 +120,8 @@ async function sendWhatsAppMessage(to, body) {
     type: "text",
     text: { body }
   };
+
+  console.log(`Sending WhatsApp message from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to}`);
 
   const response = await fetch(url, {
     method: "POST",
@@ -139,9 +169,16 @@ app.post("/api/send", protectInbox, async (req, res) => {
       });
     }
 
-    await sendWhatsAppMessage(to, body);
+    const phoneNumberId =
+      (req.body?.phoneNumberId || "").toString().trim() ||
+      conversationPhoneNumberId[to] ||
+      DUBAI_PHONE_NUMBER_ID;
+
+    conversationPhoneNumberId[to] = phoneNumberId;
+
+    await sendWhatsAppMessage(to, body, phoneNumberId);
     setConversationStatus(to, "Human Reply");
-    addInboxMessage(to, "staff", body, "Human Reply");
+    addInboxMessage(to, "staff", body, "Human Reply", phoneNumberId);
 
     return res.json({ ok: true });
   } catch (error) {
@@ -193,13 +230,14 @@ app.get("/inbox", protectInbox, (req, res) => {
           <tr>
             <th>Time</th>
             <th>Phone</th>
+            <th>Branch</th>
             <th>Sender</th>
             <th>Message</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody id="rows">
-          <tr><td colspan="5">Loading...</td></tr>
+          <tr><td colspan="6">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -210,6 +248,13 @@ app.get("/inbox", protectInbox, (req, res) => {
 
       <label>Customer phone</label>
       <input id="to" placeholder="97150xxxxxxx" />
+
+      <label style="display:block;margin-top:12px;">Reply from</label>
+      <select id="phoneNumberId" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:10px;margin-top:6px;font-size:14px;">
+        <option value="">Auto — نفس الرقم الذي استقبل رسالة العميل</option>
+        <option value="${DUBAI_PHONE_NUMBER_ID}">Dubai +971 4 396 3333</option>
+        <option value="${ABU_DHABI_PHONE_NUMBER_ID}">Abu Dhabi +971 2 562 2778</option>
+      </select>
 
       <label style="display:block;margin-top:12px;">Message</label>
       <textarea id="body" rows="7" placeholder="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟"></textarea>
@@ -226,7 +271,7 @@ async function loadMessages() {
   const rows = document.getElementById('rows');
 
   if (!data.messages || data.messages.length === 0) {
-    rows.innerHTML = '<tr><td colspan="5">No messages yet.</td></tr>';
+    rows.innerHTML = '<tr><td colspan="6">No messages yet.</td></tr>';
     return;
   }
 
@@ -234,7 +279,8 @@ async function loadMessages() {
     const senderClass = m.sender === 'customer' ? 'customer' : (m.sender === 'bot' ? 'bot' : 'staff');
     return '<tr>' +
       '<td>' + escapeHtml(m.time) + '</td>' +
-      '<td><button style="width:auto;padding:6px 8px;margin:0;background:#0ea5e9" onclick="fillPhone(\\'' + escapeHtml(m.phone) + '\\')">' + escapeHtml(m.phone) + '</button></td>' +
+      '<td><button style="width:auto;padding:6px 8px;margin:0;background:#0ea5e9" data-phone="' + escapeHtml(m.phone) + '" data-phone-number-id="' + escapeHtml(m.phoneNumberId || '') + '" onclick="fillPhoneFromButton(this)">' + escapeHtml(m.phone) + '</button></td>' +
+      '<td>' + escapeHtml(m.branch || '') + '</td>' +
       '<td class="' + senderClass + '">' + escapeHtml(m.sender) + '</td>' +
       '<td class="msg">' + escapeHtml(m.body) + '</td>' +
       '<td><span class="status">' + escapeHtml(m.status) + '</span></td>' +
@@ -242,8 +288,15 @@ async function loadMessages() {
   }).join('');
 }
 
-function fillPhone(phone) {
+function fillPhoneFromButton(button) {
+  fillPhone(button.dataset.phone || '', button.dataset.phoneNumberId || '');
+}
+
+function fillPhone(phone, phoneNumberId) {
   document.getElementById('to').value = phone;
+  if (phoneNumberId) {
+    document.getElementById('phoneNumberId').value = phoneNumberId;
+  }
 }
 
 function escapeHtml(value) {
@@ -258,6 +311,7 @@ function escapeHtml(value) {
 async function sendReply() {
   const to = document.getElementById('to').value.trim();
   const body = document.getElementById('body').value.trim();
+  const phoneNumberId = document.getElementById('phoneNumberId').value.trim();
   const result = document.getElementById('result');
 
   result.textContent = 'Sending...';
@@ -265,7 +319,7 @@ async function sendReply() {
   const res = await fetch('/api/send', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({to, body})
+    body: JSON.stringify({to, body, phoneNumberId})
   });
 
   const data = await res.json();
@@ -313,7 +367,13 @@ app.post("/webhook", async (req, res) => {
     }
 
     const from = message.from;
+    const incomingPhoneNumberId = value?.metadata?.phone_number_id || DUBAI_PHONE_NUMBER_ID;
+    const lineConfig = getLineConfig(incomingPhoneNumberId);
     const profileName = value?.contacts?.[0]?.profile?.name || "";
+
+    conversationPhoneNumberId[from] = incomingPhoneNumberId;
+
+    console.log("Incoming message received on:", lineConfig.branch, incomingPhoneNumberId);
 
     let text = "";
 
@@ -329,7 +389,8 @@ app.post("/webhook", async (req, res) => {
       from,
       "customer",
       profileName ? `${profileName}: ${message.text?.body || ""}` : (message.text?.body || ""),
-      "Bot"
+      "Bot",
+      incomingPhoneNumberId
     );
 
     const hour = getDubaiHour();
@@ -345,14 +406,14 @@ app.post("/webhook", async (req, res) => {
         "تم استلام رسالتك بنجاح، وسيقوم فريقنا بالرد عليك في أقرب وقت خلال ساعات العمل.\n\n" +
         "ساعات العمل:\n" +
         "10:00 صباحاً إلى 7:00 مساءً\n\n" +
-        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${lineConfig.callNumber}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Thank you for contacting us.\n\n" +
         "Your message has been received successfully. A member of our team will get back to you as soon as possible during working hours.\n\n" +
         "Working hours:\n" +
         "10:00 AM to 7:00 PM\n\n" +
-        `📞 To call us directly:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${lineConfig.callNumber}`;
     }
 
     /* 1 — حجز استشارة */
@@ -363,12 +424,12 @@ app.post("/webhook", async (req, res) => {
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "تم استلام طلب الاستشارة الخاص بك ✅\n\n" +
         "سيقوم أحد أعضاء فريقنا بالتواصل معك قريباً لمعرفة التفاصيل ومساعدتك في اختيار الخدمة الأنسب.\n\n" +
-        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${lineConfig.callNumber}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Your consultation request has been received ✅\n\n" +
         "A member of our team will contact you shortly to understand your needs and guide you to the most suitable service.\n\n" +
-        `📞 To call us directly:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${lineConfig.callNumber}`;
     }
 
     /* 2 — الخدمات */
@@ -391,7 +452,7 @@ app.post("/webhook", async (req, res) => {
         "للمساعدة بشكل أدق، اختر:\n\n" +
         "1️⃣ حجز استشارة\n" +
         "6️⃣ التحدث مع أحد أعضاء الفريق\n\n" +
-        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${lineConfig.callNumber}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "At Iconic Hair Care, we provide personalized hair care solutions based on your needs.\n\n" +
@@ -403,7 +464,7 @@ app.post("/webhook", async (req, res) => {
         "For better assistance, please choose:\n\n" +
         "1️⃣ Book a consultation\n" +
         "6️⃣ Speak with our team\n\n" +
-        `📞 To call us directly:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${lineConfig.callNumber}`;
     }
 
     /* 3 — الأسعار والعروض */
@@ -428,7 +489,7 @@ app.post("/webhook", async (req, res) => {
         "اختر:\n" +
         "1️⃣ حجز استشارة\n" +
         "6️⃣ التحدث مع أحد أعضاء الفريق\n\n" +
-        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${lineConfig.callNumber}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Prices vary depending on the service and your specific needs.\n\n" +
@@ -436,7 +497,7 @@ app.post("/webhook", async (req, res) => {
         "Please choose:\n" +
         "1️⃣ Book a consultation\n" +
         "6️⃣ Speak with our team\n\n" +
-        `📞 To call us directly:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${lineConfig.callNumber}`;
     }
 
     /* 5 — المواقع وساعات العمل */
@@ -460,7 +521,7 @@ app.post("/webhook", async (req, res) => {
         "https://maps.google.com/?q=Iconic+Hair+Care+Abu+Dhabi\n\n" +
         "ساعات العمل:\n" +
         "10:00 صباحاً إلى 7:00 مساءً\n\n" +
-        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${lineConfig.callNumber}\n\n` +
         `الموقع الرسمي:\n${WEBSITE}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
@@ -471,7 +532,7 @@ app.post("/webhook", async (req, res) => {
         "https://maps.google.com/?q=Iconic+Hair+Care+Abu+Dhabi\n\n" +
         "Working hours:\n" +
         "10:00 AM to 7:00 PM\n\n" +
-        `📞 To call us directly:\n${CALL_NUMBER}\n\n` +
+        `📞 To call us directly:\n${lineConfig.callNumber}\n\n` +
         `Website:\n${WEBSITE}`;
     }
 
@@ -493,12 +554,12 @@ app.post("/webhook", async (req, res) => {
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "تم تحويل طلبك إلى فريق Iconic Hair Care ✅\n\n" +
         "سيقوم أحد أعضاء الفريق بالرد عليك قريباً.\n\n" +
-        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${lineConfig.callNumber}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Your request has been transferred to the Iconic Hair Care team ✅\n\n" +
         "A team member will reply to you shortly.\n\n" +
-        `📞 To call us directly:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${lineConfig.callNumber}`;
     }
 
     /* القائمة الرئيسية */
@@ -513,7 +574,7 @@ app.post("/webhook", async (req, res) => {
         "3️⃣ الأسعار والعروض\n" +
         "5️⃣ الموقع وساعات العمل\n" +
         "6️⃣ التحدث مع أحد أعضاء الفريق\n\n" +
-        `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
+        `📞 للاتصال المباشر من الهاتف:\n${lineConfig.callNumber}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Welcome to Iconic Hair Care.\n\n" +
@@ -524,12 +585,12 @@ app.post("/webhook", async (req, res) => {
         "3️⃣ Prices & offers\n" +
         "5️⃣ Locations & working hours\n" +
         "6️⃣ Speak with our team\n\n" +
-        `📞 To call us directly:\n${CALL_NUMBER}`;
+        `📞 To call us directly:\n${lineConfig.callNumber}`;
     }
 
     /* إرسال الرد للعميل */
-    await sendWhatsAppMessage(from, replyText);
-    addInboxMessage(from, "bot", replyText, conversationStatus[from] || "Bot");
+    await sendWhatsAppMessage(from, replyText, incomingPhoneNumberId);
+    addInboxMessage(from, "bot", replyText, conversationStatus[from] || "Bot", incomingPhoneNumberId);
 
     /* إشعار الموظف عند طلب استشارة أو موظف */
     const shouldNotifyStaff =
@@ -549,6 +610,9 @@ app.post("/webhook", async (req, res) => {
 
         const staffBody =
           "طلب تواصل/استشارة جديد عبر واتساب\n\n" +
+          "الفرع / الرقم المستلم:\n" +
+          lineConfig.branch + " - " + lineConfig.displayNumber +
+          "\n\n" +
           "رقم العميل:\n" +
           from +
           "\n\n" +
@@ -561,6 +625,9 @@ app.post("/webhook", async (req, res) => {
           "افتح Mini Inbox لمتابعة المحادثة والرد من رقم الأرضي.\n\n" +
           "------------------------------\n\n" +
           "New WhatsApp team/consultation request\n\n" +
+          "Receiving branch/line:\n" +
+          lineConfig.branch + " - " + lineConfig.displayNumber +
+          "\n\n" +
           "Customer Number:\n" +
           from +
           "\n\n" +
@@ -572,7 +639,7 @@ app.post("/webhook", async (req, res) => {
           "\n\n" +
           "Open Mini Inbox to review and reply from the landline number.";
 
-        await sendWhatsAppMessage(STAFF_NUMBER, staffBody);
+        await sendWhatsAppMessage(STAFF_NUMBER, staffBody, incomingPhoneNumberId);
       } catch (staffError) {
         console.log("Staff notification failed:");
         console.log(staffError);
