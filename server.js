@@ -13,18 +13,43 @@ const BUSINESS_NAME_SPACED = "I C O N I C   H A I R   C A R E";
 const CALL_NUMBER = "04 396 3333";
 const WEBSITE = "https://iconichaircare.com";
 
-/* حساب توقيت دبي */
+/* Mini Inbox مؤقت للعرض والتجربة */
+const inboxMessages = [];
+const conversationStatus = {};
+
+function addInboxMessage(phone, sender, body, status = "Bot") {
+  const item = {
+    time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
+    phone,
+    sender,
+    body,
+    status: conversationStatus[phone] || status
+  };
+
+  inboxMessages.unshift(item);
+
+  if (inboxMessages.length > 300) {
+    inboxMessages.pop();
+  }
+}
+
+function setConversationStatus(phone, status) {
+  conversationStatus[phone] = status;
+  for (const item of inboxMessages) {
+    if (item.phone === phone) {
+      item.status = status;
+    }
+  }
+}
+
 function getDubaiHour() {
   const now = new Date();
-
   const dubaiTime = new Date(
     now.toLocaleString("en-US", { timeZone: "Asia/Dubai" })
   );
-
   return dubaiTime.getHours();
 }
 
-/* توحيد بعض المدخلات */
 function normalizeText(value) {
   return (value || "")
     .toString()
@@ -32,12 +57,10 @@ function normalizeText(value) {
     .trim();
 }
 
-/* رابط محادثة مباشر مع العميل */
 function getCustomerChatLink(customerNumber) {
   return `https://wa.me/${customerNumber}`;
 }
 
-/* إرسال رسالة واتساب */
 async function sendWhatsAppMessage(to, body) {
   const url = `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`;
 
@@ -45,9 +68,7 @@ async function sendWhatsAppMessage(to, body) {
     messaging_product: "whatsapp",
     to,
     type: "text",
-    text: {
-      body
-    }
+    text: { body }
   };
 
   const response = await fetch(url, {
@@ -72,6 +93,176 @@ async function sendWhatsAppMessage(to, body) {
   return result;
 }
 
+/* واجهة Inbox بسيطة */
+app.get("/", (req, res) => {
+  res.redirect("/inbox");
+});
+
+app.get("/api/messages", (req, res) => {
+  res.json({
+    ok: true,
+    messages: inboxMessages
+  });
+});
+
+app.post("/api/send", async (req, res) => {
+  try {
+    const to = (req.body?.to || "").toString().trim();
+    const body = (req.body?.body || "").toString().trim();
+
+    if (!to || !body) {
+      return res.status(400).json({
+        ok: false,
+        error: "Missing to or body"
+      });
+    }
+
+    await sendWhatsAppMessage(to, body);
+    setConversationStatus(to, "Human Reply");
+    addInboxMessage(to, "staff", body, "Human Reply");
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("Inbox send failed:");
+    console.error(error);
+    return res.status(500).json({
+      ok: false,
+      error: "Send failed"
+    });
+  }
+});
+
+app.get("/inbox", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  res.send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Iconic WhatsApp Inbox</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; color: #111827; }
+    header { background: #0f172a; color: white; padding: 16px 22px; font-size: 20px; font-weight: 700; }
+    .wrap { display: grid; grid-template-columns: 1fr 360px; gap: 16px; padding: 16px; }
+    .card { background: white; border-radius: 14px; box-shadow: 0 2px 12px rgba(15,23,42,.08); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; font-size: 14px; }
+    th { background: #f8fafc; color: #475569; }
+    .customer { color: #047857; font-weight: 700; }
+    .bot { color: #2563eb; font-weight: 700; }
+    .staff { color: #7c3aed; font-weight: 700; }
+    .status { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #e0f2fe; color: #075985; font-size: 12px; }
+    textarea, input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; margin-top: 6px; font-size: 14px; }
+    label { font-size: 13px; color: #475569; font-weight: 700; }
+    button { width: 100%; padding: 12px; border: 0; border-radius: 10px; background: #16a34a; color: white; font-weight: 700; cursor: pointer; margin-top: 10px; }
+    .small { color: #64748b; font-size: 12px; padding: 10px 12px; }
+    .msg { max-width: 520px; white-space: pre-wrap; }
+    @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>Iconic Hair Care — Mini WhatsApp Inbox</header>
+  <div class="wrap">
+    <div class="card">
+      <div class="small">Auto refresh every 3 seconds. Open this page to see customer messages, bot replies, and staff replies.</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Phone</th>
+            <th>Sender</th>
+            <th>Message</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          <tr><td colspan="5">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" style="padding:16px;">
+      <h3>Reply from landline</h3>
+      <p class="small" style="padding:0;">اكتب رقم العميل والرسالة. الرد سيخرج من رقم الأرضي Cloud API.</p>
+
+      <label>Customer phone</label>
+      <input id="to" placeholder="97150xxxxxxx" />
+
+      <label style="display:block;margin-top:12px;">Message</label>
+      <textarea id="body" rows="7" placeholder="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟"></textarea>
+
+      <button onclick="sendReply()">Send reply</button>
+      <div id="result" class="small"></div>
+    </div>
+  </div>
+
+<script>
+async function loadMessages() {
+  const res = await fetch('/api/messages');
+  const data = await res.json();
+  const rows = document.getElementById('rows');
+
+  if (!data.messages || data.messages.length === 0) {
+    rows.innerHTML = '<tr><td colspan="5">No messages yet.</td></tr>';
+    return;
+  }
+
+  rows.innerHTML = data.messages.map(m => {
+    const senderClass = m.sender === 'customer' ? 'customer' : (m.sender === 'bot' ? 'bot' : 'staff');
+    return '<tr>' +
+      '<td>' + escapeHtml(m.time) + '</td>' +
+      '<td><button style="width:auto;padding:6px 8px;margin:0;background:#0ea5e9" onclick="fillPhone(\\'' + escapeHtml(m.phone) + '\\')">' + escapeHtml(m.phone) + '</button></td>' +
+      '<td class="' + senderClass + '">' + escapeHtml(m.sender) + '</td>' +
+      '<td class="msg">' + escapeHtml(m.body) + '</td>' +
+      '<td><span class="status">' + escapeHtml(m.status) + '</span></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function fillPhone(phone) {
+  document.getElementById('to').value = phone;
+}
+
+function escapeHtml(value) {
+  return (value || '').toString()
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+async function sendReply() {
+  const to = document.getElementById('to').value.trim();
+  const body = document.getElementById('body').value.trim();
+  const result = document.getElementById('result');
+
+  result.textContent = 'Sending...';
+
+  const res = await fetch('/api/send', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({to, body})
+  });
+
+  const data = await res.json();
+
+  if (data.ok) {
+    result.textContent = 'Sent successfully.';
+    document.getElementById('body').value = '';
+    loadMessages();
+  } else {
+    result.textContent = 'Failed: ' + (data.error || 'Unknown error');
+  }
+}
+
+loadMessages();
+setInterval(loadMessages, 3000);
+</script>
+</body>
+</html>`);
+});
 /* تحقق من Webhook */
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -92,14 +283,15 @@ app.post("/webhook", async (req, res) => {
   console.log(JSON.stringify(req.body, null, 2));
 
   try {
-    const message =
-      req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
+    const message = value?.messages?.[0];
 
     if (!message) {
       return res.sendStatus(200);
     }
 
     const from = message.from;
+    const profileName = value?.contacts?.[0]?.profile?.name || "";
 
     let text = "";
 
@@ -110,6 +302,13 @@ app.post("/webhook", async (req, res) => {
     if (!text) {
       text = "";
     }
+
+    addInboxMessage(
+      from,
+      "customer",
+      profileName ? `${profileName}: ${message.text?.body || ""}` : (message.text?.body || ""),
+      "Bot"
+    );
 
     const hour = getDubaiHour();
     console.log("Dubai hour:", hour);
@@ -136,6 +335,8 @@ app.post("/webhook", async (req, res) => {
 
     /* 1 — حجز استشارة */
     else if (text === "1" || text === "١") {
+      setConversationStatus(from, "Consultation Request");
+
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "تم استلام طلب الاستشارة الخاص بك ✅\n\n" +
@@ -253,16 +454,28 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* 6 — التحدث مع موظف */
-    else if (text === "6" || text === "٦") {
+    else if (
+      text === "6" ||
+      text === "٦" ||
+      text.includes("موظف") ||
+      text.includes("فريق") ||
+      text.includes("استشارة") ||
+      text.includes("support") ||
+      text.includes("team") ||
+      text.includes("human") ||
+      text.includes("consultation")
+    ) {
+      setConversationStatus(from, "Talk to Team");
+
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "تم استلام طلبك بنجاح ✅\n\n" +
-        "سيقوم أحد أعضاء فريقنا بالتواصل معك في أقرب وقت ممكن.\n\n" +
+        "تم تحويل طلبك إلى فريق Iconic Hair Care ✅\n\n" +
+        "سيقوم أحد أعضاء الفريق بالرد عليك قريباً.\n\n" +
         `📞 للاتصال المباشر من الهاتف:\n${CALL_NUMBER}\n\n` +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Your request has been received successfully ✅\n\n" +
-        "A member of our team will contact you shortly.\n\n" +
+        "Your request has been transferred to the Iconic Hair Care team ✅\n\n" +
+        "A team member will reply to you shortly.\n\n" +
         `📞 To call us directly:\n${CALL_NUMBER}`;
     }
 
@@ -294,59 +507,48 @@ app.post("/webhook", async (req, res) => {
 
     /* إرسال الرد للعميل */
     await sendWhatsAppMessage(from, replyText);
+    addInboxMessage(from, "bot", replyText, conversationStatus[from] || "Bot");
 
     /* إشعار الموظف عند طلب استشارة أو موظف */
     const shouldNotifyStaff =
       text === "1" || text === "١" ||
-      text === "6" || text === "٦";
+      text === "6" || text === "٦" ||
+      text.includes("موظف") ||
+      text.includes("فريق") ||
+      text.includes("استشارة") ||
+      text.includes("support") ||
+      text.includes("team") ||
+      text.includes("human") ||
+      text.includes("consultation");
 
-    if (shouldNotifyStaff) {
+    if (shouldNotifyStaff && STAFF_NUMBER) {
       try {
         const customerChatLink = getCustomerChatLink(from);
 
-        let staffBody = "";
-
-        if (text === "1" || text === "١") {
-          staffBody =
-            "طلب استشارة جديد عبر واتساب\n\n" +
-            "رقم العميل:\n" +
-            from +
-            "\n\n" +
-            "رابط محادثة العميل:\n" +
-            customerChatLink +
-            "\n\n" +
-            "يرجى التواصل مع العميل في أقرب وقت.\n\n" +
-            "------------------------------\n\n" +
-            "New WhatsApp Consultation Request\n\n" +
-            "Customer Number:\n" +
-            from +
-            "\n\n" +
-            "Open customer chat:\n" +
-            customerChatLink +
-            "\n\n" +
-            "Please contact the customer as soon as possible.";
-        } else {
-          staffBody =
-            "طلب تواصل مباشر مع أحد أعضاء الفريق عبر واتساب\n\n" +
-            "رقم العميل:\n" +
-            from +
-            "\n\n" +
-            "رابط محادثة العميل:\n" +
-            customerChatLink +
-            "\n\n" +
-            "العميل يرغب بالتحدث مع أحد أعضاء الفريق.\n" +
-            "يرجى التواصل معه في أقرب وقت.\n\n" +
-            "------------------------------\n\n" +
-            "Direct Team Contact Request via WhatsApp\n\n" +
-            "Customer Number:\n" +
-            from +
-            "\n\n" +
-            "Open customer chat:\n" +
-            customerChatLink +
-            "\n\n" +
-            "The customer would like to speak with a member of our team.\n" +
-            "Please contact the customer as soon as possible.";
-        }
+        const staffBody =
+          "طلب تواصل/استشارة جديد عبر واتساب\n\n" +
+          "رقم العميل:\n" +
+          from +
+          "\n\n" +
+          "رابط محادثة العميل:\n" +
+          customerChatLink +
+          "\n\n" +
+          "آخر رسالة من العميل:\n" +
+          (message.text?.body || "") +
+          "\n\n" +
+          "افتح Mini Inbox لمتابعة المحادثة والرد من رقم الأرضي.\n\n" +
+          "------------------------------\n\n" +
+          "New WhatsApp team/consultation request\n\n" +
+          "Customer Number:\n" +
+          from +
+          "\n\n" +
+          "Open customer chat:\n" +
+          customerChatLink +
+          "\n\n" +
+          "Last customer message:\n" +
+          (message.text?.body || "") +
+          "\n\n" +
+          "Open Mini Inbox to review and reply from the landline number.";
 
         await sendWhatsAppMessage(STAFF_NUMBER, staffBody);
       } catch (staffError) {
