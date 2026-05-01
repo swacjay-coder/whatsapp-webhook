@@ -279,7 +279,7 @@ app.get("/", (req, res) => {
   res.redirect("/inbox");
 });
 
-app.get("/api/messages", protectInbox, async (req, res) => {
+  app.get("/api/messages", async (req, res) => {
   const sheetMessages = await loadMessagesFromGoogleSheet();
 
   if (sheetMessages.length > 0) {
