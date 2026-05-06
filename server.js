@@ -14,7 +14,7 @@ const fetch = (...args) => {
 const app = express();
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-7-top-header-reference-match";
+const BOT_VERSION = "iconic-team-inbox-v30-7-1-remove-stats-row-reclaim-space";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -7059,6 +7059,48 @@ app.get("/inbox", protectInbox, (req, res) => {
         border-right: 0 !important;
       }
     }
+
+
+    /* V30.7.1 - Remove Stats Row / Reclaim Space.
+       Visual-only layout change: removes the metric row and lets the inbox grid use that vertical space. */
+    .stats {
+      display: none !important;
+      height: 0 !important;
+      min-height: 0 !important;
+      max-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .page {
+      grid-template-rows: 54px minmax(0, 1fr) !important;
+      gap: 10px !important;
+      padding-top: 12px !important;
+    }
+
+    .topbar.v18-topbar,
+    .topbar {
+      margin-bottom: 0 !important;
+      flex: 0 0 54px !important;
+      height: 54px !important;
+      min-height: 54px !important;
+      max-height: 54px !important;
+    }
+
+    .page .app,
+    .app {
+      min-height: 0 !important;
+      height: 100% !important;
+      max-height: 100% !important;
+    }
+
+    @media (max-width: 1180px) {
+      .page {
+        grid-template-rows: auto minmax(0, 1fr) !important;
+      }
+    }
+
 </style>
 </head>
 <body>
@@ -7121,13 +7163,6 @@ app.get("/inbox", protectInbox, (req, res) => {
         </div>
       </section>
 
-    <section class="stats">
-      <div class="stat"><div class="stat-label">Messages</div><div class="stat-value" id="statTotal">0</div></div>
-      <div class="stat"><div class="stat-label">Customers</div><div class="stat-value" id="statCustomers">0</div></div>
-      <div class="stat"><div class="stat-label">Unread</div><div class="stat-value" id="statUnread">0</div></div>
-      <div class="stat"><div class="stat-label">Dubai</div><div class="stat-value" id="statDubai">0</div></div>
-      <div class="stat"><div class="stat-label">Abu Dhabi</div><div class="stat-value" id="statAbu">0</div></div>
-    </section>
 
     <main class="app">
       <aside class="panel">
@@ -8058,13 +8093,18 @@ function normalizedMessageBranch(message) {
 
 function updateStats() {
   const conversations = buildConversations();
-  document.getElementById("statTotal").textContent = allMessages.length;
-  document.getElementById("statCustomers").textContent = conversations.length;
-  document.getElementById("statUnread").textContent = conversations.filter(isUnreadConversation).length;
+  const statTotal = document.getElementById("statTotal");
+  const statCustomers = document.getElementById("statCustomers");
+  const statUnread = document.getElementById("statUnread");
+  if (statTotal) statTotal.textContent = allMessages.length;
+  if (statCustomers) statCustomers.textContent = conversations.length;
+  if (statUnread) statUnread.textContent = conversations.filter(isUnreadConversation).length;
   const dubaiSidebarCount = allMessages.filter(function(m) { return normalizedMessageBranch(m) === "Dubai"; }).length;
   const abuSidebarCount = allMessages.filter(function(m) { return normalizedMessageBranch(m) === "Abu Dhabi"; }).length;
-  document.getElementById("statDubai").textContent = dubaiSidebarCount;
-  document.getElementById("statAbu").textContent = abuSidebarCount;
+  const statDubai = document.getElementById("statDubai");
+  const statAbu = document.getElementById("statAbu");
+  if (statDubai) statDubai.textContent = dubaiSidebarCount;
+  if (statAbu) statAbu.textContent = abuSidebarCount;
   const sideDubaiCount = document.getElementById("sideDubaiCount");
   const sideAbuCount = document.getElementById("sideAbuCount");
   if (sideDubaiCount) sideDubaiCount.textContent = dubaiSidebarCount;
