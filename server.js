@@ -14,7 +14,7 @@ const fetch = (...args) => {
 const app = express();
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-7-3-composer-reference-match";
+const BOT_VERSION = "iconic-team-inbox-v30-7-4-header-quick-replies-reference";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -6999,6 +6999,102 @@ app.get("/inbox", protectInbox, (req, res) => {
       min-width: 124px !important;
     }
 
+    .topbar-quick-wrap {
+      position: relative !important;
+      display: inline-flex !important;
+      align-items: center !important;
+    }
+
+    .quick-replies-menu {
+      position: absolute !important;
+      top: calc(100% + 10px) !important;
+      right: 0 !important;
+      width: 255px !important;
+      padding: 10px !important;
+      border-radius: 16px !important;
+      border: 1px solid rgba(15, 23, 42, .10) !important;
+      background: rgba(255, 255, 255, .98) !important;
+      box-shadow: 0 18px 44px rgba(15, 23, 42, .16) !important;
+      z-index: 80 !important;
+      display: none !important;
+    }
+
+    .topbar-quick-wrap.open .quick-replies-menu {
+      display: block !important;
+    }
+
+    .quick-replies-menu::before {
+      content: "" !important;
+      position: absolute !important;
+      top: -7px !important;
+      right: 30px !important;
+      width: 13px !important;
+      height: 13px !important;
+      transform: rotate(45deg) !important;
+      background: rgba(255,255,255,.98) !important;
+      border-left: 1px solid rgba(15, 23, 42, .10) !important;
+      border-top: 1px solid rgba(15, 23, 42, .10) !important;
+    }
+
+    .quick-replies-menu-head {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 8px !important;
+      padding: 2px 4px 9px !important;
+      border-bottom: 1px solid rgba(15, 23, 42, .08) !important;
+      margin-bottom: 8px !important;
+    }
+
+    .quick-replies-menu-title {
+      font-size: 12px !important;
+      line-height: 1.2 !important;
+      color: #111827 !important;
+      font-weight: 900 !important;
+    }
+
+    .quick-replies-menu-note {
+      font-size: 10px !important;
+      line-height: 1.2 !important;
+      color: #64748b !important;
+      font-weight: 700 !important;
+    }
+
+    .quick-replies-list {
+      display: grid !important;
+      gap: 7px !important;
+    }
+
+    .quick-reply-item {
+      width: 100% !important;
+      min-height: 38px !important;
+      padding: 8px 10px !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(120, 184, 62, .18) !important;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fcf5 100%) !important;
+      color: #16352b !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 10px !important;
+      cursor: pointer !important;
+      text-align: left !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      box-shadow: none !important;
+    }
+
+    .quick-reply-item:hover {
+      border-color: rgba(120, 184, 62, .44) !important;
+      background: #f2faee !important;
+    }
+
+    .quick-reply-item span:last-child {
+      color: #6b7280 !important;
+      font-size: 12px !important;
+      font-weight: 900 !important;
+    }
+
     .topbar-notification {
       position: relative !important;
       width: 42px !important;
@@ -7742,7 +7838,23 @@ app.get("/inbox", protectInbox, (req, res) => {
         </div>
         <div class="topbar-actions">
           <div class="topbar-system"><span class="system-dot"></span>All systems operational</div>
-          <button type="button" class="topbar-quick">⚡ Quick Replies</button>
+          <div class="topbar-quick-wrap" id="quickRepliesWrap">
+            <button type="button" class="topbar-quick" id="topbarQuickRepliesBtn" aria-expanded="false" aria-controls="quickRepliesMenu">⚡ Quick Replies</button>
+            <div class="quick-replies-menu" id="quickRepliesMenu" role="menu" aria-label="Quick replies">
+              <div class="quick-replies-menu-head">
+                <div>
+                  <div class="quick-replies-menu-title">Quick Replies</div>
+                  <div class="quick-replies-menu-note">Insert into message</div>
+                </div>
+              </div>
+              <div class="quick-replies-list">
+                <button type="button" class="quick-reply-item" data-text="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟&#10;&#10;Hello, this is the Iconic Hair Care team. How may we help you?"><span>Greeting</span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="شكراً لتواصلك معنا. تم استلام طلبك وسيقوم أحد أعضاء فريقنا بالرد عليك قريباً.&#10;&#10;Thank you for contacting us. Your request has been received and one of our team members will reply shortly."><span>Follow-up</span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="يمكنك مشاركة اسمك والخدمة المطلوبة والفرع المناسب لك حتى نساعدك بشكل أدق.&#10;&#10;Please share your name, required service, and preferred branch so we can assist you better."><span>Need details</span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="تم تحويل طلبك إلى الفريق المختص وسنتواصل معك بأقرب وقت ممكن.&#10;&#10;Your request has been transferred to the relevant team and we will contact you as soon as possible."><span>Team handoff</span><span>↵</span></button>
+              </div>
+            </div>
+          </div>
           <button type="button" class="topbar-notification" aria-label="Notifications">🔔<span class="notification-count">3</span></button>
           <div class="topbar-profile-avatar" aria-label="Iconic profile">ICONIC</div>
         </div>
@@ -9170,12 +9282,53 @@ document.getElementById("markReadBtn").addEventListener("click", function() {
   renderAll();
 });
 
+function insertQuickReply(text) {
+  inputBody.value = text || "";
+  inputBody.focus();
+}
+
 Array.from(document.querySelectorAll(".quick-btn")).forEach(function(btn) {
   btn.addEventListener("click", function() {
-    inputBody.value = btn.getAttribute("data-text") || "";
-    inputBody.focus();
+    insertQuickReply(btn.getAttribute("data-text") || "");
   });
 });
+
+const quickRepliesWrap = document.getElementById("quickRepliesWrap");
+const topbarQuickRepliesBtn = document.getElementById("topbarQuickRepliesBtn");
+
+function closeQuickRepliesMenu() {
+  if (!quickRepliesWrap || !topbarQuickRepliesBtn) return;
+  quickRepliesWrap.classList.remove("open");
+  topbarQuickRepliesBtn.setAttribute("aria-expanded", "false");
+}
+
+if (quickRepliesWrap && topbarQuickRepliesBtn) {
+  topbarQuickRepliesBtn.addEventListener("click", function(event) {
+    event.stopPropagation();
+    const isOpen = quickRepliesWrap.classList.toggle("open");
+    topbarQuickRepliesBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
+
+  Array.from(quickRepliesWrap.querySelectorAll(".quick-reply-item")).forEach(function(btn) {
+    btn.addEventListener("click", function(event) {
+      event.stopPropagation();
+      insertQuickReply(btn.getAttribute("data-text") || "");
+      closeQuickRepliesMenu();
+    });
+  });
+
+  document.addEventListener("click", function(event) {
+    if (!quickRepliesWrap.contains(event.target)) {
+      closeQuickRepliesMenu();
+    }
+  });
+
+  document.addEventListener("keydown", function(event) {
+    if (event.key === "Escape") {
+      closeQuickRepliesMenu();
+    }
+  });
+}
 
 Array.from(document.querySelectorAll(".status-btn")).forEach(function(btn) {
   btn.addEventListener("click", function() {
