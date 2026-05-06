@@ -14,7 +14,7 @@ const fetch = (...args) => {
 const app = express();
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-7-5-conversation-list-footer-finish";
+const BOT_VERSION = "iconic-team-inbox-v30-7-6-list-closure-chat-header-balance";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -7888,6 +7888,83 @@ app.get("/inbox", protectInbox, (req, res) => {
         border-radius: 0 0 18px 18px !important;
       }
     }
+
+    /* V30.7.6 - Conversation list closure + balanced chat header.
+       Visual-only: keeps the customer list visually closed inside the panel with the footer fixed at the bottom,
+       preserves list scroll, and increases the selected-chat header height for better balance.
+       No Google Sheets, send/image, Reply From, webhook, auto-reply, opt-in, or reminders logic changed. */
+    .messages-panel {
+      display: flex !important;
+      flex-direction: column !important;
+      height: 100% !important;
+      overflow: hidden !important;
+      border-radius: 20px !important;
+      background: #ffffff !important;
+    }
+
+    .reference-conversation-filters {
+      flex: 0 0 auto !important;
+      padding: 12px 12px 8px !important;
+      border-bottom: 1px solid rgba(226,232,226,.90) !important;
+      background: #ffffff !important;
+    }
+
+    #conversationList.reference-conversation-list,
+    #conversationList.conversation-list {
+      flex: 1 1 auto !important;
+      min-height: 0 !important;
+      height: auto !important;
+      padding: 0 10px 12px !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      background: #ffffff !important;
+      scrollbar-gutter: stable !important;
+    }
+
+    .reference-list-footer {
+      flex: 0 0 40px !important;
+      height: 40px !important;
+      min-height: 40px !important;
+      margin-top: auto !important;
+      border-top: 1px solid rgba(226,232,226,.90) !important;
+      border-radius: 0 0 20px 20px !important;
+      background: #ffffff !important;
+      position: relative !important;
+      z-index: 2 !important;
+    }
+
+    .chat-head {
+      min-height: 78px !important;
+      padding: 17px 18px !important;
+      gap: 14px !important;
+      align-items: center !important;
+    }
+
+    .chat-head .avatar {
+      width: 46px !important;
+      height: 46px !important;
+    }
+
+    .chat-title {
+      font-size: 19px !important;
+    }
+
+    .chat-meta {
+      margin-top: 6px !important;
+      gap: 7px !important;
+    }
+
+    .chat-actions {
+      gap: 10px !important;
+      align-items: center !important;
+    }
+
+    .chat-actions .mini-btn,
+    .chat-actions .conversation-status-select {
+      height: 40px !important;
+      min-height: 40px !important;
+    }
+
 </style>
 </head>
 <body>
