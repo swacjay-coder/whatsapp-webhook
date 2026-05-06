@@ -14,7 +14,7 @@ const fetch = (...args) => {
 const app = express();
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-8-1-clean-layout-fix-from-v30-7-4";
+const BOT_VERSION = "iconic-team-inbox-v30-8-2-chat-header-meta-visibility-from-v30-7-4";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -7783,7 +7783,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V30.8.1 - Clean Layout Fix from V30.7.4
+    /* V30.8.2 - Clean Layout Fix from V30.7.4
        Scope only:
        - messages-panel
        - conversationList
@@ -7929,19 +7929,19 @@ app.get("/inbox", protectInbox, (req, res) => {
       /* Balanced chat panel */
       .chat-panel {
         display: grid !important;
-        grid-template-rows: 76px minmax(0, 1fr) auto !important;
+        grid-template-rows: 106px minmax(0, 1fr) auto !important;
         border-radius: 24px !important;
       }
 
       .chat-head {
-        height: 76px !important;
-        min-height: 76px !important;
-        max-height: 76px !important;
-        padding: 10px 14px !important;
+        height: 106px !important;
+        min-height: 106px !important;
+        max-height: 106px !important;
+        padding: 14px 16px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: space-between !important;
-        gap: 12px !important;
+        gap: 14px !important;
         overflow: hidden !important;
         border-radius: 24px 24px 0 0 !important;
         background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(250,253,248,.94)) !important;
@@ -7951,25 +7951,26 @@ app.get("/inbox", protectInbox, (req, res) => {
 
       .chat-customer {
         display: flex !important;
-        align-items: center !important;
-        gap: 10px !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
         min-width: 0 !important;
         flex: 1 1 auto !important;
+        padding-top: 4px !important;
       }
 
       .chat-head .avatar,
       .chat-head .chat-avatar,
       .chat-head .conversation-avatar {
-        width: 42px !important;
-        height: 42px !important;
-        min-width: 42px !important;
-        min-height: 42px !important;
+        width: 46px !important;
+        height: 46px !important;
+        min-width: 46px !important;
+        min-height: 46px !important;
         font-size: 12px !important;
         border-radius: 999px !important;
       }
 
       .chat-title {
-        font-size: 16.5px !important;
+        font-size: 17px !important;
         line-height: 1.12 !important;
         font-weight: 900 !important;
         letter-spacing: -.018em !important;
@@ -7981,13 +7982,14 @@ app.get("/inbox", protectInbox, (req, res) => {
       }
 
       .chat-meta {
-        margin-top: 4px !important;
+        margin-top: 8px !important;
         display: flex !important;
         align-items: center !important;
-        gap: 5px !important;
-        flex-wrap: nowrap !important;
+        align-content: flex-start !important;
+        gap: 6px !important;
+        flex-wrap: wrap !important;
         min-width: 0 !important;
-        max-height: 22px !important;
+        max-height: 48px !important;
         overflow: hidden !important;
       }
 
@@ -7995,12 +7997,12 @@ app.get("/inbox", protectInbox, (req, res) => {
       .chat-meta .status,
       .chat-meta .sender-badge,
       .chat-meta span {
-        height: 20px !important;
-        min-height: 20px !important;
-        padding: 0 8px !important;
+        height: 21px !important;
+        min-height: 21px !important;
+        padding: 0 9px !important;
         border-radius: 999px !important;
-        font-size: 10px !important;
-        line-height: 20px !important;
+        font-size: 10.5px !important;
+        line-height: 21px !important;
         font-weight: 850 !important;
         white-space: nowrap !important;
       }
@@ -8009,9 +8011,10 @@ app.get("/inbox", protectInbox, (req, res) => {
         display: flex !important;
         align-items: center !important;
         justify-content: flex-end !important;
-        gap: 7px !important;
+        gap: 8px !important;
         flex: 0 0 auto !important;
         min-width: 0 !important;
+        align-self: center !important;
       }
 
       .conversation-status-select {
@@ -8075,7 +8078,7 @@ app.get("/inbox", protectInbox, (req, res) => {
 
       .chat-head {
         height: auto !important;
-        min-height: 76px !important;
+        min-height: 106px !important;
         max-height: none !important;
         flex-wrap: wrap !important;
       }
