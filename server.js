@@ -14,7 +14,7 @@ const fetch = (...args) => {
 const app = express();
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-8-2-chat-header-meta-visibility-from-v30-7-4";
+const BOT_VERSION = "iconic-team-inbox-v30-8-3-compact-filter-grid-from-v30-7-4";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -6280,8 +6280,8 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reference-conversation-filters {
-      padding: 12px 12px 10px !important;
-      gap: 9px !important;
+      padding: 8px 10px 8px !important;
+      gap: 6px !important;
       background: #ffffff !important;
       border-bottom: 1px solid rgba(226,232,226,.92) !important;
       display: grid !important;
@@ -6289,57 +6289,61 @@ app.get("/inbox", protectInbox, (req, res) => {
 
     .reference-search-row {
       display: grid !important;
-      grid-template-columns: minmax(0, 1fr) 42px !important;
-      gap: 8px !important;
+      grid-template-columns: minmax(0, 1fr) 38px !important;
+      gap: 7px !important;
       align-items: center !important;
     }
 
     .reference-search-row input {
-      height: 42px !important;
-      min-height: 42px !important;
+      height: 38px !important;
+      min-height: 38px !important;
       border-radius: 12px !important;
       border: 1px solid rgba(218,226,218,.95) !important;
       background: #fff !important;
       box-shadow: none !important;
-      padding: 0 14px !important;
-      font-size: 13px !important;
-      font-weight: 650 !important;
+      padding: 0 13px !important;
+      font-size: 12.5px !important;
+      font-weight: 600 !important;
       color: #334155 !important;
     }
 
     .reference-filter-icon {
-      height: 42px !important;
-      width: 42px !important;
+      height: 38px !important;
+      width: 38px !important;
       border-radius: 12px !important;
       border: 1px solid rgba(218,226,218,.95) !important;
       background: #fff !important;
       color: #475569 !important;
-      font-size: 16px !important;
-      font-weight: 900 !important;
+      font-size: 15px !important;
+      font-weight: 850 !important;
       cursor: default !important;
     }
 
     .reference-pill-row {
-      display: flex !important;
-      gap: 7px !important;
-      flex-wrap: wrap !important;
+      display: grid !important;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      gap: 6px !important;
       align-items: center !important;
     }
 
     .reference-pill {
-      height: 36px !important;
-      min-height: 36px !important;
-      padding: 0 14px !important;
+      width: 100% !important;
+      height: 30px !important;
+      min-height: 30px !important;
+      padding: 0 8px !important;
       border-radius: 10px !important;
       border: 1px solid rgba(218,226,218,.95) !important;
       background: #fff !important;
       color: #334155 !important;
-      font-size: 12px !important;
-      font-weight: 800 !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
       letter-spacing: -.01em !important;
       box-shadow: none !important;
       cursor: pointer !important;
       white-space: nowrap !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
     }
 
     .reference-pill.active {
@@ -6350,10 +6354,11 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reference-secondary-pills .reference-pill {
-      height: 34px !important;
-      min-height: 34px !important;
-      padding: 0 13px !important;
-      font-size: 11.5px !important;
+      height: 30px !important;
+      min-height: 30px !important;
+      padding: 0 8px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
     }
 
     .reference-branch-tabs {
@@ -8181,10 +8186,10 @@ app.get("/inbox", protectInbox, (req, res) => {
             <button type="button" class="reference-pill active" data-status="">All</button>
             <button type="button" class="reference-pill" data-status="Customer Reply">Customer</button>
             <button type="button" class="reference-pill" data-status="Bot Reply">Bot Reply</button>
-            <button type="button" class="reference-pill" data-status="Human Reply">Human Reply</button>
           </div>
 
           <div class="reference-pill-row reference-secondary-pills" aria-label="Workflow filters">
+            <button type="button" class="reference-pill" data-status="Human Reply">Human Reply</button>
             <button type="button" class="reference-pill reference-soft-pill" data-status="Follow-up">Follow-up</button>
             <button type="button" class="reference-pill reference-soft-pill" data-status="Talk to Team">Talk to Team</button>
           </div>
