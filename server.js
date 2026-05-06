@@ -14,7 +14,7 @@ const fetch = (...args) => {
 const app = express();
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-8-4-show-header-tags-from-v30-7-4";
+const BOT_VERSION = "iconic-team-inbox-v30-9-inline-image-messages-from-v30-8-4";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1330,6 +1330,17 @@ app.post("/api/send", protectInbox, async (req, res) => {
 
 
 
+
+function buildInlineImageMessageBody(mediaId, filename, caption) {
+  const payload = {
+    mediaId: (mediaId || "").toString().trim(),
+    filename: (filename || "iconic-image.jpg").toString().trim(),
+    caption: (caption || "").toString().trim()
+  };
+
+  return "[[ICONIC_INLINE_IMAGE]] " + JSON.stringify(payload);
+}
+
 app.post("/api/send-image", protectInbox, async (req, res) => {
   try {
     const to = (req.body?.to || "").toString().trim();
@@ -1363,10 +1374,16 @@ app.post("/api/send-image", protectInbox, async (req, res) => {
     }
 
     setConversationStatus(to, "Human Reply");
+
+    const safeImageFilename = sanitizeMediaFilename(
+      filename,
+      (req.body?.mimeType || "image/jpeg").toString().trim()
+    );
+
     addInboxMessage(
       to,
       "staff",
-      `[Image sent] ${sanitizeMediaFilename(filename, "image/jpeg")}${caption ? "\n" + caption : ""}`,
+      buildInlineImageMessageBody(sendResult.mediaId, safeImageFilename, caption),
       "Human Reply",
       phoneNumberId,
       { messageType: "Human Image Reply" }
@@ -1380,6 +1397,57 @@ app.post("/api/send-image", protectInbox, async (req, res) => {
       ok: false,
       error: "Image send failed"
     });
+  }
+});
+
+
+app.get("/api/media/:mediaId", protectInbox, async (req, res) => {
+  try {
+    const mediaId = (req.params?.mediaId || "").toString().trim().replace(/[^a-zA-Z0-9_-]/g, "");
+
+    if (!mediaId) {
+      return res.status(400).send("Missing media id");
+    }
+
+    const mediaMetaResponse = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`
+      }
+    });
+
+    const mediaMeta = await mediaMetaResponse.json();
+
+    if (!mediaMetaResponse.ok || !mediaMeta.url) {
+      console.log("WhatsApp media metadata failed:");
+      console.log(JSON.stringify(mediaMeta, null, 2));
+      return res.status(mediaMetaResponse.status || 500).send("Could not load media metadata");
+    }
+
+    const imageResponse = await fetch(mediaMeta.url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`
+      }
+    });
+
+    if (!imageResponse.ok) {
+      const text = await imageResponse.text();
+      console.log("WhatsApp media download failed:");
+      console.log(imageResponse.status, text);
+      return res.status(imageResponse.status || 500).send("Could not download media");
+    }
+
+    const arrayBuffer = await imageResponse.arrayBuffer();
+    const contentType = mediaMeta.mime_type || imageResponse.headers.get("content-type") || "application/octet-stream";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (error) {
+    console.error("Media proxy failed:");
+    console.error(error);
+    return res.status(500).send("Media proxy failed");
   }
 });
 
@@ -8100,7 +8168,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     /* V30.8.4 - Show selected conversation tags in chat header only.
        UI-only: moves VIP/tags before workflow/assigned so they cannot be hidden by long assignee text. */
     .topbar-sub::after {
-      content: "V30.8.4" !important;
+      content: "V30.9" !important;
     }
 
     @media (min-width: 1181px) {
@@ -8156,6 +8224,45 @@ app.get("/inbox", protectInbox, (req, res) => {
         overflow: hidden !important;
         text-overflow: ellipsis !important;
       }
+    }
+
+
+    /* V30.9 - Inline Image Messages. Visual rendering only for images sent from Team Inbox. */
+    .inline-image-message {
+      display: block !important;
+      max-width: 310px !important;
+    }
+
+    .inline-image-link {
+      display: block !important;
+      text-decoration: none !important;
+      border-radius: 16px !important;
+      overflow: hidden !important;
+      background: rgba(255,255,255,.55) !important;
+      border: 1px solid rgba(148, 163, 184, .28) !important;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, .08) !important;
+    }
+
+    .inline-image-message img {
+      display: block !important;
+      width: 100% !important;
+      max-width: 310px !important;
+      max-height: 360px !important;
+      object-fit: cover !important;
+      border-radius: 15px !important;
+    }
+
+    .inline-image-caption {
+      margin-top: 8px !important;
+      color: #0f172a !important;
+      font-size: 12.5px !important;
+      font-weight: 650 !important;
+      line-height: 1.45 !important;
+      white-space: pre-wrap !important;
+    }
+
+    .reference-version-badge::after {
+      content: "V30.9" !important;
     }
 </style>
 </head>
@@ -8951,6 +9058,49 @@ function shortText(value, max) {
   return t.length <= max ? t : t.slice(0, max - 1) + "…";
 }
 
+const INLINE_IMAGE_PREFIX = "[[ICONIC_INLINE_IMAGE]] ";
+
+function parseInlineImageMessage(body) {
+  const value = (body || "").toString().trim();
+
+  if (!value.startsWith(INLINE_IMAGE_PREFIX)) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(value.slice(INLINE_IMAGE_PREFIX.length));
+    const mediaId = (payload.mediaId || "").toString().trim();
+
+    if (!mediaId) {
+      return null;
+    }
+
+    return {
+      mediaId,
+      filename: (payload.filename || "WhatsApp image").toString().trim(),
+      caption: (payload.caption || "").toString().trim()
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function renderMessageBody(message) {
+  const image = parseInlineImageMessage(message?.body || "");
+
+  if (!image) {
+    return escapeHtml(message?.body || "");
+  }
+
+  const mediaSrc = "/api/media/" + encodeURIComponent(image.mediaId);
+  return '<div class="inline-image-message">' +
+    '<a class="inline-image-link" href="' + mediaSrc + '" target="_blank" rel="noopener">' +
+      '<img src="' + mediaSrc + '" alt="' + escapeHtml(image.filename || "WhatsApp image") + '" loading="lazy" />' +
+    '</a>' +
+    (image.caption ? '<div class="inline-image-caption">' + escapeHtml(image.caption) + '</div>' : '') +
+  '</div>';
+}
+
 function avatarText(phone) {
   const clean = (phone || "IC").replace(/\D/g, "");
   return clean ? clean.slice(-2) : "IC";
@@ -9328,6 +9478,12 @@ function formatConversationDisplayName(c) {
 function formatConversationPreview(message) {
   if (!message) return "";
   const senderLabel = message.sender === "customer" ? "Customer" : message.sender === "staff" ? "Team" : message.sender === "bot" ? "Bot" : "Message";
+  const image = parseInlineImageMessage(message.body || "");
+
+  if (image) {
+    return senderLabel + ": 📷 Image" + (image.caption ? " — " + image.caption : "");
+  }
+
   const body = (message.body || "").toString().replace(/\s+/g, " ").trim();
   return senderLabel + ": " + body;
 }
@@ -9465,7 +9621,7 @@ function renderChat() {
     const cls = m.sender === "customer" ? "customer" : (m.sender === "staff" ? "staff" : "bot");
     return '<div class="bubble-row ' + cls + '">' +
       '<div class="bubble ' + cls + '">' +
-        escapeHtml(m.body || "") +
+        renderMessageBody(m) +
         '<div class="bubble-info">' +
           '<span>' + senderBadge(m.sender || "") + '</span>' +
           '<span>' + escapeHtml(m.time || "") + '</span>' +
