@@ -14,7 +14,7 @@ const fetch = (...args) => {
 const app = express();
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-8-3-compact-filter-grid-from-v30-7-4";
+const BOT_VERSION = "iconic-team-inbox-v30-8-4-show-header-tags-from-v30-7-4";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -8095,7 +8095,69 @@ app.get("/inbox", protectInbox, (req, res) => {
       }
     }
 
-  </style>
+  
+
+    /* V30.8.4 - Show selected conversation tags in chat header only.
+       UI-only: moves VIP/tags before workflow/assigned so they cannot be hidden by long assignee text. */
+    .topbar-sub::after {
+      content: "V30.8.4" !important;
+    }
+
+    @media (min-width: 1181px) {
+      .chat-meta {
+        max-height: 58px !important;
+        gap: 6px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-meta > .tag-chip,
+      .chat-meta > .conversation-tag-chip {
+        order: 3 !important;
+        height: 21px !important;
+        min-height: 21px !important;
+        line-height: 21px !important;
+        padding: 0 9px !important;
+        font-size: 10.5px !important;
+        max-width: 118px !important;
+        flex: 0 0 auto !important;
+      }
+
+      .chat-meta > .branch {
+        order: 1 !important;
+      }
+
+      .chat-meta > .status {
+        order: 2 !important;
+      }
+
+      .chat-meta > .workflow-status-bar {
+        order: 4 !important;
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        margin-top: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 7px !important;
+        flex-wrap: nowrap !important;
+        overflow: hidden !important;
+      }
+
+      .chat-meta .workflow-status-chip,
+      .chat-meta .assignee-chip {
+        height: 21px !important;
+        min-height: 21px !important;
+        line-height: 21px !important;
+        padding: 0 9px !important;
+        font-size: 10.5px !important;
+      }
+
+      .chat-meta .assignee-chip {
+        max-width: 220px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+    }
+</style>
 </head>
 <body>
   <div class="workspace-shell">
@@ -9368,7 +9430,9 @@ function renderChat() {
 
   chatTitle.textContent = c.phone;
   chatAvatar.textContent = avatarText(c.phone);
-  chatMeta.innerHTML = branchBadge(c.branch) + '<span class="status ' + statusClass(c.status) + '">' + escapeHtml(c.status || "") + '</span>' + '<div class="workflow-status-bar"><span class="workflow-status-chip ' + statusClass(c.status) + '">Workflow: ' + escapeHtml(c.status || "Open") + '</span>' + assigneeBadge(c.assignee) + tagBadges(c.tags, "tag-chip", 4) + '</div>';
+  const headerTags = normalizeTags(c.tags || []);
+  const headerTagsHtml = headerTags.length ? tagBadges(headerTags, "tag-chip", 3) : "";
+  chatMeta.innerHTML = branchBadge(c.branch) + '<span class="status ' + statusClass(c.status) + '">' + escapeHtml(c.status || "") + '</span>' + headerTagsHtml + '<div class="workflow-status-bar"><span class="workflow-status-chip ' + statusClass(c.status) + '">Workflow: ' + escapeHtml(c.status || "Open") + '</span>' + assigneeBadge(c.assignee) + '</div>';
   if (conversationStatusSelect) {
     const allowedStatuses = ["Open", "Waiting", "Need Follow-up", "Talk to Team", "Closed"];
     conversationStatusSelect.value = allowedStatuses.includes(c.status) ? c.status : "Open";
