@@ -14,7 +14,7 @@ const fetch = (...args) => {
 const app = express();
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-7-1-remove-stats-row-reclaim-space";
+const BOT_VERSION = "iconic-team-inbox-v30-7-2-yellow-areas-reference-match";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -4171,7 +4171,7 @@ app.get("/inbox", protectInbox, (req, res) => {
 
     /* V22 - Move Send Composer under Chat. UI-only: IDs and send logic preserved. */
     .topbar-sub::after {
-      content: "LIVE: V30.2" !important;
+      content: "LIVE: V30.7.2" !important;
       font-size: 11px !important;
       font-weight: 950 !important;
       color: #14532d !important;
@@ -4752,7 +4752,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reply-panel::after {
-      content: "V30.2.1" !important;
+      content: "V30.7.2" !important;
     }
 
     .reply-panel .panel-head {
@@ -5200,7 +5200,7 @@ app.get("/inbox", protectInbox, (req, res) => {
        UI-only: keeps V22.5 conversation list scroll and composer under chat.
        Goal: Reply Panel + Team assignment + Tags fit in the visible right column. */
     .reply-panel::after {
-      content: "V30.2.1" !important;
+      content: "V30.7.2" !important;
     }
 
     .app {
@@ -5369,7 +5369,7 @@ app.get("/inbox", protectInbox, (req, res) => {
        UI-only: keeps V24 send button visible, V22.5 scroll fixes, and V22.3 quick replies inside composer.
        Goal: keep Send WhatsApp Reply visible without page zooming or scrolling. */
     .reply-panel::after {
-      content: "V30.2.1" !important;
+      content: "V30.7.2" !important;
     }
 
     .chat-composer-wrap {
@@ -7101,7 +7101,293 @@ app.get("/inbox", protectInbox, (req, res) => {
       }
     }
 
-</style>
+
+
+    /* V30.7.2 - Yellow Areas Reference Match.
+       Visual-only: refines selected chat header, list footer, and reply-from footer. Core send/image/sheet/webhook logic untouched. */
+    .chat-head {
+      min-height: 64px !important;
+      padding: 8px 12px !important;
+      border-bottom: 1px solid rgba(226,232,226,.92) !important;
+      background: rgba(255,255,255,.94) !important;
+      gap: 10px !important;
+    }
+
+    .chat-customer {
+      gap: 10px !important;
+      align-items: center !important;
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+    }
+
+    .chat-head .avatar {
+      width: 42px !important;
+      height: 42px !important;
+      min-width: 42px !important;
+      font-size: 12px !important;
+      box-shadow: 0 8px 18px rgba(15,23,42,.08) !important;
+    }
+
+    .chat-title {
+      font-size: 14px !important;
+      line-height: 1.15 !important;
+      font-weight: 900 !important;
+      letter-spacing: -.01em !important;
+      color: #111827 !important;
+      max-width: 250px !important;
+    }
+
+    .chat-meta {
+      margin-top: 3px !important;
+      gap: 5px !important;
+      align-items: center !important;
+      overflow: hidden !important;
+      max-height: 24px !important;
+    }
+
+    .chat-meta .tag-chip,
+    .chat-meta .conversation-tag-chip {
+      font-size: 9.5px !important;
+      padding: 3px 8px !important;
+      line-height: 1.1 !important;
+      border-radius: 999px !important;
+    }
+
+    .chat-actions {
+      flex: 0 0 auto !important;
+      gap: 7px !important;
+      align-items: center !important;
+      flex-wrap: nowrap !important;
+    }
+
+    .chat-actions .conversation-status-select {
+      min-height: 34px !important;
+      height: 34px !important;
+      width: 92px !important;
+      padding: 0 28px 0 12px !important;
+      border-radius: 12px !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      background-color: #ffffff !important;
+    }
+
+    .chat-actions .mini-btn {
+      height: 34px !important;
+      min-height: 34px !important;
+      padding: 0 11px !important;
+      border-radius: 12px !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      box-shadow: none !important;
+    }
+
+    .chat-actions .more-btn {
+      width: 34px !important;
+      padding: 0 !important;
+      font-size: 18px !important;
+      line-height: 1 !important;
+    }
+
+    .reference-list-footer {
+      height: 30px !important;
+      min-height: 30px !important;
+      padding: 0 12px !important;
+      font-size: 11px !important;
+      line-height: 1 !important;
+      background: #ffffff !important;
+      border-top: 1px solid rgba(226,232,226,.90) !important;
+    }
+
+    .reference-list-footer button {
+      width: 24px !important;
+      height: 24px !important;
+      font-size: 14px !important;
+    }
+
+    .chat-composer-wrap {
+      padding: 8px 10px 9px !important;
+      background: rgba(255,255,255,.82) !important;
+      border-top: 1px solid rgba(226,232,226,.92) !important;
+    }
+
+    .chat-composer-wrap .composer-block {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 7px !important;
+      padding: 10px 11px !important;
+      border-radius: 18px !important;
+      background: #ffffff !important;
+      box-shadow: 0 8px 20px rgba(15,23,42,.06) !important;
+    }
+
+    .chat-composer-wrap .composer-title {
+      min-height: 20px !important;
+      margin-bottom: 0 !important;
+      padding: 0 !important;
+    }
+
+    .chat-composer-wrap .composer-title strong {
+      font-size: 12px !important;
+      line-height: 1 !important;
+    }
+
+    .chat-composer-wrap .composer-title span {
+      font-size: 10px !important;
+      padding: 3px 7px !important;
+      border-radius: 999px !important;
+    }
+
+    .chat-composer-wrap label {
+      font-size: 9px !important;
+      line-height: 1 !important;
+      margin: 0 !important;
+      color: #64748b !important;
+      letter-spacing: .08em !important;
+      text-transform: uppercase !important;
+    }
+
+    .chat-composer-wrap textarea#body {
+      min-height: 48px !important;
+      height: 48px !important;
+      padding: 10px 12px !important;
+      border-radius: 13px !important;
+      font-size: 13px !important;
+      resize: vertical !important;
+    }
+
+    .chat-composer-wrap .composer-mini-actions {
+      gap: 6px !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+
+    .chat-composer-wrap .composer-mini-actions .quick-btn {
+      min-height: 28px !important;
+      height: 28px !important;
+      padding: 0 9px !important;
+      border-radius: 12px !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+    }
+
+    .chat-composer-wrap .media-box {
+      display: grid !important;
+      grid-template-columns: minmax(145px, .75fr) minmax(160px, 1fr) 132px !important;
+      gap: 7px !important;
+      align-items: center !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+
+    .chat-composer-wrap #imageFile,
+    .chat-composer-wrap #imageCaption {
+      min-height: 32px !important;
+      height: 32px !important;
+      padding: 6px 9px !important;
+      border-radius: 12px !important;
+      font-size: 11px !important;
+    }
+
+    .chat-composer-wrap .send-image-btn {
+      min-height: 32px !important;
+      height: 32px !important;
+      padding: 0 10px !important;
+      border-radius: 12px !important;
+      font-size: 11px !important;
+      box-shadow: none !important;
+    }
+
+    .chat-composer-wrap .media-hint {
+      display: none !important;
+    }
+
+    .chat-composer-wrap .composer-actions {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) 190px !important;
+      gap: 8px !important;
+      align-items: center !important;
+      order: 20 !important;
+    }
+
+    .chat-composer-wrap .composer-actions .result {
+      min-height: 30px !important;
+      height: 30px !important;
+      display: flex !important;
+      align-items: center !important;
+      padding: 0 10px !important;
+      font-size: 11px !important;
+      border-radius: 12px !important;
+      margin: 0 !important;
+    }
+
+    .chat-composer-wrap .send-btn {
+      min-height: 34px !important;
+      height: 34px !important;
+      margin: 0 !important;
+      padding: 0 14px !important;
+      border-radius: 13px !important;
+      font-size: 12px !important;
+      box-shadow: 0 8px 18px rgba(37,211,102,.20) !important;
+    }
+
+    .chat-composer-wrap .composer-reply-source {
+      order: 30 !important;
+      display: grid !important;
+      grid-template-columns: auto minmax(0, 1fr) !important;
+      gap: 8px !important;
+      align-items: center !important;
+      min-height: 24px !important;
+      padding: 0 2px !important;
+      margin: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+
+    .chat-composer-wrap .composer-reply-source label {
+      font-size: 10px !important;
+      text-transform: none !important;
+      letter-spacing: 0 !important;
+      color: #64748b !important;
+      font-weight: 800 !important;
+    }
+
+    .chat-composer-wrap .composer-reply-source label::before {
+      content: "Responding as: ";
+    }
+
+    .chat-composer-wrap .composer-reply-source label {
+      font-size: 0 !important;
+    }
+
+    .chat-composer-wrap .composer-reply-source label::before {
+      font-size: 10.5px !important;
+    }
+
+    .chat-composer-wrap .composer-reply-source select {
+      height: 24px !important;
+      min-height: 24px !important;
+      border: 0 !important;
+      background: transparent !important;
+      color: #1f2937 !important;
+      font-size: 10.5px !important;
+      font-weight: 850 !important;
+      padding: 0 22px 0 0 !important;
+      box-shadow: none !important;
+    }
+
+    @media (max-width: 1180px) {
+      .chat-composer-wrap .media-box {
+        grid-template-columns: 1fr !important;
+      }
+      .chat-composer-wrap .composer-actions {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
+  </style>
 </head>
 <body>
   <div class="workspace-shell">
@@ -7250,6 +7536,7 @@ app.get("/inbox", protectInbox, (req, res) => {
             </select>
             <button type="button" class="mini-btn" id="copyPhoneBtn">Copy phone</button>
             <button type="button" class="mini-btn" id="markReadBtn">Mark read</button>
+            <button type="button" class="mini-btn more-btn" aria-label="More actions">⋮</button>
           </div>
         </div>
 
@@ -7262,7 +7549,7 @@ app.get("/inbox", protectInbox, (req, res) => {
             <div class="composer-block">
               <div class="composer-title">
                 <strong>Reply composer</strong>
-                <span>V30.2.1</span>
+                <span>V30.7.2</span>
               </div>
 
               <input id="to" type="hidden" />
