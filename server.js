@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-8-branch-staff-notification-routing-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-9-consultation-only-notify-premium-booking-reply";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1188,7 +1188,7 @@ function getAutoIntentWorkflow(text) {
       status: "Booking Request",
       tags: ["Booking", "Need Details"],
       assignee: "Consultation Team",
-      notifyStaff: true
+      notifyStaff: false
     };
   }
 
@@ -1212,7 +1212,7 @@ function getAutoIntentWorkflow(text) {
       status: "Talk to Team",
       tags: ["Human Support", "Need Details"],
       assignee: "Consultation Team",
-      notifyStaff: true
+      notifyStaff: false
     };
   }
 
@@ -1223,7 +1223,7 @@ function getAutoIntentWorkflow(text) {
       status: "Call Requested",
       tags: ["Call Requested", "Need Details"],
       assignee: "Consultation Team",
-      notifyStaff: true
+      notifyStaff: false
     };
   }
 
@@ -1236,7 +1236,7 @@ function getAutoIntentWorkflow(text) {
       status: "Price Question",
       tags: ["Price", "Need Details"],
       assignee: "Consultation Team",
-      notifyStaff: true
+      notifyStaff: false
     };
   }
 
@@ -11252,22 +11252,14 @@ app.post("/webhook", async (req, res) => {
 
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `أكيد، نرتب لك طلب الحجز مع فرع ${branchNameAr} ✅\n\n` +
-        "حتى يكون رد الفريق دقيق وسريع، اكتب لنا الآن:\n" +
-        "• الخدمة المطلوبة\n" +
-        "• اليوم أو التاريخ المناسب\n" +
-        "• الوقت المفضل\n" +
-        "• هل هذه أول زيارة لك؟\n\n" +
-        "إذا تفضل مكالمة مباشرة أو تريد معرفة الموقع، استخدم الأزرار بالأسفل.\n\n" +
+        `تم، نرتب لك طلب الحجز مع فرع ${branchNameAr} ✅\n\n` +
+        "اكتب لنا الوقت المناسب لك برسالة قصيرة، وسنساعدك بالخطوة التالية.\n\n" +
+        "وللتواصل الأسرع، يمكنك استخدام الأزرار بالأسفل للاتصال أو فتح موقع الفرع.\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `Sure, we will arrange your booking request with our ${lineConfig.branch} team ✅\n\n` +
-        "To help the team reply faster, please send:\n" +
-        "• Service needed\n" +
-        "• Preferred day/date\n" +
-        "• Preferred time\n" +
-        "• Is this your first visit?\n\n" +
-        "You can also use the buttons below for a direct call or branch location.";
+        `Your booking request with our ${lineConfig.branch} branch is ready ✅\n\n` +
+        "Send us your preferred time in one short message, and we will guide you with the next step.\n\n" +
+        "For faster contact, you can use the buttons below to call or open the branch location.";
 
       replyButtons = getConsultActionButtons();
       sendReminderOptInPrompt = true;
@@ -11378,20 +11370,14 @@ app.post("/webhook", async (req, res) => {
 
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `ممتاز، طلب الاستشارة وصل لفريق فرع ${branchNameAr} ✅\n\n` +
-        "حتى نبدأ صح، أرسل لنا 3 أشياء فقط:\n" +
-        "• الخدمة أو المشكلة التي تريد حلها\n" +
-        "• هل تفضل نتيجة طبيعية جدًا أو كثافة أعلى؟\n" +
-        "• الوقت المناسب للتواصل معك\n\n" +
-        "إذا تريد زيارة الفرع أو مكالمة مباشرة، استخدم الأزرار بالأسفل.\n\n" +
+        `تم استلام طلب الاستشارة بنجاح ✅\n\n` +
+        `تم تحويل محادثتك إلى فريق الاستشارات في فرع ${branchNameAr}. سيتم الرد عليك في أقرب وقت ممكن بسرية واهتمام.\n\n` +
+        "يمكنك إرسال أي ملاحظة إضافية هنا، وسيقوم الفريق بمراجعتها قبل التواصل معك.\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `Perfect, your consultation request has reached our ${lineConfig.branch} team ✅\n\n` +
-        "To start properly, please send only 3 details:\n" +
-        "• The service or concern you want to solve\n" +
-        "• Very natural look or higher density?\n" +
-        "• Best time to contact you\n\n" +
-        "Use the buttons below for the branch location or a direct call.";
+        `Your consultation request has been received successfully ✅\n\n` +
+        `Your conversation has been forwarded to the ${lineConfig.branch} consultation team. They will reply as soon as possible with privacy and care.\n\n` +
+        "You may send any additional note here, and our team will review it before contacting you.";
 
       replyButtons = getConsultActionButtons();
       sendReminderOptInPrompt = true;
@@ -11486,27 +11472,8 @@ app.post("/webhook", async (req, res) => {
       );
     }
 
-    /* إشعار الموظف عند طلب استشارة أو موظف */
-    const shouldNotifyStaff =
-      Boolean(autoIntentWorkflow?.notifyStaff) ||
-      text === "1" || text === "١" ||
-      text === "6" || text === "٦" ||
-      text.includes("احجز") ||
-      text.includes("موعد") ||
-      text.includes("appointment") ||
-      text.includes("book consultation") ||
-      text.includes("book appointment") ||
-      text.includes("موظف") ||
-      text.includes("فريق") ||
-      text.includes("استشارة") ||
-      text.includes("support") ||
-      text.includes("team") ||
-      text.includes("human") ||
-      text.includes("consultation") ||
-      text.includes("price") ||
-      text.includes("سعر") ||
-      text.includes("call") ||
-      text.includes("اتصل");
+    /* إشعار الموظف فقط عند طلب استشارة */
+    const shouldNotifyStaff = autoIntentWorkflow?.status === "Consultation Request";
 
     const staffNotificationNumber = getStaffNotificationNumber(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
 
