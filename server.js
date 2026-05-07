@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-6-restore-v31-5-1-no-sidebar-scroll";
+const BOT_VERSION = "iconic-team-inbox-v31-5-7-hard-disable-sidebar-scroll-from-v31-5-6";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -8515,6 +8515,30 @@ app.get("/inbox", protectInbox, (req, res) => {
 
     .reference-version-badge::after {
       content: "V31.2" !important;
+    }
+
+
+    /* V31.5.7 - Hard disable left sidebar scroll only.
+       Scope: main navigation/sidebar only.
+       Do not touch messages-panel, conversationList, chat, WhatsApp, Google Sheets, or auto replies. */
+    .main-sidebar,
+    .main-sidebar:hover,
+    .workspace-shell > .main-sidebar,
+    .workspace-shell > .main-sidebar:hover {
+      overflow: hidden !important;
+      overflow-y: hidden !important;
+      overflow-x: hidden !important;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+
+    .main-sidebar::-webkit-scrollbar,
+    .main-sidebar:hover::-webkit-scrollbar,
+    .workspace-shell > .main-sidebar::-webkit-scrollbar,
+    .workspace-shell > .main-sidebar:hover::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
     }
 </style>
 </head>
