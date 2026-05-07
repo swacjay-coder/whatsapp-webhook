@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-15-booking-card-in-team-inbox";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-16-booking-card-clean-notes";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -7466,7 +7466,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V31.5.8.15 - Booking card inside Team Inbox right panel only. */
+    /* V31.5.8.16 - Booking card clean notes, preserves V31.5.8.15 layout. */
     .booking-request-card {
       border-color: rgba(120,184,62,.34) !important;
       background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,253,241,.96)) !important;
@@ -10244,6 +10244,19 @@ function getLatestBookingRequestForConversation(c) {
   }) || null;
 }
 
+function cleanBookingNoteForTeamInbox(note) {
+  const value = (note || "").toString().trim();
+
+  // V31.5.8.16:
+  // Hide/clear old API test notes so staff do not see production booking cards
+  // polluted by testing text. If staff writes a real note, it remains saved.
+  if (value.toLowerCase() === "api status update test") {
+    return "";
+  }
+
+  return value;
+}
+
 function updateBookingRequestCard(c) {
   if (!bookingRequestCard) return;
 
@@ -10275,7 +10288,7 @@ function updateBookingRequestCard(c) {
   setProfileText(bookingRequestLastUpdated, booking.lastUpdated || booking.date || "—");
 
   if (bookingStatusNote) {
-    bookingStatusNote.value = booking.notes || "";
+    bookingStatusNote.value = cleanBookingNoteForTeamInbox(booking.notes || "");
   }
 
   if (bookingRequestResult) {
@@ -10298,7 +10311,7 @@ async function updateSelectedBookingStatus(status) {
     return;
   }
 
-  const notes = bookingStatusNote ? bookingStatusNote.value.trim() : "";
+  const notes = cleanBookingNoteForTeamInbox(bookingStatusNote ? bookingStatusNote.value.trim() : "");
 
   if (bookingRequestResult) bookingRequestResult.textContent = "Updating booking status...";
   setBookingButtonsDisabled(true);
