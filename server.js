@@ -22,7 +22,7 @@ app.get("/api/wake", (req, res) => {
 });
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-9-inline-image-messages-from-v30-8-4";
+const BOT_VERSION = "iconic-team-inbox-v30-10-incoming-customer-images-with-api-wake";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -354,6 +354,11 @@ function getIncomingMessageText(message) {
       message.interactive?.list_reply?.title ||
       message.interactive?.list_reply?.id ||
       "";
+  }
+
+  // V30.10: use image caption as text input only when a customer sends an image with caption.
+  if (message.type === "image") {
+    return message.image?.caption || "";
   }
 
   return "";
@@ -1347,6 +1352,21 @@ function buildInlineImageMessageBody(mediaId, filename, caption) {
   };
 
   return "[[ICONIC_INLINE_IMAGE]] " + JSON.stringify(payload);
+}
+
+function buildIncomingCustomerImageBody(message) {
+  const image = message?.image || {};
+  const mediaId = (image.id || "").toString().trim();
+
+  if (!mediaId) {
+    return "";
+  }
+
+  const mimeType = (image.mime_type || "image/jpeg").toString().trim();
+  const filename = sanitizeMediaFilename("customer-image-" + mediaId, mimeType);
+  const caption = (image.caption || "").toString().trim();
+
+  return buildInlineImageMessageBody(mediaId, filename, caption);
 }
 
 app.post("/api/send-image", protectInbox, async (req, res) => {
@@ -8176,7 +8196,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     /* V30.8.4 - Show selected conversation tags in chat header only.
        UI-only: moves VIP/tags before workflow/assigned so they cannot be hidden by long assignee text. */
     .topbar-sub::after {
-      content: "V30.9" !important;
+      content: "V30.10" !important;
     }
 
     @media (min-width: 1181px) {
@@ -8235,7 +8255,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V30.9 - Inline Image Messages. Visual rendering only for images sent from Team Inbox. */
+    /* V30.10 - Inline Image Messages. Visual rendering for staff-sent and customer-sent images. */
     .inline-image-message {
       display: block !important;
       max-width: 310px !important;
@@ -10120,15 +10140,19 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    const incomingCustomerImageBody = message.type === "image" ? buildIncomingCustomerImageBody(message) : "";
+    const customerMessageBody = incomingCustomerImageBody || (profileName ? `${profileName}: ${originalText}` : originalText);
+    const customerMessageType = incomingCustomerImageBody ? "Customer Image Message" : "Customer Message";
+
     addInboxMessage(
       from,
       "customer",
-      profileName ? `${profileName}: ${originalText}` : originalText,
+      customerMessageBody,
       "Bot",
       incomingPhoneNumberId,
       {
         customerName: profileName,
-        messageType: "Customer Message"
+        messageType: customerMessageType
       }
     );
 
