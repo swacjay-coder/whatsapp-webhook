@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-5-instant-whatsapp-profile-name-display";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-6-sidebar-responsive-lock-only";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -8613,6 +8613,134 @@ app.get("/inbox", protectInbox, (req, res) => {
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
+      }
+    }
+
+
+    /* V31.5.8.6 - Sidebar responsive lock only.
+       Goal: keep the Iconic logo and Created by card visible when browser zoom/height changes.
+       Scope only: main sidebar, sidebar brand/logo, sidebar nav, branches card, and sidebar user card.
+       Do not touch messages panel, conversation list, footer reserved row, chat, WhatsApp, Google Sheets, webhook, reminders, or media logic. */
+    @media (min-width: 1181px) {
+      .workspace-shell > .main-sidebar {
+        height: 100vh !important;
+        max-height: 100vh !important;
+        min-height: 0 !important;
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) auto auto !important;
+        align-content: stretch !important;
+        gap: clamp(7px, 1.15vh, 12px) !important;
+        overflow: hidden !important;
+        overflow-y: hidden !important;
+        overflow-x: hidden !important;
+        padding: clamp(8px, 1.2vh, 14px) 12px !important;
+      }
+
+      .workspace-shell > .main-sidebar:hover {
+        overflow: hidden !important;
+        overflow-y: hidden !important;
+        overflow-x: hidden !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-brand {
+        grid-row: 1 !important;
+        flex: 0 0 auto !important;
+        min-height: clamp(88px, 13.2vh, 118px) !important;
+        padding: clamp(10px, 1.7vh, 18px) 10px clamp(12px, 2vh, 24px) !important;
+        margin: 0 !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-brand .sidebar-logo {
+        width: clamp(138px, 10.8vw, 166px) !important;
+        height: clamp(58px, 8.4vh, 78px) !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-nav {
+        grid-row: 2 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overscroll-behavior: contain !important;
+        align-content: start !important;
+        gap: clamp(3px, .75vh, 6px) !important;
+        padding-right: 2px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-nav::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-item {
+        min-height: clamp(32px, 4.35vh, 40px) !important;
+        padding: clamp(7px, .95vh, 10px) 11px !important;
+        flex: 0 0 auto !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-branches {
+        grid-row: 3 !important;
+        margin-top: 0 !important;
+        flex: 0 0 auto !important;
+        min-height: 0 !important;
+        padding: clamp(8px, 1.15vh, 12px) !important;
+        overflow: hidden !important;
+      }
+
+      .workspace-shell > .main-sidebar .branch-row {
+        padding: clamp(5px, .85vh, 9px) 2px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-user {
+        grid-row: 4 !important;
+        flex: 0 0 auto !important;
+        min-height: 0 !important;
+        padding: clamp(8px, 1.05vh, 11px) !important;
+        overflow: hidden !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-user-avatar {
+        width: clamp(32px, 4.6vh, 38px) !important;
+        height: clamp(32px, 4.6vh, 38px) !important;
+        min-width: clamp(32px, 4.6vh, 38px) !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-height: 720px) {
+      .workspace-shell > .main-sidebar {
+        gap: 7px !important;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-brand {
+        min-height: 82px !important;
+        padding-top: 8px !important;
+        padding-bottom: 9px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-brand .sidebar-logo {
+        width: 132px !important;
+        height: 56px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-section-title {
+        margin-bottom: 5px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-user-name {
+        font-size: 12px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-user-role {
+        font-size: 10px !important;
+        margin-top: 1px !important;
       }
     }
 
