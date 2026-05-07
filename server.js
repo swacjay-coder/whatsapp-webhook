@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-16-booking-card-clean-notes";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-17-safe-booking-customer-update";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1581,6 +1581,112 @@ async function updateBookingRequestStatusInGoogleSheetFromServer({ rowNumber, ph
   }
 }
 
+function buildBookingCustomerUpdateBody(status, notes = "") {
+  const cleanStatus = (status || "").toString().trim();
+  const statusValue = cleanStatus.toLowerCase();
+  const cleanNotes = (notes || "").toString().trim();
+
+  if (!cleanStatus) {
+    return { ok: false, error: "Missing booking status" };
+  }
+
+  if (statusValue.includes("suggest")) {
+    if (!cleanNotes) {
+      return {
+        ok: false,
+        error: "Please write the suggested time in Notes before sending to customer."
+      };
+    }
+
+    return {
+      ok: true,
+      body: [
+        BUSINESS_NAME_SPACED + " ✨",
+        "",
+        "شكراً لك، بخصوص طلب الحجز الخاص بك.",
+        "الوقت المقترح من فريقنا هو:",
+        "",
+        cleanNotes,
+        "",
+        "إذا كان الوقت مناسباً، يرجى الرد على هذه الرسالة للتأكيد.",
+        "",
+        "------------------------------",
+        "",
+        BUSINESS_NAME_SPACED + " ✨",
+        "",
+        "Thank you, regarding your booking request.",
+        "The suggested time from our team is:",
+        "",
+        cleanNotes,
+        "",
+        "If this time works for you, please reply to this message to confirm."
+      ].join("\n")
+    };
+  }
+
+  if (statusValue.includes("approved")) {
+    return {
+      ok: true,
+      body: [
+        BUSINESS_NAME_SPACED + " ✨",
+        "",
+        "تمت الموافقة على طلب الحجز الخاص بك.",
+        "سيتواصل معك فريقنا لتأكيد التفاصيل النهائية.",
+        "",
+        "------------------------------",
+        "",
+        BUSINESS_NAME_SPACED + " ✨",
+        "",
+        "Your booking request has been approved.",
+        "Our team will contact you to confirm the final details."
+      ].join("\n")
+    };
+  }
+
+  if (statusValue.includes("follow")) {
+    return {
+      ok: true,
+      body: [
+        BUSINESS_NAME_SPACED + " ✨",
+        "",
+        "شكراً لك، طلبك قيد المتابعة من فريقنا.",
+        "سنتواصل معك قريباً لتأكيد التفاصيل.",
+        "",
+        "------------------------------",
+        "",
+        BUSINESS_NAME_SPACED + " ✨",
+        "",
+        "Thank you, your request is being reviewed by our team.",
+        "We will contact you shortly to confirm the details."
+      ].join("\n")
+    };
+  }
+
+  if (statusValue.includes("cancel")) {
+    return {
+      ok: true,
+      body: [
+        BUSINESS_NAME_SPACED + " ✨",
+        "",
+        "تم تحديث حالة طلب الحجز الخاص بك.",
+        "إذا كنت ترغب بالمساعدة، يمكنك التواصل معنا في أي وقت.",
+        "",
+        "------------------------------",
+        "",
+        BUSINESS_NAME_SPACED + " ✨",
+        "",
+        "Your booking request status has been updated.",
+        "If you need assistance, you can contact us anytime."
+      ].join("\n")
+    };
+  }
+
+  return {
+    ok: false,
+    error: "Choose Approved, Suggest another time, Need follow-up, or Cancelled before sending to customer."
+  };
+}
+
 /* واجهة Inbox بسيطة */
 app.get("/", (req, res) => {
   res.redirect("/inbox");
@@ -1925,6 +2031,58 @@ app.post("/api/bookings/status", protectInbox, async (req, res) => {
     console.error("Booking status API failed:");
     console.error(error);
     return res.status(500).json({ ok: false, error: "Booking status API failed" });
+  }
+});
+
+app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
+  try {
+    const to = normalizePhoneDigits(req.body?.to || req.body?.phone || "");
+    const phoneNumberId = normalizePhoneNumberId(req.body?.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+    const status = (req.body?.status || req.body?.bookingStatus || "").toString().trim();
+    const notes = (req.body?.notes || "").toString().trim();
+
+    if (!to) {
+      return res.status(400).json({ ok: false, error: "Missing customer phone" });
+    }
+
+    const messageBuild = buildBookingCustomerUpdateBody(status, notes);
+
+    if (!messageBuild.ok) {
+      return res.status(400).json(messageBuild);
+    }
+
+    const sendResult = await sendWhatsAppMessage(to, messageBuild.body, phoneNumberId);
+
+    if (sendResult?.error) {
+      return res.status(500).json({
+        ok: false,
+        error: sendResult.error?.message || "WhatsApp booking update send failed",
+        result: sendResult
+      });
+    }
+
+    addInboxMessage(
+      to,
+      "staff",
+      messageBuild.body,
+      "Human Reply",
+      phoneNumberId,
+      {
+        messageType: "Booking Customer Update"
+      }
+    );
+
+    return res.json({
+      ok: true,
+      to,
+      phoneNumberId,
+      status,
+      result: sendResult
+    });
+  } catch (error) {
+    console.error("Booking customer update send failed:");
+    console.error(error);
+    return res.status(500).json({ ok: false, error: "Booking customer update send failed" });
   }
 });
 
@@ -7466,7 +7624,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V31.5.8.16 - Booking card clean notes, preserves V31.5.8.15 layout. */
+    /* V31.5.8.17 - Safe booking customer update, preserves V31.5.8.16 layout. */
     .booking-request-card {
       border-color: rgba(120,184,62,.34) !important;
       background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,253,241,.96)) !important;
@@ -7569,8 +7727,22 @@ app.get("/inbox", protectInbox, (req, res) => {
       border-color: rgba(239,68,68,.28);
     }
 
-    .booking-action-btn:disabled {
-      cursor: not-allowed;
+
+    .booking-send-update-btn {
+      width: 100%;
+      margin-top: 8px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #128c7e, #25d366);
+      border-color: rgba(18,140,126,.35);
+      box-shadow: 0 10px 18px rgba(18,140,126,.12);
+    }
+
+    .booking-send-update-btn:hover {
+      border-color: rgba(18,140,126,.55);
+      box-shadow: 0 12px 22px rgba(18,140,126,.17);
+    }
+
+    .booking-action-btn:disabled {      cursor: not-allowed;
       opacity: .62;
       transform: none;
       box-shadow: none;
@@ -9652,6 +9824,7 @@ app.get("/inbox", protectInbox, (req, res) => {
               <button type="button" class="booking-action-btn follow" data-booking-status-action="Need follow-up">Need follow-up</button>
               <button type="button" class="booking-action-btn cancel" data-booking-status-action="Cancelled">Cancel</button>
             </div>
+            <button type="button" class="booking-action-btn booking-send-update-btn" id="bookingSendCustomerUpdateBtn">Send update to customer</button>
             <div class="booking-result-text" id="bookingRequestResult">Ready.</div>
           </section>
 
@@ -9823,6 +9996,7 @@ const bookingRequestBranch = document.getElementById("bookingRequestBranch");
 const bookingRequestMessage = document.getElementById("bookingRequestMessage");
 const bookingRequestLastUpdated = document.getElementById("bookingRequestLastUpdated");
 const bookingStatusNote = document.getElementById("bookingStatusNote");
+const bookingSendCustomerUpdateBtn = document.getElementById("bookingSendCustomerUpdateBtn");
 const bookingRequestResult = document.getElementById("bookingRequestResult");
 
 const referenceFilterPills = Array.from(document.querySelectorAll(".reference-pill[data-status]"));
@@ -10300,6 +10474,10 @@ function setBookingButtonsDisabled(disabled) {
   Array.from(document.querySelectorAll("[data-booking-status-action]")).forEach(function(btn) {
     btn.disabled = Boolean(disabled);
   });
+
+  if (bookingSendCustomerUpdateBtn) {
+    bookingSendCustomerUpdateBtn.disabled = Boolean(disabled);
+  }
 }
 
 async function updateSelectedBookingStatus(status) {
@@ -10348,6 +10526,70 @@ async function updateSelectedBookingStatus(status) {
     loadMessages();
   } catch (error) {
     if (bookingRequestResult) bookingRequestResult.textContent = "Failed: booking status update error.";
+  } finally {
+    setBookingButtonsDisabled(false);
+  }
+}
+
+function bookingStatusNeedsSuggestedTime(status) {
+  return (status || "").toString().toLowerCase().includes("suggest");
+}
+
+function bookingStatusCanSendCustomerUpdate(status) {
+  const value = (status || "").toString().toLowerCase();
+  return value.includes("approved") || value.includes("suggest") || value.includes("follow") || value.includes("cancel");
+}
+
+async function sendSelectedBookingUpdateToCustomer() {
+  const c = getCurrentConversationForState();
+  const booking = getLatestBookingRequestForConversation(c);
+
+  if (!booking || !booking.rowNumber) {
+    if (bookingRequestResult) bookingRequestResult.textContent = "No booking request selected.";
+    return;
+  }
+
+  const status = (booking.status || "Pending").toString().trim();
+  const notes = cleanBookingNoteForTeamInbox(bookingStatusNote ? bookingStatusNote.value.trim() : "");
+
+  if (!bookingStatusCanSendCustomerUpdate(status)) {
+    if (bookingRequestResult) bookingRequestResult.textContent = "Choose booking status before sending to customer.";
+    return;
+  }
+
+  if (bookingStatusNeedsSuggestedTime(status) && !notes) {
+    if (bookingRequestResult) bookingRequestResult.textContent = "Write the suggested time in Notes first.";
+    if (bookingStatusNote) bookingStatusNote.focus();
+    return;
+  }
+
+  if (bookingRequestResult) bookingRequestResult.textContent = "Sending update to customer...";
+  setBookingButtonsDisabled(true);
+
+  try {
+    const response = await fetch("/api/bookings/send-update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rowNumber: booking.rowNumber,
+        to: booking.phone || (c && c.phone) || "",
+        phoneNumberId: booking.phoneNumberId || (c && c.phoneNumberId) || "",
+        status: status,
+        notes: notes
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      if (bookingRequestResult) bookingRequestResult.textContent = "Failed: " + (result.error || "Customer update failed");
+      return;
+    }
+
+    if (bookingRequestResult) bookingRequestResult.textContent = "Customer update sent.";
+    loadMessages();
+  } catch (error) {
+    if (bookingRequestResult) bookingRequestResult.textContent = "Failed: customer update send error.";
   } finally {
     setBookingButtonsDisabled(false);
   }
@@ -11253,6 +11495,10 @@ Array.from(document.querySelectorAll("[data-booking-status-action]")).forEach(fu
     updateSelectedBookingStatus(btn.dataset.bookingStatusAction || "");
   });
 });
+
+if (bookingSendCustomerUpdateBtn) {
+  bookingSendCustomerUpdateBtn.addEventListener("click", sendSelectedBookingUpdateToCustomer);
+}
 
 document.getElementById("copyPhoneBtn").addEventListener("click", function() {
   const phone = inputTo.value.trim() || selectedPhone;
