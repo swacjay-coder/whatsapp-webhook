@@ -1,4 +1,6 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 
 // Render-safe fetch:
 // Uses Node 18+ built-in fetch first, and falls back to node-fetch only if needed.
@@ -12,6 +14,7 @@ const fetch = (...args) => {
 };
 
 const app = express();
+app.set("trust proxy", true);
 
 app.get("/api/wake", (req, res) => {
   return res.status(200).json({
@@ -22,7 +25,32 @@ app.get("/api/wake", (req, res) => {
 });
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v31-4-3-soft-reminder-offers-copy-from-v31-4-2";
+app.get("/assets/:filename", (req, res) => {
+  try {
+    const requestedFilename = (req.params?.filename || "").toString().trim();
+
+    if (requestedFilename !== AUTO_REPLY_VIDEO_FILENAME) {
+      return res.status(404).send("Asset not found");
+    }
+
+    const videoPath = path.join(__dirname, AUTO_REPLY_VIDEO_FILENAME);
+
+    if (!fs.existsSync(videoPath)) {
+      console.log("Auto-reply video file is missing:", videoPath);
+      return res.status(404).send("Auto-reply video file not found");
+    }
+
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return res.sendFile(videoPath);
+  } catch (error) {
+    console.error("Auto-reply video asset failed:");
+    console.error(error);
+    return res.status(500).send("Auto-reply video asset failed");
+  }
+});
+
+const BOT_VERSION = "iconic-team-inbox-v31-5-auto-video-reply-from-v31-4-3";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -33,6 +61,12 @@ const ABU_DHABI_PHONE_NUMBER_ID = process.env.ABU_DHABI_PHONE_NUMBER_ID || "1000
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
 const INBOX_USER = process.env.INBOX_USER || "admin";
 const INBOX_PASS = process.env.INBOX_PASS || "123456";
+
+// V31.5 Auto Video Reply:
+// Put iconic-auto-reply-video-13s.mp4 in the same GitHub/Render folder as server.js.
+// If you prefer hosting the video elsewhere, set AUTO_REPLY_VIDEO_URL to a direct public MP4 link.
+const AUTO_REPLY_VIDEO_FILENAME = process.env.AUTO_REPLY_VIDEO_FILENAME || "iconic-auto-reply-video-13s.mp4";
+const AUTO_REPLY_VIDEO_URL = (process.env.AUTO_REPLY_VIDEO_URL || "").toString().trim();
 
 // Follow-up reminder templates:
 // Use separate templates for Dubai and Abu Dhabi so each branch can have its own Call button.
@@ -366,6 +400,81 @@ function isReminderOptInDeclineText(text) {
     value === "ليس الان";
 }
 
+function isAutoVideoRequestText(text) {
+  const value = compactText(text);
+
+  if (!value) return false;
+
+  return value === "video" ||
+    value === "فيديو" ||
+    value.includes("video") ||
+    value.includes("فيديو") ||
+    value.includes("مقطع") ||
+    value.includes("ميديا") ||
+    value.includes("media") ||
+    value.includes("شوف") ||
+    value.includes("show") ||
+    value.includes("result") ||
+    value.includes("results") ||
+    value.includes("before after") ||
+    value.includes("before/after") ||
+    value.includes("قبل وبعد") ||
+    value.includes("صور") ||
+    value.includes("صورة") ||
+    value.includes("photo") ||
+    value.includes("photos") ||
+    value.includes("image") ||
+    value.includes("images");
+}
+
+function buildAutoVideoCaption() {
+  return `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "أكيد، هذا فيديو قصير يوضح فكرة الخدمة من Iconic Hair Care.\n\n" +
+    "لخصوصيتك، فريقنا يقدر يساعدك بالتفاصيل المناسبة لحالتك داخل المحادثة.\n\n" +
+    "------------------------------\n\n" +
+    `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "Sure, here is a short video showing the service idea from Iconic Hair Care.\n\n" +
+    "For your privacy, our team can guide you with the details that fit your case inside this chat.";
+}
+
+function buildAfterVideoBody() {
+  return `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "إذا حاب تعرف الأنسب لحالتك، تقدر تحجز استشارة أو تتواصل مع الفريق مباشرة.\n\n" +
+    "------------------------------\n\n" +
+    `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "If you would like to know what fits your case best, you can book a consultation or talk to the team directly.";
+}
+
+function getPublicBaseUrl(req) {
+  const configuredBaseUrl = (process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || "").toString().trim().replace(/\/$/, "");
+
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  const host = (req?.get?.("host") || "").toString().trim();
+
+  if (!host) {
+    return "";
+  }
+
+  return `https://${host}`;
+}
+
+function getAutoReplyVideoUrl(req) {
+  if (AUTO_REPLY_VIDEO_URL) {
+    return AUTO_REPLY_VIDEO_URL;
+  }
+
+  const baseUrl = getPublicBaseUrl(req);
+
+  if (!baseUrl) {
+    return "";
+  }
+
+  return `${baseUrl}/assets/${AUTO_REPLY_VIDEO_FILENAME}`;
+}
+
 function getIncomingMessageText(message) {
   if (!message) return "";
 
@@ -567,6 +676,60 @@ async function sendWhatsAppImageMessage(to, imageDataUrl, caption = "", filename
     ok: response.ok,
     status: response.status,
     mediaId: uploadResult.mediaId,
+    result
+  };
+}
+
+async function sendWhatsAppVideoMessage(to, videoUrl, caption = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const lineConfig = getLineConfig(finalPhoneNumberId);
+  const cleanVideoUrl = (videoUrl || "").toString().trim();
+
+  if (!cleanVideoUrl) {
+    return {
+      ok: false,
+      status: 400,
+      result: { error: "Missing auto-reply video URL" }
+    };
+  }
+
+  const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
+  const cleanCaption = (caption || "").toString().trim().slice(0, 900);
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "video",
+    video: {
+      link: cleanVideoUrl,
+      ...(cleanCaption ? { caption: cleanCaption } : {})
+    }
+  };
+
+  console.log(`Sending WhatsApp auto-reply video from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to}`);
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    console.log("WhatsApp video send failed:");
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log("WhatsApp video sent successfully:");
+    console.log(JSON.stringify(result, null, 2));
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
     result
   };
 }
@@ -10501,6 +10664,67 @@ app.post("/webhook", async (req, res) => {
     ) {
       replyText = buildReminderOptInBody();
       replyButtons = getReminderOptInButtons();
+    }
+
+    /* V31.5 — إرسال فيديو تلقائي عند طلب الصور أو الميديا */
+    else if (isAutoVideoRequestText(text)) {
+      setConversationStatus(from, "Media Requested");
+
+      const videoUrl = getAutoReplyVideoUrl(req);
+      const videoCaption = buildAutoVideoCaption();
+      const videoResult = await sendWhatsAppVideoMessage(from, videoUrl, videoCaption, incomingPhoneNumberId);
+
+      if (videoResult.ok) {
+        addInboxMessage(
+          from,
+          "bot",
+          `[Video sent] ${AUTO_REPLY_VIDEO_FILENAME}\n${videoCaption}`,
+          "Media Requested",
+          incomingPhoneNumberId,
+          {
+            customerName: profileName,
+            messageType: "Auto Video Reply"
+          }
+        );
+
+        const afterVideoBody = buildAfterVideoBody();
+        const afterVideoButtons = getConsultActionButtons();
+
+        await sendWhatsAppButtonMessage(from, afterVideoBody, afterVideoButtons, incomingPhoneNumberId);
+        addInboxMessage(
+          from,
+          "bot",
+          formatButtonLog(afterVideoBody, afterVideoButtons),
+          "Media Requested",
+          incomingPhoneNumberId,
+          {
+            customerName: profileName,
+            messageType: "Bot Reply"
+          }
+        );
+      } else {
+        const videoFallbackText =
+          `${BUSINESS_NAME_SPACED} ✨\n\n` +
+          "تعذر إرسال الفيديو حالياً، لكن فريقنا جاهز يرسل لك التفاصيل داخل المحادثة.\n\n" +
+          "------------------------------\n\n" +
+          `${BUSINESS_NAME_SPACED} ✨\n\n` +
+          "The video could not be sent right now, but our team can share the details with you inside this chat.";
+
+        await sendWhatsAppMessage(from, videoFallbackText, incomingPhoneNumberId);
+        addInboxMessage(
+          from,
+          "bot",
+          videoFallbackText,
+          "Media Fallback",
+          incomingPhoneNumberId,
+          {
+            customerName: profileName,
+            messageType: "Auto Video Fallback"
+          }
+        );
+      }
+
+      return res.sendStatus(200);
     }
 
     /* 1 — حجز استشارة */
