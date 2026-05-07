@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-2-branch-list-scroll-fix-from-v31-5-1";
+const BOT_VERSION = "iconic-team-inbox-v31-5-3-clean-conversation-list-scroll-rebuild-from-v31-5-1";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -3520,7 +3520,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reply-panel::after {
-      content: "V19";
+      content: "V31.5.3";
       position: absolute;
       top: 18px;
       right: 18px;
@@ -3761,7 +3761,7 @@ app.get("/inbox", protectInbox, (req, res) => {
 
     /* V18.5 - Bottom Send / Composer Block: visual-only. Keeps IDs and send logic intact. */
     .reply-panel::after {
-      content: "V19" !important;
+      content: "V31.5.3" !important;
       background: linear-gradient(135deg, rgba(220,248,198,.95), rgba(255,255,255,.94)) !important;
       border-color: rgba(34,197,94,.38) !important;
     }
@@ -4144,7 +4144,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reply-panel::after {
-      content: "V19" !important;
+      content: "V31.5.3" !important;
       color: #166534 !important;
       border-color: rgba(34,197,94,.38) !important;
     }
@@ -5061,7 +5061,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reply-panel::after {
-      content: "V31.4" !important;
+      content: "V31.5.3" !important;
     }
 
     .reply-panel .panel-head {
@@ -5165,77 +5165,6 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V22.2 - Conversation list scroll fix preserved.
-       V22.4 - Conversation list blank block fix.
-       Fixes the customer conversation column so staff can scroll inside it
-       without scrolling the whole page. UI-only; no API/send/Google Sheets changes. */
-    .app {
-      height: calc(100vh - 166px) !important;
-      min-height: 0 !important;
-      overflow: hidden !important;
-    }
-
-    .messages-panel {
-      display: flex !important;
-      flex-direction: column !important;
-      min-height: 0 !important;
-      height: 100% !important;
-      max-height: 100% !important;
-      overflow: hidden !important;
-    }
-
-    .messages-panel .filters {
-      flex: 0 0 auto !important;
-    }
-
-    #conversationList.conversation-list,
-    .messages-panel > .conversation-list {
-      flex: 1 1 0 !important;
-      height: 0 !important;
-      min-height: 0 !important;
-      max-height: none !important;
-      overflow-y: scroll !important;
-      overflow-x: hidden !important;
-      overscroll-behavior: contain !important;
-      scrollbar-gutter: stable !important;
-      padding-bottom: 14px !important;
-    }
-
-    #conversationList.conversation-list::-webkit-scrollbar {
-      width: 10px !important;
-    }
-
-    #conversationList.conversation-list::-webkit-scrollbar-thumb {
-      background: rgba(120,184,62,.36) !important;
-      border-radius: 999px !important;
-      border: 2px solid rgba(255,255,255,.88) !important;
-    }
-
-    #conversationList.conversation-list::-webkit-scrollbar-track {
-      background: rgba(241,247,238,.65) !important;
-      border-radius: 999px !important;
-    }
-
-    .conversation-card,
-    .conversation-item {
-      scroll-margin: 10px !important;
-    }
-
-    @media (max-width: 920px) {
-      .app {
-        height: auto !important;
-        max-height: none !important;
-        overflow: visible !important;
-      }
-
-      #conversationList.conversation-list,
-      .messages-panel > .conversation-list {
-        height: 420px !important;
-        flex: 0 0 420px !important;
-      }
-    }
-
-
     /* V22.3 - Quick replies are now part of the composer, not the right panel. */
     .chat-composer-wrap .composer-quick-replies {
       grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
@@ -5263,253 +5192,11 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V22.4 - Conversation list blank block fix.
-       Keeps the customer conversation column usable and removes the empty visual block.
-       UI-only CSS fix; no Google Sheets, send message, send image, status, assign, or tags logic changed. */
-    .messages-panel {
-      display: grid !important;
-      grid-template-rows: auto minmax(0, 1fr) !important;
-      min-height: 0 !important;
-      height: 100% !important;
-      max-height: 100% !important;
-      overflow: hidden !important;
-    }
-
-    .messages-panel .filters {
-      position: relative !important;
-      z-index: 3 !important;
-      flex: none !important;
-    }
-
-    #conversationList.conversation-list,
-    .messages-panel > .conversation-list {
-      position: relative !important;
-      z-index: 2 !important;
-      display: block !important;
-      height: auto !important;
-      min-height: 0 !important;
-      max-height: none !important;
-      overflow-y: auto !important;
-      overflow-x: hidden !important;
-      padding: 8px 10px 14px !important;
-      background: rgba(255,255,255,.74) !important;
-      border-top: 1px solid rgba(215,226,212,.76) !important;
-      overscroll-behavior: contain !important;
-      scrollbar-gutter: stable !important;
-    }
-
-    #conversationList.conversation-list::before,
-    .messages-panel > .conversation-list::before {
-      display: none !important;
-      content: none !important;
-    }
-
-    #conversationList .conversation-card {
-      display: grid !important;
-      grid-template-columns: 44px minmax(0, 1fr) !important;
-      gap: 10px !important;
-      width: 100% !important;
-      position: relative !important;
-      z-index: 4 !important;
-      opacity: 1 !important;
-      visibility: visible !important;
-      margin: 0 0 9px !important;
-      transform: none !important;
-    }
-
-    #conversationList .conversation-card:hover {
-      transform: translateY(-1px) !important;
-    }
-
-    #conversationList .empty {
-      margin: 10px !important;
-      min-height: 120px !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      border-radius: 18px !important;
-      background: rgba(255,255,255,.82) !important;
-      border: 1px dashed rgba(180,210,171,.85) !important;
-    }
-
-    @media (min-width: 1181px) {
-      .app {
-        height: calc(100vh - 166px) !important;
-        overflow: hidden !important;
-      }
-    }
-
-
-    /* V22.5 - Conversation list scroll final fix.
-       This version forces the customer conversations column to be a real
-       internal scroll area, so staff can choose any customer without
-       shrinking browser zoom or scrolling the whole page. UI-only CSS fix. */
-    @media (min-width: 1181px) {
-      html,
-      body {
-        height: 100vh !important;
-        max-height: 100vh !important;
-        overflow: hidden !important;
-      }
-
-      .workspace-shell {
-        height: 100vh !important;
-        max-height: 100vh !important;
-        overflow: hidden !important;
-      }
-
-      .page {
-        height: 100vh !important;
-        max-height: 100vh !important;
-        overflow: hidden !important;
-        display: grid !important;
-        grid-template-rows: 72px 78px minmax(0, 1fr) !important;
-        gap: 10px !important;
-      }
-
-      .topbar.v18-topbar,
-      .topbar {
-        height: 72px !important;
-        min-height: 72px !important;
-        max-height: 72px !important;
-        padding: 10px 14px !important;
-      }
-
-      .stats {
-        height: 78px !important;
-        min-height: 78px !important;
-        max-height: 78px !important;
-        gap: 10px !important;
-        overflow: hidden !important;
-      }
-
-      .stat-card,
-      .metric-card {
-        min-height: 0 !important;
-        height: 78px !important;
-        padding: 10px 14px !important;
-      }
-
-      .stat-value,
-      .metric-value {
-        font-size: 26px !important;
-        line-height: 1 !important;
-        margin-top: 3px !important;
-      }
-
-      .app {
-        height: 100% !important;
-        min-height: 0 !important;
-        max-height: 100% !important;
-        overflow: hidden !important;
-        grid-template-columns: 330px minmax(0, 1fr) 360px !important;
-        align-items: stretch !important;
-      }
-
-      .messages-panel,
-      .chat-panel,
-      .reply-panel {
-        height: 100% !important;
-        min-height: 0 !important;
-        max-height: 100% !important;
-        overflow: hidden !important;
-      }
-
-      .messages-panel {
-        display: grid !important;
-        grid-template-rows: auto minmax(0, 1fr) !important;
-      }
-
-      .messages-panel .filters {
-        min-height: 0 !important;
-        padding: 10px !important;
-        gap: 8px !important;
-      }
-
-      .messages-panel .filters input,
-      .messages-panel .filters select {
-        min-height: 38px !important;
-        height: 38px !important;
-        padding: 8px 11px !important;
-        font-size: 12px !important;
-      }
-
-      #conversationList.conversation-list,
-      .messages-panel > .conversation-list {
-        height: 100% !important;
-        min-height: 0 !important;
-        max-height: 100% !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        display: block !important;
-        padding: 8px 10px 12px !important;
-        overscroll-behavior: contain !important;
-        scrollbar-gutter: stable both-edges !important;
-        touch-action: pan-y !important;
-      }
-
-      #conversationList .conversation-card {
-        min-height: auto !important;
-        padding: 10px !important;
-        margin-bottom: 8px !important;
-      }
-
-      #conversationList .conversation-card .avatar,
-      #conversationList .conversation-card .conversation-avatar {
-        width: 42px !important;
-        height: 42px !important;
-        min-width: 42px !important;
-      }
-
-      #conversationList .conv-preview,
-      #conversationList .conversation-preview {
-        display: block !important;
-        max-height: 30px !important;
-        overflow: hidden !important;
-        line-height: 1.25 !important;
-      }
-
-      .chat-panel {
-        display: grid !important;
-        grid-template-rows: auto minmax(0, 1fr) auto !important;
-      }
-
-      .chat-body {
-        min-height: 0 !important;
-        height: 100% !important;
-        max-height: 100% !important;
-        overflow-y: auto !important;
-      }
-
-      .chat-composer-wrap {
-        flex: 0 0 auto !important;
-        max-height: 245px !important;
-        overflow: hidden !important;
-        padding: 10px !important;
-      }
-
-      .chat-composer-wrap textarea {
-        min-height: 58px !important;
-        max-height: 78px !important;
-      }
-
-      .reply-panel .reply-body,
-      .reply-body {
-        height: 100% !important;
-        min-height: 0 !important;
-        max-height: 100% !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        padding-bottom: 14px !important;
-      }
-    }
-
-
     /* V24 - Send button visible with no internal scroll.
        UI-only: keeps V22.5 conversation list scroll and composer under chat.
        Goal: Reply Panel + Team assignment + Tags fit in the visible right column. */
     .reply-panel::after {
-      content: "V30.7.3" !important;
+      content: "V31.5.3" !important;
     }
 
     .app {
@@ -5678,7 +5365,7 @@ app.get("/inbox", protectInbox, (req, res) => {
        UI-only: keeps V24 send button visible, V22.5 scroll fixes, and V22.3 quick replies inside composer.
        Goal: keep Send WhatsApp Reply visible without page zooming or scrolling. */
     .reply-panel::after {
-      content: "V30.7.3" !important;
+      content: "V31.5.3" !important;
     }
 
     .chat-composer-wrap {
@@ -7708,7 +7395,7 @@ app.get("/inbox", protectInbox, (req, res) => {
        Rebuilds the reply composer to match the reference layout exactly.
        UI-only: no send message, send image, Reply from logic, Google Sheets, Conversation State, webhook, auto-reply, opt-in, or reminders changes. */
     .reply-panel::after {
-      content: "V30.7.3" !important;
+      content: "V31.5.3" !important;
     }
 
     .chat-composer-wrap {
@@ -8356,7 +8043,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     /* V30.8.4 - Show selected conversation tags in chat header only.
        UI-only: moves VIP/tags before workflow/assigned so they cannot be hidden by long assignee text. */
     .topbar-sub::after {
-      content: "V31.2" !important;
+      content: "V31.5.3" !important;
     }
 
     @media (min-width: 1181px) {
@@ -8514,35 +8201,91 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reference-version-badge::after {
-      content: "V31.2" !important;
+      content: "V31.5.3" !important;
     }
 
 
-    /* V31.5.2 - Branch conversation list scroll fix
-       UI-only fix for Dubai / Abu Dhabi branch tabs.
-       Keeps the customer card list as the only scrollable area inside messages-panel. */
+
+    /* V31.5.3 - Clean Conversation List Scroll Rebuild
+       Single source of truth for the customer conversation list scroll.
+       Scope only: messages-panel, conversationList, reference-list-footer.
+       Does not touch WhatsApp, Webhook, Google Sheets, media, reminders, or auto-reply logic. */
     @media (min-width: 1181px) {
       .messages-panel {
+        display: flex !important;
+        flex-direction: column !important;
+        height: 100% !important;
         min-height: 0 !important;
+        max-height: 100% !important;
         overflow: hidden !important;
       }
 
-      #conversationList.reference-conversation-list,
-      #conversationList.conversation-list,
-      .messages-panel > #conversationList {
+      .messages-panel .filters {
+        flex: 0 0 auto !important;
         min-height: 0 !important;
-        height: 100% !important;
+        overflow: visible !important;
+      }
+
+      #conversationList,
+      #conversationList.conversation-list,
+      #conversationList.reference-conversation-list,
+      .messages-panel > #conversationList {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
         max-height: none !important;
-        overflow-y: auto !important;
+        overflow-y: scroll !important;
+        overflow-x: hidden !important;
+        display: block !important;
+        padding: 10px 10px 14px !important;
+        overscroll-behavior: contain !important;
+        scrollbar-gutter: stable both-edges !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-y !important;
+        pointer-events: auto !important;
+        background: linear-gradient(180deg, rgba(250,253,248,.96), rgba(246,250,244,.96)) !important;
+      }
+
+      #conversationList .conversation-card,
+      #conversationList .reference-conversation-card {
+        width: 100% !important;
+        flex: 0 0 auto !important;
+        pointer-events: auto !important;
+      }
+
+      .reference-list-footer {
+        flex: 0 0 46px !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        max-height: 46px !important;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .messages-panel {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 620px !important;
+        max-height: 620px !important;
+        overflow: hidden !important;
+      }
+
+      #conversationList,
+      #conversationList.conversation-list,
+      #conversationList.reference-conversation-list,
+      .messages-panel > #conversationList {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: scroll !important;
         overflow-x: hidden !important;
         overscroll-behavior: contain !important;
         -webkit-overflow-scrolling: touch !important;
-        touch-action: pan-y !important;
       }
 
-      #conversationList.reference-conversation-list.branch-scroll-active,
-      #conversationList.conversation-list.branch-scroll-active {
-        overflow-y: auto !important;
+      .reference-list-footer {
+        flex: 0 0 46px !important;
       }
     }
 
@@ -9000,6 +8743,7 @@ const referenceBranchTabs = Array.from(document.querySelectorAll(".reference-bra
 const conversationFooterText = document.getElementById("conversationFooterText");
 const refreshListBtn = document.getElementById("refreshListBtn");
 const conversationListScrollMemory = {};
+let shouldResetConversationListScroll = false;
 
 function getConversationListScrollKey() {
   return [
@@ -9018,37 +8762,26 @@ function saveConversationListScrollPosition() {
 
 function restoreConversationListScrollPosition() {
   if (!conversationList) return;
-  const key = getConversationListScrollKey();
-  const stored = conversationListScrollMemory[key] || 0;
-  const maxScroll = Math.max(0, conversationList.scrollHeight - conversationList.clientHeight);
-  conversationList.scrollTop = Math.min(stored, maxScroll);
-  conversationList.classList.toggle("branch-scroll-active", conversationList.scrollHeight > conversationList.clientHeight + 2);
-}
 
-function bindConversationListWheelScroll() {
-  if (!conversationList || conversationList.dataset.branchScrollBound === "yes") return;
-  conversationList.dataset.branchScrollBound = "yes";
+  requestAnimationFrame(function() {
+    const maxScroll = Math.max(0, conversationList.scrollHeight - conversationList.clientHeight);
 
-  conversationList.addEventListener("scroll", function() {
-    saveConversationListScrollPosition();
-  }, { passive: true });
-
-  conversationList.addEventListener("wheel", function(event) {
-    const canScroll = conversationList.scrollHeight > conversationList.clientHeight + 2;
-    if (!canScroll) return;
-
-    const before = conversationList.scrollTop;
-    conversationList.scrollTop += event.deltaY;
-
-    if (conversationList.scrollTop !== before) {
-      event.preventDefault();
-      event.stopPropagation();
-      saveConversationListScrollPosition();
+    if (shouldResetConversationListScroll) {
+      conversationList.scrollTop = 0;
+      shouldResetConversationListScroll = false;
+    } else {
+      const key = getConversationListScrollKey();
+      const stored = conversationListScrollMemory[key] || 0;
+      conversationList.scrollTop = Math.min(stored, maxScroll);
     }
-  }, { passive: false });
+
+    conversationList.classList.toggle("branch-scroll-active", maxScroll > 2);
+  });
 }
 
-bindConversationListWheelScroll();
+function resetConversationListScrollOnNextRender() {
+  shouldResetConversationListScroll = true;
+}
 
 const composerTabs = Array.from(document.querySelectorAll(".composer-tab[data-mode]"));
 const replyComposerPane = document.getElementById("replyComposerPane");
@@ -9119,9 +8852,9 @@ referenceBranchTabs.forEach(function(btn) {
     const value = btn.dataset.branch || "";
     branchFilter.value = branchFilter.value === value ? "" : value;
     selectedConversationKey = "";
+    resetConversationListScrollOnNextRender();
     renderConversationList();
     renderChat();
-    requestAnimationFrame(restoreConversationListScrollPosition);
   });
 });
 
@@ -10402,7 +10135,7 @@ if (tagPicker) {
 }
 
 searchBox.addEventListener("input", renderAll);
-branchFilter.addEventListener("change", renderAll);
+branchFilter.addEventListener("change", function() { resetConversationListScrollOnNextRender(); renderAll(); });
 statusFilter.addEventListener("change", renderAll);
 if (assigneeFilter) assigneeFilter.addEventListener("change", renderAll);
 if (tagFilter) tagFilter.addEventListener("change", renderAll);
@@ -10413,6 +10146,7 @@ if (clearFiltersBtn) {
     statusFilter.value = "";
     if (assigneeFilter) assigneeFilter.value = "";
     if (tagFilter) tagFilter.value = "";
+    resetConversationListScrollOnNextRender();
     renderAll();
   });
 }
