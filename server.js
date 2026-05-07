@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-1-footer-count-logic-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-2-footer-clean-finish-only";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -6820,6 +6820,45 @@ app.get("/inbox", protectInbox, (req, res) => {
       cursor: pointer !important;
       font-size: 16px !important;
       line-height: 1 !important;
+    }
+
+    /* V31.5.8.2: Footer clean finish only.
+       Safe visual fix: keeps conversationList scroll untouched. */
+    .messages-panel .reference-list-footer {
+      flex: 0 0 48px !important;
+      min-height: 48px !important;
+      height: 48px !important;
+      margin: 0 !important;
+      padding: 0 14px !important;
+      border-top: 1px solid rgba(226,232,226,.98) !important;
+      border-bottom-left-radius: 28px !important;
+      border-bottom-right-radius: 28px !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(250,253,248,.98)) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.86),
+        0 -8px 18px rgba(15,23,42,.035) !important;
+      position: relative !important;
+      z-index: 5 !important;
+      overflow: hidden !important;
+    }
+
+    .messages-panel .reference-list-footer span {
+      display: block !important;
+      min-width: 0 !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      line-height: 1 !important;
+    }
+
+    .messages-panel .reference-list-footer button {
+      flex: 0 0 30px !important;
+      width: 30px !important;
+      height: 30px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
     }
 
     @media (max-width: 1180px) {
