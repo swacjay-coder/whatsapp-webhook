@@ -22,7 +22,7 @@ app.get("/api/wake", (req, res) => {
 });
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v31-2-remove-duplicate-quick-actions-from-v30-10";
+const BOT_VERSION = "iconic-team-inbox-v31-3-move-internal-notes-to-note-tab-from-v30-10";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -4851,7 +4851,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reply-panel::after {
-      content: "V30.7.3" !important;
+      content: "V31.3" !important;
     }
 
     .reply-panel .panel-head {
@@ -6341,7 +6341,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       color: #475569 !important;
       font-size: 15px !important;
       font-weight: 850 !important;
-      cursor: default !important;
+      cursor: pointer !important;
     }
 
     .reference-pill-row {
@@ -7566,6 +7566,47 @@ app.get("/inbox", protectInbox, (req, res) => {
       background: #22c55e !important;
     }
 
+    .composer-pane {
+      display: block !important;
+    }
+
+    .composer-pane.is-hidden {
+      display: none !important;
+    }
+
+    .composer-note-wrap {
+      padding: 12px 14px 14px !important;
+      background: #ffffff !important;
+    }
+
+    .composer-note-wrap textarea {
+      width: 100% !important;
+      min-height: 118px !important;
+      resize: vertical !important;
+      border: 1px solid rgba(226,232,226,.95) !important;
+      border-radius: 12px !important;
+      padding: 12px 13px !important;
+      color: #10231d !important;
+      background: #ffffff !important;
+      font-family: Arial, sans-serif !important;
+      font-size: 12px !important;
+      font-weight: 650 !important;
+      line-height: 1.5 !important;
+      outline: none !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.8) !important;
+    }
+
+    .composer-note-wrap textarea:focus {
+      border-color: rgba(120,184,62,.46) !important;
+      box-shadow: 0 0 0 3px rgba(120,184,62,.12) !important;
+    }
+
+    .composer-note-wrap textarea:disabled {
+      color: #94a3b8 !important;
+      background: #f8fafc !important;
+      cursor: not-allowed !important;
+    }
+
     .chat-composer-wrap .composer-message-label,
     .chat-composer-wrap label.composer-message-label {
       display: none !important;
@@ -8220,35 +8261,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       letter-spacing: .04em;
     }
 
-    .internal-notes-card textarea {
-      width: 100%;
-      min-height: 94px;
-      resize: vertical;
-      border: 1px solid rgba(226,232,226,.95);
-      border-radius: 16px;
-      padding: 10px 11px;
-      color: #10231d;
-      background: #ffffff;
-      font-family: Arial, sans-serif;
-      font-size: 12px;
-      font-weight: 650;
-      line-height: 1.5;
-      outline: none;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
-    }
-
-    .internal-notes-card textarea:focus {
-      border-color: rgba(120,184,62,.46);
-      box-shadow: 0 0 0 3px rgba(120,184,62,.12);
-    }
-
-    .internal-notes-card textarea:disabled {
-      color: #94a3b8;
-      background: #f8fafc;
-      cursor: not-allowed;
-    }
-
-    .internal-note-hint {
+        .internal-note-hint {
       margin-top: 7px;
       color: #64748b;
       font-size: 10.2px;
@@ -8471,51 +8484,60 @@ app.get("/inbox", protectInbox, (req, res) => {
         <div class="chat-composer-wrap">
             <div class="composer-block">
               <div class="composer-tabs" role="tablist" aria-label="Composer mode">
-                <button type="button" class="composer-tab active">Reply</button>
-                <button type="button" class="composer-tab">Note</button>
+                <button type="button" class="composer-tab active" id="replyTabBtn" data-mode="reply" aria-selected="true">Reply</button>
+                <button type="button" class="composer-tab" id="noteTabBtn" data-mode="note" aria-selected="false">Note</button>
               </div>
 
               <input id="to" type="hidden" />
 
-              <label class="composer-message-label">Message</label>
-              <textarea id="body" rows="3" placeholder="Type your reply here..."></textarea>
+              <div id="replyComposerPane" class="composer-pane composer-pane-reply">
+                <label class="composer-message-label">Message</label>
+                <textarea id="body" rows="3" placeholder="Type your reply here..."></textarea>
 
-              <div class="composer-bottom-row">
-                <div class="composer-icon-tools" aria-label="Composer tools">
-                  <button type="button" class="composer-icon-btn" title="Emoji">☺</button>
-                  <button type="button" class="composer-icon-btn" title="Attach">⌕</button>
-                  <label class="composer-icon-btn composer-image-picker" for="imageFile" title="Choose image">▧</label>
-                </div>
+                <div class="composer-bottom-row">
+                  <div class="composer-icon-tools" aria-label="Composer tools">
+                    <button type="button" class="composer-icon-btn" title="Emoji">☺</button>
+                    <button type="button" class="composer-icon-btn" title="Attach">⌕</button>
+                    <label class="composer-icon-btn composer-image-picker" for="imageFile" title="Choose image">▧</label>
+                  </div>
 
-                <div class="composer-tools">
-                  <div class="media-box">
-                    <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" />
-                    <input id="imageCaption" placeholder="Optional image caption..." />
-                    <button type="button" class="send-image-btn" id="sendImageBtn">▧ Send image</button>
-                    <div class="media-hint">JPG, PNG, or WEBP. Keep image under 5MB.</div>
+                  <div class="composer-tools">
+                    <div class="media-box">
+                      <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" />
+                      <input id="imageCaption" placeholder="Optional image caption..." />
+                      <button type="button" class="send-image-btn" id="sendImageBtn">▧ Send image</button>
+                      <div class="media-hint">JPG, PNG, or WEBP. Keep image under 5MB.</div>
+                    </div>
+                  </div>
+
+                  <div class="composer-actions">
+                    <button type="button" class="send-btn" id="sendBtn" aria-label="Send WhatsApp Reply">➤</button>
+                    <div class="result" id="result">Ready.</div>
                   </div>
                 </div>
 
-                <div class="composer-actions">
-                  <button type="button" class="send-btn" id="sendBtn" aria-label="Send WhatsApp Reply">➤</button>
-                  <div class="result" id="result">Ready.</div>
+                <div class="composer-reply-source">
+                  <label for="phoneNumberId">Responding as:</label>
+                  <select id="phoneNumberId">
+                    <option value="">Auto — same received line</option>
+                    <option value="${DUBAI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Dubai)</option>
+                    <option value="${ABU_DHABI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Abu Dhabi)</option>
+                  </select>
+                </div>
+
+                <div class="quick-grid composer-mini-actions composer-quick-replies">
+                  <button type="button" class="quick-btn" data-text="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟&#10;&#10;Hello, this is the Iconic Hair Care team. How may we help you?">Greeting</button>
+                  <button type="button" class="quick-btn" data-text="شكراً لتواصلك معنا. تم استلام طلبك وسيقوم أحد أعضاء فريقنا بالرد عليك قريباً.&#10;&#10;Thank you for contacting us. Your request has been received and one of our team members will reply shortly.">Follow-up</button>
+                  <button type="button" class="quick-btn" data-text="يمكنك مشاركة اسمك والخدمة المطلوبة والفرع المناسب لك حتى نساعدك بشكل أدق.&#10;&#10;Please share your name, required service, and preferred branch so we can assist you better.">Need details</button>
+                  <button type="button" class="quick-btn" data-text="تم تحويل طلبك إلى الفريق المختص وسنتواصل معك بأقرب وقت ممكن.&#10;&#10;Your request has been transferred to the relevant team and we will contact you as soon as possible.">Team handoff</button>
                 </div>
               </div>
 
-              <div class="composer-reply-source">
-                <label for="phoneNumberId">Responding as:</label>
-                <select id="phoneNumberId">
-                  <option value="">Auto — same received line</option>
-                  <option value="${DUBAI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Dubai)</option>
-                  <option value="${ABU_DHABI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Abu Dhabi)</option>
-                </select>
-              </div>
-
-              <div class="quick-grid composer-mini-actions composer-quick-replies">
-                <button type="button" class="quick-btn" data-text="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟&#10;&#10;Hello, this is the Iconic Hair Care team. How may we help you?">Greeting</button>
-                <button type="button" class="quick-btn" data-text="شكراً لتواصلك معنا. تم استلام طلبك وسيقوم أحد أعضاء فريقنا بالرد عليك قريباً.&#10;&#10;Thank you for contacting us. Your request has been received and one of our team members will reply shortly.">Follow-up</button>
-                <button type="button" class="quick-btn" data-text="يمكنك مشاركة اسمك والخدمة المطلوبة والفرع المناسب لك حتى نساعدك بشكل أدق.&#10;&#10;Please share your name, required service, and preferred branch so we can assist you better.">Need details</button>
-                <button type="button" class="quick-btn" data-text="تم تحويل طلبك إلى الفريق المختص وسنتواصل معك بأقرب وقت ممكن.&#10;&#10;Your request has been transferred to the relevant team and we will contact you as soon as possible.">Team handoff</button>
+              <div id="noteComposerPane" class="composer-pane composer-pane-note is-hidden">
+                <div class="composer-note-wrap">
+                  <textarea id="customerInternalNote" placeholder="Private internal note for the team. Do not write anything that should be sent to the customer." disabled></textarea>
+                  <div class="internal-note-hint" id="customerInternalNoteStatus">Select a customer to add a note. V31.3 saves notes in this browser only.</div>
+                </div>
               </div>
             </div>
         </div>
@@ -8602,14 +8624,6 @@ app.get("/inbox", protectInbox, (req, res) => {
               <h3>Customer summary</h3>
             </div>
             <div class="profile-note-text" id="customerProfileLongSummary">No customer selected yet.</div>
-          </section>
-
-          <section class="reference-card internal-notes-card">
-            <div class="reference-card-head">
-              <h3>Internal Notes</h3>
-            </div>
-            <textarea id="customerInternalNote" placeholder="Private internal note for the team. Do not write anything that should be sent to the customer." disabled></textarea>
-            <div class="internal-note-hint" id="customerInternalNoteStatus">Select a customer to add a note. V31.2 saves notes in this browser only.</div>
           </section>
 
           <section class="about-iconic-card reference-about-card">
@@ -8745,6 +8759,43 @@ const referenceFilterPills = Array.from(document.querySelectorAll(".reference-pi
 const referenceBranchTabs = Array.from(document.querySelectorAll(".reference-branch-tab[data-branch]"));
 const conversationFooterText = document.getElementById("conversationFooterText");
 const refreshListBtn = document.getElementById("refreshListBtn");
+const composerTabs = Array.from(document.querySelectorAll(".composer-tab[data-mode]"));
+const replyComposerPane = document.getElementById("replyComposerPane");
+const noteComposerPane = document.getElementById("noteComposerPane");
+
+function setComposerMode(mode) {
+  const isNoteMode = mode === "note";
+
+  composerTabs.forEach(function(btn) {
+    const active = (btn.dataset.mode || "reply") === mode;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
+
+  if (replyComposerPane) {
+    replyComposerPane.classList.toggle("is-hidden", isNoteMode);
+  }
+
+  if (noteComposerPane) {
+    noteComposerPane.classList.toggle("is-hidden", !isNoteMode);
+  }
+
+  if (isNoteMode) {
+    if (customerInternalNote && !customerInternalNote.disabled) {
+      customerInternalNote.focus();
+    }
+  } else if (body) {
+    body.focus();
+  }
+}
+
+composerTabs.forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    setComposerMode(btn.dataset.mode || "reply");
+  });
+});
+
+setComposerMode("reply");
 
 function updateReferenceFilterUi(currentCount) {
   referenceFilterPills.forEach(function(btn) {
@@ -9030,14 +9081,14 @@ function syncInternalNoteBox(c) {
   if (!c) {
     customerInternalNote.value = "";
     customerInternalNote.disabled = true;
-    customerInternalNoteStatus.textContent = "Select a customer to add a note. V31.2 saves notes in this browser only.";
+    customerInternalNoteStatus.textContent = "Select a customer to add a note. V31.3 saves notes in this browser only.";
     return;
   }
 
   const key = getInternalNoteKey(c);
   customerInternalNote.disabled = false;
   customerInternalNote.value = internalNotesMap[key] || "";
-  customerInternalNoteStatus.textContent = "Internal note is private to Team Inbox. V31.2 stores it in this browser only.";
+  customerInternalNoteStatus.textContent = "Internal note is private to Team Inbox. V31.3 stores it in this browser only.";
 }
 
 function buildCustomerProfileSummary(c) {
