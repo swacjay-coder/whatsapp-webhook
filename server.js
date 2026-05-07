@@ -22,7 +22,7 @@ app.get("/api/wake", (req, res) => {
 });
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v30-10-incoming-customer-images-with-api-wake";
+const BOT_VERSION = "iconic-team-inbox-v31-1-privacy-crm-profile-from-v30-10";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -4237,6 +4237,9 @@ app.get("/inbox", protectInbox, (req, res) => {
 
     .tag-chip.tag-vip,
     .conversation-tag-chip.tag-vip { color: #7c4a03; background: #fff8dd; border-color: rgba(245,158,11,.26); }
+
+    .tag-chip.tag-private,
+    .conversation-tag-chip.tag-private { color: #6d28d9; background: #f5f3ff; border-color: rgba(124,58,237,.24); }
     .tag-chip.tag-follow-up,
     .conversation-tag-chip.tag-follow-up { color: #b45309; background: #fff3e6; border-color: rgba(239,125,34,.26); }
     .tag-chip.tag-price,
@@ -8196,7 +8199,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     /* V30.8.4 - Show selected conversation tags in chat header only.
        UI-only: moves VIP/tags before workflow/assigned so they cannot be hidden by long assignee text. */
     .topbar-sub::after {
-      content: "V30.10" !important;
+      content: "V31.1" !important;
     }
 
     @media (min-width: 1181px) {
@@ -8255,6 +8258,98 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
+    /* V31.1 - Privacy CRM Profile. UI/local notes only; no WhatsApp, webhook, send, image, reminders, or Google Sheets structure changes. */
+    .customer-details-card .reference-card-head h3::after {
+      content: "CRM";
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 7px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #f5f3ff;
+      color: #6d28d9;
+      border: 1px solid rgba(124,58,237,.18);
+      font-size: 9px;
+      font-weight: 950;
+      letter-spacing: .08em;
+      vertical-align: middle;
+    }
+
+    .crm-privacy-strip {
+      margin: 10px 0 12px;
+      padding: 9px 10px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: linear-gradient(135deg, #f5f3ff, #ffffff);
+      border: 1px solid rgba(124,58,237,.17);
+      color: #4c1d95;
+      font-size: 10.5px;
+      font-weight: 850;
+      line-height: 1.35;
+    }
+
+    .crm-privacy-strip strong {
+      color: #32106d;
+      font-size: 10.8px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .crm-code-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 22px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid rgba(16,185,129,.18);
+      font-size: 11px;
+      font-weight: 950;
+      letter-spacing: .04em;
+    }
+
+    .internal-notes-card textarea {
+      width: 100%;
+      min-height: 94px;
+      resize: vertical;
+      border: 1px solid rgba(226,232,226,.95);
+      border-radius: 16px;
+      padding: 10px 11px;
+      color: #10231d;
+      background: #ffffff;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.5;
+      outline: none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+    }
+
+    .internal-notes-card textarea:focus {
+      border-color: rgba(120,184,62,.46);
+      box-shadow: 0 0 0 3px rgba(120,184,62,.12);
+    }
+
+    .internal-notes-card textarea:disabled {
+      color: #94a3b8;
+      background: #f8fafc;
+      cursor: not-allowed;
+    }
+
+    .internal-note-hint {
+      margin-top: 7px;
+      color: #64748b;
+      font-size: 10.2px;
+      font-weight: 750;
+      line-height: 1.4;
+    }
+
     /* V30.10 - Inline Image Messages. Visual rendering for staff-sent and customer-sent images. */
     .inline-image-message {
       display: block !important;
@@ -8290,7 +8385,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reference-version-badge::after {
-      content: "V30.9" !important;
+      content: "V31.1" !important;
     }
 </style>
 </head>
@@ -8423,6 +8518,7 @@ app.get("/inbox", protectInbox, (req, res) => {
               <option value="Location">Location</option>
               <option value="Follow-up">Follow-up</option>
               <option value="VIP">VIP</option>
+              <option value="Private">Private</option>
               <option value="Need Details">Need Details</option>
             </select>
             <button type="button" id="clearFiltersBtn" class="filter-clear-btn">Clear filters</button>
@@ -8523,7 +8619,7 @@ app.get("/inbox", protectInbox, (req, res) => {
         <div class="right-reference-scroll">
           <section class="reference-card customer-details-card">
             <div class="reference-card-head">
-              <h3>Customer Details</h3>
+              <h3>Customer CRM Profile</h3>
               <span class="wa-mini-icon">☘</span>
             </div>
 
@@ -8535,11 +8631,19 @@ app.get("/inbox", protectInbox, (req, res) => {
               </div>
             </div>
 
+            <div class="crm-privacy-strip">
+              <span>Privacy-first profile</span>
+              <strong id="customerProfilePrivacyBadge">Discreet</strong>
+            </div>
+
             <div class="reference-detail-list">
+              <div class="reference-detail-row"><span>Customer Code</span><strong><span class="crm-code-pill" id="customerProfileCode">IC-000000</span></strong></div>
               <div class="reference-detail-row"><span>Name</span><strong id="customerProfileName">Customer</strong></div>
               <div class="reference-detail-row"><span>Phone</span><strong id="customerProfilePhone">—</strong></div>
+              <div class="reference-detail-row"><span>Privacy</span><strong id="customerProfilePrivacy">Discreet</strong></div>
               <div class="reference-detail-row"><span>Location</span><strong id="customerProfileLocation">—</strong></div>
               <div class="reference-detail-row"><span>First Contact</span><strong id="customerProfileFirstContact">—</strong></div>
+              <div class="reference-detail-row"><span>Lead Source</span><strong id="customerProfileLeadSource">WhatsApp</strong></div>
               <div class="reference-detail-row"><span>Language</span><strong id="customerProfileLanguage">English</strong></div>
               <div class="reference-detail-row"><span>Status</span><strong><span class="reference-status-pill" id="customerProfileStatus">Open</span></strong></div>
             </div>
@@ -8564,6 +8668,7 @@ app.get("/inbox", protectInbox, (req, res) => {
               </div>
               <div class="reference-detail-row"><span>Status</span><strong><span class="reference-status-pill" id="conversationInfoStatus">Open</span></strong></div>
               <div class="reference-detail-row"><span>Last Activity</span><strong id="customerProfileLastActivity">—</strong></div>
+              <div class="reference-detail-row"><span>Last Action</span><strong id="customerProfileLastAction">—</strong></div>
             </div>
           </section>
 
@@ -8581,6 +8686,7 @@ app.get("/inbox", protectInbox, (req, res) => {
               <label class="tag-option"><input type="checkbox" value="Location" /> Location</label>
               <label class="tag-option"><input type="checkbox" value="Follow-up" /> Follow-up</label>
               <label class="tag-option"><input type="checkbox" value="VIP" /> VIP</label>
+              <label class="tag-option"><input type="checkbox" value="Private" /> Private</label>
               <label class="tag-option"><input type="checkbox" value="Need Details" /> Need Details</label>
             </div>
           </section>
@@ -8592,7 +8698,8 @@ app.get("/inbox", protectInbox, (req, res) => {
             <div class="reference-action-grid compact-reference-actions">
               <button type="button" class="reference-action-btn" id="markNeedFollowBtn">Need details</button>
               <button type="button" class="reference-action-btn" id="openWhatsAppChatBtn">Team handoff</button>
-              <button type="button" class="reference-action-btn" id="setVipBtn">Follow-up</button>
+              <button type="button" class="reference-action-btn" id="setVipBtn">VIP</button>
+              <button type="button" class="reference-action-btn" id="markPrivateBtn">Private</button>
               <button type="button" class="reference-action-btn" id="markClosedBtn">Book Appointment</button>
               <button type="button" class="reference-action-btn is-hidden-action" id="copyPhoneProfileBtn">Copy Phone</button>
               <button type="button" class="reference-action-btn is-hidden-action" id="markReadProfileBtn">Mark Read</button>
@@ -8604,6 +8711,14 @@ app.get("/inbox", protectInbox, (req, res) => {
               <h3>Customer summary</h3>
             </div>
             <div class="profile-note-text" id="customerProfileLongSummary">No customer selected yet.</div>
+          </section>
+
+          <section class="reference-card internal-notes-card">
+            <div class="reference-card-head">
+              <h3>Internal Notes</h3>
+            </div>
+            <textarea id="customerInternalNote" placeholder="Private internal note for the team. Do not write anything that should be sent to the customer." disabled></textarea>
+            <div class="internal-note-hint" id="customerInternalNoteStatus">Select a customer to add a note. V31.1 saves notes in this browser only.</div>
           </section>
 
           <section class="about-iconic-card reference-about-card">
@@ -8673,6 +8788,13 @@ try {
   tagMap = {};
 }
 
+let internalNotesMap = {};
+try {
+  internalNotesMap = JSON.parse(localStorage.getItem("iconic_internal_notes_map") || "{}");
+} catch (e) {
+  internalNotesMap = {};
+}
+
 let conversationStateMap = {};
 
 const searchBox = document.getElementById("searchBox");
@@ -8711,7 +8833,14 @@ const customerProfileHeaderPhone = document.getElementById("customerProfileHeade
 const customerProfileName = document.getElementById("customerProfileName");
 const customerProfileLocation = document.getElementById("customerProfileLocation");
 const customerProfileFirstContact = document.getElementById("customerProfileFirstContact");
+const customerProfileLeadSource = document.getElementById("customerProfileLeadSource");
 const customerProfileLanguage = document.getElementById("customerProfileLanguage");
+const customerProfileCode = document.getElementById("customerProfileCode");
+const customerProfilePrivacy = document.getElementById("customerProfilePrivacy");
+const customerProfilePrivacyBadge = document.getElementById("customerProfilePrivacyBadge");
+const customerProfileLastAction = document.getElementById("customerProfileLastAction");
+const customerInternalNote = document.getElementById("customerInternalNote");
+const customerInternalNoteStatus = document.getElementById("customerInternalNoteStatus");
 const conversationInfoStatus = document.getElementById("conversationInfoStatus");
 const timelineFirstSeen = document.getElementById("timelineFirstSeen");
 const timelineLastMessage = document.getElementById("timelineLastMessage");
@@ -8923,6 +9052,7 @@ async function saveConversationStateToGoogleSheet(c) {
 function tagClass(tag) {
   const value = (tag || "").toString().toLowerCase().replace(/\s+/g, "-");
   if (value.includes("vip")) return "tag-vip";
+  if (value.includes("private")) return "tag-private";
   if (value.includes("follow")) return "tag-follow-up";
   if (value.includes("price")) return "tag-price";
   if (value.includes("booking")) return "tag-booking";
@@ -8952,6 +9082,71 @@ function profileSenderLabel(sender) {
   if (sender === "staff") return "Team";
   if (sender === "bot") return "Bot";
   return "Message";
+}
+
+function saveInternalNotesMap() {
+  localStorage.setItem("iconic_internal_notes_map", JSON.stringify(internalNotesMap));
+}
+
+function getInternalNoteKey(c) {
+  return c && c.key ? c.key : selectedConversationKey || "";
+}
+
+function hashStringForCode(value) {
+  const text = (value || "").toString();
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36).toUpperCase().padStart(6, "0").slice(-6);
+}
+
+function buildCustomerCode(c) {
+  if (!c) return "IC-000000";
+  return "IC-" + hashStringForCode((c.phone || "") + "|" + (c.phoneNumberId || "") + "|" + (c.branch || ""));
+}
+
+function buildLeadSource(c) {
+  if (!c) return "WhatsApp";
+  return "WhatsApp - " + (c.branch || "Branch");
+}
+
+function buildPrivacyLabel(tags) {
+  const safeTags = normalizeTags(tags || []);
+  if (safeTags.includes("Private")) return "Private";
+  if (safeTags.includes("VIP")) return "VIP / Discreet";
+  return "Discreet";
+}
+
+function buildLastAction(c) {
+  if (!c || !c.latest) return "—";
+  const latest = c.latest || {};
+  const image = parseInlineImageMessage(latest.body || "");
+  const actor = profileSenderLabel(latest.sender);
+
+  if (image) {
+    return actor + " sent image" + (image.caption ? ": " + shortText(image.caption, 34) : "");
+  }
+
+  const body = (latest.body || latest.messageType || "").toString().replace(/\s+/g, " ").trim();
+  return actor + (body ? ": " + shortText(body, 42) : " activity");
+}
+
+function syncInternalNoteBox(c) {
+  if (!customerInternalNote || !customerInternalNoteStatus) return;
+
+  if (!c) {
+    customerInternalNote.value = "";
+    customerInternalNote.disabled = true;
+    customerInternalNoteStatus.textContent = "Select a customer to add a note. V31.1 saves notes in this browser only.";
+    return;
+  }
+
+  const key = getInternalNoteKey(c);
+  customerInternalNote.disabled = false;
+  customerInternalNote.value = internalNotesMap[key] || "";
+  customerInternalNoteStatus.textContent = "Internal note is private to Team Inbox. V31.1 stores it in this browser only.";
 }
 
 function buildCustomerProfileSummary(c) {
@@ -9004,6 +9199,7 @@ function updateCustomerProfile(c) {
     setProfileText(customerProfilePhone, "—");
     setProfileText(customerProfileBranch, "—");
     setProfileText(customerProfileLastActivity, "—");
+    setProfileText(customerProfileLastAction, "—");
     setProfileText(customerProfileStatus, "—");
     setProfileText(conversationInfoStatus, "—");
     setProfileText(customerProfileAssigned, "Unassigned");
@@ -9012,11 +9208,16 @@ function updateCustomerProfile(c) {
     setProfileText(customerProfileLongSummary, "No customer selected yet.");
     setProfileText(customerProfileHeaderName, "Customer");
     setProfileText(customerProfileHeaderPhone, "—");
+    setProfileText(customerProfileCode, "IC-000000");
     setProfileText(customerProfileName, "Customer");
+    setProfileText(customerProfilePrivacy, "Discreet");
+    setProfileText(customerProfilePrivacyBadge, "Discreet");
+    setProfileText(customerProfileLeadSource, "WhatsApp");
     setProfileText(customerProfileLocation, "—");
     setProfileText(customerProfileFirstContact, "—");
     setProfileText(customerProfileLanguage, "English");
     if (customerProfileAvatar) customerProfileAvatar.textContent = "IC";
+    syncInternalNoteBox(null);
     updateCustomerTimeline(null);
     return;
   }
@@ -9029,10 +9230,12 @@ function updateCustomerProfile(c) {
   const first = orderedMessages[0] || latest || {};
   const displayName = c.customerName || c.name || c.phone || "Customer";
   const location = c.branch ? (c.branch + ", UAE") : "—";
+  const privacyLabel = buildPrivacyLabel(tags);
 
   setProfileText(customerProfilePhone, c.phone || "—");
   setProfileText(customerProfileBranch, c.branch || "—");
   setProfileText(customerProfileLastActivity, latest.time || "—");
+  setProfileText(customerProfileLastAction, buildLastAction(c));
   setProfileText(customerProfileStatus, c.status || "Open");
   setProfileText(conversationInfoStatus, c.status || "Open");
   setProfileText(customerProfileAssigned, c.assignee || "Unassigned");
@@ -9041,11 +9244,16 @@ function updateCustomerProfile(c) {
   setProfileText(customerProfileLongSummary, buildCustomerProfileSummary(c));
   setProfileText(customerProfileHeaderName, displayName);
   setProfileText(customerProfileHeaderPhone, c.phone || "—");
+  setProfileText(customerProfileCode, buildCustomerCode(c));
   setProfileText(customerProfileName, displayName);
+  setProfileText(customerProfilePrivacy, privacyLabel);
+  setProfileText(customerProfilePrivacyBadge, privacyLabel);
+  setProfileText(customerProfileLeadSource, buildLeadSource(c));
   setProfileText(customerProfileLocation, location);
   setProfileText(customerProfileFirstContact, first.time || "—");
   setProfileText(customerProfileLanguage, "English");
   if (customerProfileAvatar) customerProfileAvatar.textContent = avatarText(displayName || c.phone || "IC");
+  syncInternalNoteBox(c);
   updateCustomerTimeline(c);
 }
 
@@ -9326,7 +9534,7 @@ function buildAdvancedFilterOptions() {
   }
 
   if (tagFilter) {
-    const defaultTags = ["Consultation", "New Customer", "Booking", "Price", "Location", "Follow-up", "VIP", "Need Details"];
+    const defaultTags = ["Consultation", "New Customer", "Booking", "Price", "Location", "Follow-up", "VIP", "Private", "Need Details"];
     const dynamicTags = [];
     buildConversations().forEach(function(c) {
       normalizeTags(c.tags || []).forEach(function(tag) {
@@ -9958,6 +10166,34 @@ bindReferenceActionButton("setVipBtn", async function() {
   resultBox.textContent = "VIP tag applied.";
   renderAll();
 });
+
+bindReferenceActionButton("markPrivateBtn", async function() {
+  if (!selectedConversationKey) {
+    resultBox.textContent = "Select a customer first.";
+    return;
+  }
+  const currentTags = getTags(selectedConversationKey);
+  const nextTags = currentTags.includes("Private") ? currentTags : currentTags.concat(["Private"]);
+  setTags(selectedConversationKey, nextTags);
+  const currentConversation = getCurrentConversationForState();
+  if (currentConversation) {
+    currentConversation.tags = nextTags;
+    await saveConversationStateToGoogleSheet(currentConversation);
+  }
+  resultBox.textContent = "Private tag applied.";
+  renderAll();
+});
+
+if (customerInternalNote) {
+  customerInternalNote.addEventListener("input", function() {
+    if (!selectedConversationKey) return;
+    internalNotesMap[selectedConversationKey] = customerInternalNote.value || "";
+    saveInternalNotesMap();
+    if (customerInternalNoteStatus) {
+      customerInternalNoteStatus.textContent = customerInternalNote.value.trim() ? "Internal note saved in this browser." : "Internal note cleared in this browser.";
+    }
+  });
+}
 
 
 if (conversationStatusSelect) {
