@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-4-restore-stable-scroll-from-v31-5-1";
+const BOT_VERSION = "iconic-team-inbox-v31-5-5-conversation-cards-scroll-fix-from-v31-5-1";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -5061,7 +5061,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reply-panel::after {
-      content: "V31.4" !important;
+      content: "V31.5.5" !important;
     }
 
     .reply-panel .panel-head {
@@ -5509,7 +5509,7 @@ app.get("/inbox", protectInbox, (req, res) => {
        UI-only: keeps V22.5 conversation list scroll and composer under chat.
        Goal: Reply Panel + Team assignment + Tags fit in the visible right column. */
     .reply-panel::after {
-      content: "V30.7.3" !important;
+      content: "V31.5.5" !important;
     }
 
     .app {
@@ -5678,7 +5678,7 @@ app.get("/inbox", protectInbox, (req, res) => {
        UI-only: keeps V24 send button visible, V22.5 scroll fixes, and V22.3 quick replies inside composer.
        Goal: keep Send WhatsApp Reply visible without page zooming or scrolling. */
     .reply-panel::after {
-      content: "V30.7.3" !important;
+      content: "V31.5.5" !important;
     }
 
     .chat-composer-wrap {
@@ -7708,7 +7708,7 @@ app.get("/inbox", protectInbox, (req, res) => {
        Rebuilds the reply composer to match the reference layout exactly.
        UI-only: no send message, send image, Reply from logic, Google Sheets, Conversation State, webhook, auto-reply, opt-in, or reminders changes. */
     .reply-panel::after {
-      content: "V30.7.3" !important;
+      content: "V31.5.5" !important;
     }
 
     .chat-composer-wrap {
@@ -8516,7 +8516,53 @@ app.get("/inbox", protectInbox, (req, res) => {
     .reference-version-badge::after {
       content: "V31.2" !important;
     }
-</style>
+
+
+    /* V31.5.5 - Conversation cards scroll fix only.
+       Scope only: messages-panel / conversationList / reference-list-footer.
+       Do not touch the main sidebar, WhatsApp logic, Google Sheets, auto-reply, video reply, reminders, or notes. */
+    @media (min-width: 1181px) {
+      .page .app > .messages-panel {
+        min-height: 0 !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) 46px !important;
+      }
+
+      .page .app > .messages-panel > .reference-conversation-filters,
+      .page .app > .messages-panel > .filters {
+        grid-row: 1 !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+      }
+
+      .page .app > .messages-panel > #conversationList.reference-conversation-list,
+      .page .app > .messages-panel > #conversationList.conversation-list {
+        grid-row: 2 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overscroll-behavior: contain !important;
+        scrollbar-gutter: stable both-edges !important;
+        touch-action: pan-y !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+
+      .page .app > .messages-panel > .reference-list-footer {
+        grid-row: 3 !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        max-height: 46px !important;
+        overflow: hidden !important;
+        flex: none !important;
+      }
+    }
+
+  </style>
 </head>
 <body>
   <div class="workspace-shell">
@@ -9007,6 +9053,33 @@ composerTabs.forEach(function(btn) {
 
 setComposerMode("reply");
 
+function lockConversationCardsScrollArea() {
+  const panel = document.querySelector(".page .app > .messages-panel");
+  const list = document.getElementById("conversationList");
+
+  if (!panel || !list) return;
+
+  if (window.innerWidth <= 1180) {
+    list.style.height = "";
+    list.style.maxHeight = "";
+    list.style.overflowY = "auto";
+    return;
+  }
+
+  const filters = panel.querySelector(".reference-conversation-filters, .filters");
+  const footer = panel.querySelector(".reference-list-footer");
+  const panelHeight = panel.getBoundingClientRect().height;
+  const filtersHeight = filters ? filters.getBoundingClientRect().height : 0;
+  const footerHeight = footer ? footer.getBoundingClientRect().height : 0;
+  const targetHeight = Math.max(160, Math.floor(panelHeight - filtersHeight - footerHeight));
+
+  list.style.minHeight = "0";
+  list.style.height = targetHeight + "px";
+  list.style.maxHeight = targetHeight + "px";
+  list.style.overflowY = "auto";
+  list.style.overflowX = "hidden";
+}
+
 function updateReferenceFilterUi(currentCount) {
   referenceFilterPills.forEach(function(btn) {
     btn.classList.toggle("active", (statusFilter.value || "") === (btn.dataset.status || ""));
@@ -9028,6 +9101,7 @@ referenceFilterPills.forEach(function(btn) {
     if (statusFilter) statusFilter.value = btn.dataset.status || "";
     selectedConversationKey = "";
     renderConversationList();
+    if (conversationList) conversationList.scrollTop = 0;
     renderChat();
   });
 });
@@ -9885,6 +9959,7 @@ function renderConversationList() {
     selectedConversationKey = "";
     renderChat();
     updateReferenceFilterUi(0);
+    lockConversationCardsScrollArea();
     return;
   }
 
@@ -9931,6 +10006,9 @@ function renderConversationList() {
   });
 
   updateReferenceFilterUi(conversations.length);
+  requestAnimationFrame(function() {
+    lockConversationCardsScrollArea();
+  });
 }
 
 function selectConversation(key) {
@@ -10027,6 +10105,9 @@ function renderAll() {
   updateStats();
   renderConversationList();
   renderChat();
+  requestAnimationFrame(function() {
+    lockConversationCardsScrollArea();
+  });
 }
 
 async function loadMessages() {
@@ -10328,6 +10409,10 @@ if (clearFiltersBtn) {
     renderAll();
   });
 }
+
+window.addEventListener("resize", function() {
+  requestAnimationFrame(lockConversationCardsScrollArea);
+});
 
 loadMessages();
 setInterval(loadMessages, 3000);
