@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-11-staff-notification-reliability-check";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-12-booking-requests-sheet";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1396,6 +1396,73 @@ async function saveConversationStateToGoogleSheetFromServer({ phone, phoneNumber
     console.log(responseText);
   } catch (error) {
     console.log("Auto intent state save failed:");
+    console.log(error);
+  }
+}
+
+async function saveBookingRequestToGoogleSheetFromServer({ phone, phoneNumberId, customerName = "", branch = "", message = "", requestType = "Booking Request", bookingStatus = "Pending" }) {
+  const sheetUrl = process.env.SHEET_WEBHOOK_URL;
+
+  if (!sheetUrl) {
+    console.log("SHEET_WEBHOOK_URL is missing. Booking request save skipped.");
+    return;
+  }
+
+  const cleanPhone = (phone || "").toString().trim();
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
+
+  if (!cleanPhone || !cleanPhoneNumberId) {
+    console.log("Booking request save skipped: missing phone or phoneNumberId.");
+    return;
+  }
+
+  const now = getDubaiTimestamp();
+  const payload = {
+    action: "saveBookingRequest",
+    date: now,
+    phone: cleanPhone,
+    phoneNumberId: cleanPhoneNumberId,
+    customerName: (customerName || "").toString().trim(),
+    branch: (branch || getLineConfig(cleanPhoneNumberId).branch || "").toString().trim(),
+    requestType: requestType || "Booking Request",
+    message: (message || "").toString().trim() || "Customer selected Book / Booking Request",
+    bookingStatus: bookingStatus || "Pending",
+    notes: "",
+    lastUpdated: now
+  };
+
+  try {
+    const response = await fetch(sheetUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      console.log("Booking request save HTTP failed:");
+      console.log(response.status, responseText);
+      return;
+    }
+
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (error) {
+      result = { ok: false, raw: responseText };
+    }
+
+    if (!result.ok) {
+      console.log("Booking request save returned failure:");
+      console.log(responseText);
+      return;
+    }
+
+    console.log("Booking request saved:");
+    console.log(responseText);
+  } catch (error) {
+    console.log("Booking request save failed:");
     console.log(error);
   }
 }
@@ -11074,6 +11141,18 @@ app.post("/webhook", async (req, res) => {
         messageType: customerMessageType
       }
     );
+
+    if (autoIntentWorkflow?.status === "Booking Request") {
+      await saveBookingRequestToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        customerName: profileName,
+        branch: lineConfig.branch,
+        message: originalText || customerMessageBody || "Customer selected Book / Booking Request",
+        requestType: "Booking Request",
+        bookingStatus: "Pending"
+      });
+    }
 
     const hour = getDubaiHour();
     console.log("Dubai hour:", hour);
