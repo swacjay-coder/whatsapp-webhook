@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-14-booking-requests-api";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-15-booking-card-in-team-inbox";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -7465,6 +7465,125 @@ app.get("/inbox", protectInbox, (req, res) => {
       width: max-content;
     }
 
+
+    /* V31.5.8.15 - Booking card inside Team Inbox right panel only. */
+    .booking-request-card {
+      border-color: rgba(120,184,62,.34) !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,253,241,.96)) !important;
+    }
+
+    .booking-request-card.is-hidden {
+      display: none !important;
+    }
+
+    .booking-status-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 4px 9px;
+      border-radius: 8px;
+      color: #15803d;
+      background: rgba(220,248,198,.78);
+      font-size: 11px;
+      font-weight: 900;
+      width: max-content;
+      white-space: nowrap;
+    }
+
+    .booking-status-pill.booking-status-approved {
+      color: #166534;
+      background: rgba(187,247,208,.88);
+    }
+
+    .booking-status-pill.booking-status-follow-up,
+    .booking-status-pill.booking-status-suggest {
+      color: #92400e;
+      background: rgba(254,243,199,.92);
+    }
+
+    .booking-status-pill.booking-status-cancelled {
+      color: #991b1b;
+      background: rgba(254,226,226,.92);
+    }
+
+    .booking-note-input {
+      width: 100%;
+      min-height: 36px;
+      margin-top: 10px;
+      border: 1px solid rgba(203,213,225,.95);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 750;
+      color: #334155;
+      background: #ffffff;
+      outline: none;
+    }
+
+    .booking-note-input:focus {
+      border-color: rgba(120,184,62,.85);
+      box-shadow: 0 0 0 3px rgba(120,184,62,.12);
+    }
+
+    .booking-actions-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .booking-action-btn {
+      min-height: 34px;
+      border: 1px solid rgba(203,213,225,.95);
+      border-radius: 10px;
+      background: #ffffff;
+      color: #20352b;
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+    }
+
+    .booking-action-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(120,184,62,.65);
+      box-shadow: 0 8px 16px rgba(15,23,42,.07);
+    }
+
+    .booking-action-btn.approve {
+      color: #166534;
+      background: rgba(240,253,244,.98);
+      border-color: rgba(34,197,94,.35);
+    }
+
+    .booking-action-btn.follow,
+    .booking-action-btn.suggest {
+      color: #92400e;
+      background: rgba(255,251,235,.98);
+      border-color: rgba(245,158,11,.34);
+    }
+
+    .booking-action-btn.cancel {
+      color: #991b1b;
+      background: rgba(254,242,242,.98);
+      border-color: rgba(239,68,68,.28);
+    }
+
+    .booking-action-btn:disabled {
+      cursor: not-allowed;
+      opacity: .62;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .booking-result-text {
+      min-height: 18px;
+      margin-top: 8px;
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 750;
+    }
+
     .reference-assignee-control { margin-top: -4px; }
     .right-reference-panel .profile-assignee-select {
       width: 100% !important;
@@ -9514,6 +9633,28 @@ app.get("/inbox", protectInbox, (req, res) => {
             </div>
           </section>
 
+          <section class="reference-card booking-request-card is-hidden" id="bookingRequestCard">
+            <div class="reference-card-head">
+              <h3>Booking Request</h3>
+              <span class="booking-status-pill" id="bookingRequestStatusPill">—</span>
+            </div>
+            <div class="reference-detail-list">
+              <div class="reference-detail-row"><span>Customer</span><strong id="bookingRequestCustomer">—</strong></div>
+              <div class="reference-detail-row"><span>Phone</span><strong id="bookingRequestPhone">—</strong></div>
+              <div class="reference-detail-row"><span>Branch</span><strong id="bookingRequestBranch">—</strong></div>
+              <div class="reference-detail-row"><span>Request</span><strong id="bookingRequestMessage">—</strong></div>
+              <div class="reference-detail-row"><span>Last Updated</span><strong id="bookingRequestLastUpdated">—</strong></div>
+            </div>
+            <input id="bookingStatusNote" class="booking-note-input" type="text" placeholder="Optional internal note..." />
+            <div class="booking-actions-grid">
+              <button type="button" class="booking-action-btn approve" data-booking-status-action="Approved">Approve</button>
+              <button type="button" class="booking-action-btn suggest" data-booking-status-action="Suggest another time">Suggest time</button>
+              <button type="button" class="booking-action-btn follow" data-booking-status-action="Need follow-up">Need follow-up</button>
+              <button type="button" class="booking-action-btn cancel" data-booking-status-action="Cancelled">Cancel</button>
+            </div>
+            <div class="booking-result-text" id="bookingRequestResult">Ready.</div>
+          </section>
+
           <section class="reference-card conversation-tags-card">
             <div class="reference-card-head">
               <h3>Conversation Tags</h3>
@@ -9580,6 +9721,7 @@ app.get("/inbox", protectInbox, (req, res) => {
   </div>
 <script>
 let allMessages = [];
+let allBookingRequests = [];
 let selectedPhone = "";
 let selectedPhoneNumberId = "";
 let selectedConversationKey = "";
@@ -9673,6 +9815,15 @@ const timelineCustomerMessages = document.getElementById("timelineCustomerMessag
 const timelineTeamMessages = document.getElementById("timelineTeamMessages");
 const timelineBotMessages = document.getElementById("timelineBotMessages");
 const timelineLastSender = document.getElementById("timelineLastSender");
+const bookingRequestCard = document.getElementById("bookingRequestCard");
+const bookingRequestStatusPill = document.getElementById("bookingRequestStatusPill");
+const bookingRequestCustomer = document.getElementById("bookingRequestCustomer");
+const bookingRequestPhone = document.getElementById("bookingRequestPhone");
+const bookingRequestBranch = document.getElementById("bookingRequestBranch");
+const bookingRequestMessage = document.getElementById("bookingRequestMessage");
+const bookingRequestLastUpdated = document.getElementById("bookingRequestLastUpdated");
+const bookingStatusNote = document.getElementById("bookingStatusNote");
+const bookingRequestResult = document.getElementById("bookingRequestResult");
 
 const referenceFilterPills = Array.from(document.querySelectorAll(".reference-pill[data-status]"));
 const referenceBranchTabs = Array.from(document.querySelectorAll(".reference-branch-tab[data-branch]"));
@@ -10060,6 +10211,135 @@ function updateCustomerTimeline(c) {
   setProfileText(timelineLastSender, profileSenderLabel(latest.sender));
 }
 
+function normalizeBookingLookupValue(value) {
+  return (value || "").toString().replace(/\D/g, "");
+}
+
+function bookingStatusClass(status) {
+  const value = (status || "").toString().toLowerCase();
+  if (value.includes("approved")) return "booking-status-approved";
+  if (value.includes("suggest")) return "booking-status-suggest";
+  if (value.includes("follow")) return "booking-status-follow-up";
+  if (value.includes("cancel")) return "booking-status-cancelled";
+  return "booking-status-pending";
+}
+
+function getLatestBookingRequestForConversation(c) {
+  if (!c || !Array.isArray(allBookingRequests)) return null;
+
+  const phone = normalizeBookingLookupValue(c.phone || "");
+  const phoneNumberId = (c.phoneNumberId || "").toString().trim();
+
+  if (!phone) return null;
+
+  const exact = allBookingRequests.find(function(booking) {
+    return normalizeBookingLookupValue(booking.phone || "") === phone &&
+      (booking.phoneNumberId || "").toString().trim() === phoneNumberId;
+  });
+
+  if (exact) return exact;
+
+  return allBookingRequests.find(function(booking) {
+    return normalizeBookingLookupValue(booking.phone || "") === phone;
+  }) || null;
+}
+
+function updateBookingRequestCard(c) {
+  if (!bookingRequestCard) return;
+
+  const booking = getLatestBookingRequestForConversation(c);
+
+  if (!booking) {
+    bookingRequestCard.classList.add("is-hidden");
+    bookingRequestCard.dataset.rowNumber = "";
+    if (bookingRequestResult) bookingRequestResult.textContent = "No booking request for this customer.";
+    return;
+  }
+
+  bookingRequestCard.classList.remove("is-hidden");
+  bookingRequestCard.dataset.rowNumber = booking.rowNumber || "";
+  bookingRequestCard.dataset.phone = booking.phone || "";
+  bookingRequestCard.dataset.phoneNumberId = booking.phoneNumberId || "";
+
+  const status = booking.status || "Pending";
+
+  if (bookingRequestStatusPill) {
+    bookingRequestStatusPill.className = "booking-status-pill " + bookingStatusClass(status);
+    bookingRequestStatusPill.textContent = status;
+  }
+
+  setProfileText(bookingRequestCustomer, booking.customerName || (c && (c.customerName || c.phone)) || "—");
+  setProfileText(bookingRequestPhone, booking.phone || "—");
+  setProfileText(bookingRequestBranch, booking.branch || (c && c.branch) || "—");
+  setProfileText(bookingRequestMessage, booking.message || booking.requestType || "Booking Request");
+  setProfileText(bookingRequestLastUpdated, booking.lastUpdated || booking.date || "—");
+
+  if (bookingStatusNote) {
+    bookingStatusNote.value = booking.notes || "";
+  }
+
+  if (bookingRequestResult) {
+    bookingRequestResult.textContent = "Ready.";
+  }
+}
+
+function setBookingButtonsDisabled(disabled) {
+  Array.from(document.querySelectorAll("[data-booking-status-action]")).forEach(function(btn) {
+    btn.disabled = Boolean(disabled);
+  });
+}
+
+async function updateSelectedBookingStatus(status) {
+  const c = getCurrentConversationForState();
+  const booking = getLatestBookingRequestForConversation(c);
+
+  if (!booking || !booking.rowNumber) {
+    if (bookingRequestResult) bookingRequestResult.textContent = "No booking request selected.";
+    return;
+  }
+
+  const notes = bookingStatusNote ? bookingStatusNote.value.trim() : "";
+
+  if (bookingRequestResult) bookingRequestResult.textContent = "Updating booking status...";
+  setBookingButtonsDisabled(true);
+
+  try {
+    const response = await fetch("/api/bookings/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rowNumber: booking.rowNumber,
+        status,
+        notes
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      if (bookingRequestResult) bookingRequestResult.textContent = "Failed: " + (result.error || "Booking update failed");
+      return;
+    }
+
+    allBookingRequests = allBookingRequests.map(function(item) {
+      if (String(item.rowNumber) !== String(booking.rowNumber)) return item;
+      return Object.assign({}, item, {
+        status: result.status || status,
+        notes: result.notes || notes,
+        lastUpdated: result.lastUpdated || item.lastUpdated || ""
+      });
+    });
+
+    if (bookingRequestResult) bookingRequestResult.textContent = "Updated: " + (result.status || status);
+    updateBookingRequestCard(c);
+    loadMessages();
+  } catch (error) {
+    if (bookingRequestResult) bookingRequestResult.textContent = "Failed: booking status update error.";
+  } finally {
+    setBookingButtonsDisabled(false);
+  }
+}
+
 function updateCustomerProfile(c) {
   if (!c) {
     setProfileText(customerProfilePhone, "—");
@@ -10085,6 +10365,7 @@ function updateCustomerProfile(c) {
     if (customerProfileAvatar) customerProfileAvatar.textContent = "IC";
     syncInternalNoteBox(null);
     updateCustomerTimeline(null);
+    updateBookingRequestCard(null);
     return;
   }
 
@@ -10121,6 +10402,7 @@ function updateCustomerProfile(c) {
   if (customerProfileAvatar) customerProfileAvatar.textContent = avatarText(displayName || c.phone || "IC");
   syncInternalNoteBox(c);
   updateCustomerTimeline(c);
+  updateBookingRequestCard(c);
 }
 
 function syncTagPicker(tags) {
@@ -10798,6 +11080,7 @@ async function loadMessages() {
     const res = await fetch("/api/messages");
     const data = await res.json();
     allMessages = data.messages || [];
+    allBookingRequests = data.bookingRequests || [];
     applyConversationStates(data.conversationStates || []);
     renderAll();
   } catch (error) {
@@ -10951,6 +11234,12 @@ async function updateStatus(status) {
 
 document.getElementById("sendBtn").addEventListener("click", sendReply);
 document.getElementById("sendImageBtn").addEventListener("click", sendImage);
+
+Array.from(document.querySelectorAll("[data-booking-status-action]")).forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    updateSelectedBookingStatus(btn.dataset.bookingStatusAction || "");
+  });
+});
 
 document.getElementById("copyPhoneBtn").addEventListener("click", function() {
   const phone = inputTo.value.trim() || selectedPhone;
