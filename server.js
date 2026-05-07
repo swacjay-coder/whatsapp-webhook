@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-10-bilingual-request-replies-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-11-staff-notification-reliability-check";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -180,14 +180,77 @@ function getLineConfig(phoneNumberId, displayPhoneNumber = "") {
   };
 }
 
-function getStaffNotificationNumber(phoneNumberId, displayPhoneNumber = "") {
+function getStaffNotificationRouting(phoneNumberId, displayPhoneNumber = "") {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const isAbuDhabi = isAbuDhabiLine(finalPhoneNumberId, displayPhoneNumber);
+  const branchEnvName = isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER";
+  const branchStaffNumber = (process.env[branchEnvName] || "").toString().trim();
+  const fallbackStaffNumber = (process.env.STAFF_NUMBER || "").toString().trim();
+  const number = branchStaffNumber || fallbackStaffNumber || "";
+  const usedEnvName = branchStaffNumber ? branchEnvName : (fallbackStaffNumber ? "STAFF_NUMBER" : "NONE");
+  const resolvedPhoneNumberId = isAbuDhabi ? ABU_DHABI_PHONE_NUMBER_ID : (finalPhoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const lineConfig = getLineConfig(resolvedPhoneNumberId, displayPhoneNumber);
 
-  if (isAbuDhabiLine(finalPhoneNumberId, displayPhoneNumber)) {
-    return ABU_DHABI_STAFF_NUMBER || STAFF_NUMBER || "";
+  return {
+    number,
+    branch: lineConfig.branch,
+    phoneNumberId: resolvedPhoneNumberId,
+    envName: usedEnvName,
+    branchEnvName,
+    fallbackUsed: !branchStaffNumber && Boolean(fallbackStaffNumber),
+    hasNumber: Boolean(number)
+  };
+}
+
+function getStaffNotificationNumber(phoneNumberId, displayPhoneNumber = "") {
+  return getStaffNotificationRouting(phoneNumberId, displayPhoneNumber).number;
+}
+
+async function sendStaffNotificationTextMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID, routing = {}) {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const lineConfig = getLineConfig(finalPhoneNumberId);
+  const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: { body }
+  };
+
+  console.log(`[Staff Notify Send] preparing branch=${routing.branch || lineConfig.branch} fromPhoneNumberId=${finalPhoneNumberId} to=${to} env=${routing.envName || "UNKNOWN"} fallback=${Boolean(routing.fallbackUsed)}`);
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const responseText = await response.text();
+  let result;
+
+  try {
+    result = JSON.parse(responseText);
+  } catch (error) {
+    result = { raw: responseText || "" };
   }
 
-  return DUBAI_STAFF_NUMBER || STAFF_NUMBER || "";
+  if (!response.ok) {
+    console.log(`[Staff Notify Send] failed branch=${routing.branch || lineConfig.branch} status=${response.status} env=${routing.envName || "UNKNOWN"}`);
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`[Staff Notify Send] success branch=${routing.branch || lineConfig.branch} status=${response.status} env=${routing.envName || "UNKNOWN"}`);
+    console.log(JSON.stringify(result, null, 2));
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    result
+  };
 }
 
 /* Mini Inbox مؤقت للعرض والتجربة */
@@ -11474,8 +11537,16 @@ app.post("/webhook", async (req, res) => {
 
     /* إشعار الموظف فقط عند طلب استشارة */
     const shouldNotifyStaff = autoIntentWorkflow?.status === "Consultation Request";
+    const staffNotificationRouting = getStaffNotificationRouting(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
+    const staffNotificationNumber = staffNotificationRouting.number;
 
-    const staffNotificationNumber = getStaffNotificationNumber(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
+    if (shouldNotifyStaff) {
+      console.log(`[Staff Notify Routing] branch=${staffNotificationRouting.branch} phoneNumberId=${staffNotificationRouting.phoneNumberId} env=${staffNotificationRouting.envName} fallback=${staffNotificationRouting.fallbackUsed} hasNumber=${staffNotificationRouting.hasNumber}`);
+    }
+
+    if (shouldNotifyStaff && !staffNotificationNumber) {
+      console.log(`[Staff Notify Send] skipped branch=${staffNotificationRouting.branch} reason=missing_staff_number env=${staffNotificationRouting.envName}`);
+    }
 
     if (shouldNotifyStaff && staffNotificationNumber) {
       try {
@@ -11512,9 +11583,9 @@ app.post("/webhook", async (req, res) => {
           "\n\n" +
           "Open Mini Inbox to review and reply from the landline number.";
 
-        await sendWhatsAppMessage(staffNotificationNumber, staffBody, incomingPhoneNumberId);
+        await sendStaffNotificationTextMessage(staffNotificationNumber, staffBody, incomingPhoneNumberId, staffNotificationRouting);
       } catch (staffError) {
-        console.log("Staff notification failed:");
+        console.log(`[Staff Notify Send] failed branch=${staffNotificationRouting.branch} reason=exception env=${staffNotificationRouting.envName}`);
         console.log(staffError);
       }
     }
