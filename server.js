@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-2-footer-clean-finish-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-3-footer-clean-finish-final-order";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -6822,45 +6822,6 @@ app.get("/inbox", protectInbox, (req, res) => {
       line-height: 1 !important;
     }
 
-    /* V31.5.8.2: Footer clean finish only.
-       Safe visual fix: keeps conversationList scroll untouched. */
-    .messages-panel .reference-list-footer {
-      flex: 0 0 48px !important;
-      min-height: 48px !important;
-      height: 48px !important;
-      margin: 0 !important;
-      padding: 0 14px !important;
-      border-top: 1px solid rgba(226,232,226,.98) !important;
-      border-bottom-left-radius: 28px !important;
-      border-bottom-right-radius: 28px !important;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.98), rgba(250,253,248,.98)) !important;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.86),
-        0 -8px 18px rgba(15,23,42,.035) !important;
-      position: relative !important;
-      z-index: 5 !important;
-      overflow: hidden !important;
-    }
-
-    .messages-panel .reference-list-footer span {
-      display: block !important;
-      min-width: 0 !important;
-      overflow: hidden !important;
-      text-overflow: ellipsis !important;
-      white-space: nowrap !important;
-      line-height: 1 !important;
-    }
-
-    .messages-panel .reference-list-footer button {
-      flex: 0 0 30px !important;
-      width: 30px !important;
-      height: 30px !important;
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-    }
-
     @media (max-width: 1180px) {
       .page .app { grid-template-columns: 1fr !important; }
       #conversationList .conversation-card.reference-conversation-card.active { margin: 6px 8px !important; }
@@ -8579,6 +8540,92 @@ app.get("/inbox", protectInbox, (req, res) => {
       width: 0 !important;
       height: 0 !important;
     }
+
+
+    /* V31.5.8.3 - Footer Clean Finish Final Order.
+       Reason: earlier footer CSS was overridden by later stylesheet blocks.
+       Scope: messages-panel footer finish only. Keeps conversationList as the internal scroll area. */
+    @media (min-width: 1181px) {
+      .messages-panel {
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) 46px !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+        border-radius: 24px !important;
+        background: #ffffff !important;
+      }
+
+      #conversationList.conversation-list,
+      #conversationList.reference-conversation-list,
+      .messages-panel > .conversation-list {
+        grid-row: 2 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: 100% !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 10px 10px 8px !important;
+        margin: 0 !important;
+        border-bottom: 0 !important;
+        background:
+          linear-gradient(180deg, rgba(250, 253, 248, .96), rgba(246, 250, 244, .96)) !important;
+        scrollbar-gutter: stable both-edges !important;
+      }
+
+      .messages-panel > .reference-list-footer {
+        grid-row: 3 !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        max-height: 46px !important;
+        flex: 0 0 46px !important;
+        padding: 0 14px !important;
+        margin: 0 !important;
+        border-top: 1px solid rgba(226, 232, 226, .95) !important;
+        border-radius: 0 0 24px 24px !important;
+        background:
+          linear-gradient(180deg, #ffffff 0%, #fbfdf9 100%) !important;
+        color: #64748b !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        overflow: hidden !important;
+        font-size: 11.5px !important;
+        font-weight: 750 !important;
+        line-height: 1 !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.96) !important;
+        z-index: 5 !important;
+      }
+
+      .messages-panel > .reference-list-footer #conversationFooterText {
+        display: inline-flex !important;
+        align-items: center !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+      }
+
+      .messages-panel > .reference-list-footer button,
+      .messages-panel > .reference-list-footer #refreshListBtn {
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+        min-height: 30px !important;
+        border: 0 !important;
+        border-radius: 999px !important;
+        background: #f6faf3 !important;
+        color: #64748b !important;
+        cursor: pointer !important;
+        font-size: 16px !important;
+        line-height: 1 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+    }
+
 </style>
 </head>
 <body>
