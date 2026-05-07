@@ -22,7 +22,7 @@ app.get("/api/wake", (req, res) => {
 });
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v31-4-1-reminder-offers-opt-in-copy-from-v31-4";
+const BOT_VERSION = "iconic-team-inbox-v31-4-3-soft-reminder-offers-copy-from-v31-4-2";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -750,12 +750,12 @@ function getReminderOptInButtons() {
 
 function buildReminderOptInBody() {
   return `${BUSINESS_NAME_SPACED} ✨\n\n` +
-    "حتى نحافظ على نتيجة الخدمة ونساعدك بالمتابعة، هل تحب نرسل لك تذكير متابعة بعد حوالي 20 يوم؟\n\n" +
-    "الموافقة اختيارية، ويمكنك إيقاف التذكيرات بأي وقت بإرسال STOP أو إيقاف.\n\n" +
+    "إذا بتحب، فينا نرسل لك من وقت لآخر تذكيرات متابعة للخدمة وعروض خاصة من Iconic Hair Care.\n\n" +
+    "الموافقة اختيارية، وتقدر توقف التذكيرات والعروض بأي وقت بإرسال STOP أو إيقاف.\n\n" +
     "------------------------------\n\n" +
     `${BUSINESS_NAME_SPACED} ✨\n\n` +
-    "Would you like to receive a service follow-up reminder after around 20 days?\n\n" +
-    "This is optional. You can stop reminders anytime by sending STOP.";
+    "If you’d like, we can send you occasional service follow-up reminders and special offers from Iconic Hair Care.\n\n" +
+    "This is optional. You can stop reminders and offers anytime by sending STOP.";
 }
 
 function formatButtonLog(body, buttons) {
@@ -10237,13 +10237,13 @@ app.post("/webhook", async (req, res) => {
       const optInReply =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "تم حفظ موافقتك بنجاح ✅\n\n" +
-        "سنستخدم هذا الرقم فقط لإرسال تذكيرات المواعيد ومتابعة الخدمة الخاصة بـ Iconic Hair Care.\n\n" +
-        "لإيقاف التذكيرات في أي وقت، أرسل: STOP أو إيقاف\n\n" +
+        "سنستخدم هذا الرقم فقط لإرسال تذكيرات المتابعة والعروض الخاصة من Iconic Hair Care.\n\n" +
+        "لإيقاف التذكيرات والعروض في أي وقت، أرسل: STOP أو إيقاف\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Your opt-in has been saved successfully ✅\n\n" +
-        "We will use this number only for appointment reminders and service follow-ups from Iconic Hair Care.\n\n" +
-        "To stop reminders at any time, send: STOP";
+        "We will use this number only for service follow-up reminders and occasional special offers from Iconic Hair Care.\n\n" +
+        "To stop reminders and offers at any time, send: STOP";
 
       await sendWhatsAppMessage(from, optInReply, incomingPhoneNumberId);
       addInboxMessage(from, "bot", optInReply, "Opted In", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
@@ -10275,10 +10275,10 @@ app.post("/webhook", async (req, res) => {
 
       const optOutReply =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "تم إيقاف تذكيرات المتابعة لهذا الرقم ✅\n\n" +
+        "تم إيقاف تذكيرات المتابعة والعروض لهذا الرقم ✅\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Service follow-up reminders have been stopped for this number ✅";
+        "Service follow-up reminders and offers have been stopped for this number ✅";
 
       await sendWhatsAppMessage(from, optOutReply, incomingPhoneNumberId);
       addInboxMessage(from, "bot", optOutReply, "Opted Out", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
@@ -10311,11 +10311,11 @@ app.post("/webhook", async (req, res) => {
 
       const declineReply =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "تمام، لن ندخلك في تذكيرات المتابعة الآن ✅\n\n" +
+        "تمام، لن ندخلك في تذكيرات المتابعة أو العروض الآن ✅\n\n" +
         "إذا احتجت أي مساعدة، فريقنا جاهز للرد عليك.\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "No problem, we will not add you to service follow-up reminders now ✅\n\n" +
+        "No problem, we will not add you to service follow-up reminders or offers now ✅\n\n" +
         "If you need any help, our team is ready to assist you.";
 
       await sendWhatsAppMessage(from, declineReply, incomingPhoneNumberId);
