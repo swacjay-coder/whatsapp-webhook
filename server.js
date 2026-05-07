@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-1-services-media-hint-from-v31-5";
+const BOT_VERSION = "iconic-team-inbox-v31-5-2-branch-list-scroll-fix-from-v31-5-1";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -8516,7 +8516,37 @@ app.get("/inbox", protectInbox, (req, res) => {
     .reference-version-badge::after {
       content: "V31.2" !important;
     }
-</style>
+
+
+    /* V31.5.2 - Branch conversation list scroll fix
+       UI-only fix for Dubai / Abu Dhabi branch tabs.
+       Keeps the customer card list as the only scrollable area inside messages-panel. */
+    @media (min-width: 1181px) {
+      .messages-panel {
+        min-height: 0 !important;
+        overflow: hidden !important;
+      }
+
+      #conversationList.reference-conversation-list,
+      #conversationList.conversation-list,
+      .messages-panel > #conversationList {
+        min-height: 0 !important;
+        height: 100% !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-y !important;
+      }
+
+      #conversationList.reference-conversation-list.branch-scroll-active,
+      #conversationList.conversation-list.branch-scroll-active {
+        overflow-y: auto !important;
+      }
+    }
+
+  </style>
 </head>
 <body>
   <div class="workspace-shell">
@@ -8969,6 +8999,57 @@ const referenceFilterPills = Array.from(document.querySelectorAll(".reference-pi
 const referenceBranchTabs = Array.from(document.querySelectorAll(".reference-branch-tab[data-branch]"));
 const conversationFooterText = document.getElementById("conversationFooterText");
 const refreshListBtn = document.getElementById("refreshListBtn");
+const conversationListScrollMemory = {};
+
+function getConversationListScrollKey() {
+  return [
+    (branchFilter && branchFilter.value) || "all-branches",
+    (statusFilter && statusFilter.value) || "all-status",
+    (assigneeFilter && assigneeFilter.value) || "all-assigned",
+    (tagFilter && tagFilter.value) || "all-tags",
+    ((searchBox && searchBox.value) || "").toString().trim().toLowerCase() || "no-search"
+  ].join("|");
+}
+
+function saveConversationListScrollPosition() {
+  if (!conversationList) return;
+  conversationListScrollMemory[getConversationListScrollKey()] = conversationList.scrollTop || 0;
+}
+
+function restoreConversationListScrollPosition() {
+  if (!conversationList) return;
+  const key = getConversationListScrollKey();
+  const stored = conversationListScrollMemory[key] || 0;
+  const maxScroll = Math.max(0, conversationList.scrollHeight - conversationList.clientHeight);
+  conversationList.scrollTop = Math.min(stored, maxScroll);
+  conversationList.classList.toggle("branch-scroll-active", conversationList.scrollHeight > conversationList.clientHeight + 2);
+}
+
+function bindConversationListWheelScroll() {
+  if (!conversationList || conversationList.dataset.branchScrollBound === "yes") return;
+  conversationList.dataset.branchScrollBound = "yes";
+
+  conversationList.addEventListener("scroll", function() {
+    saveConversationListScrollPosition();
+  }, { passive: true });
+
+  conversationList.addEventListener("wheel", function(event) {
+    const canScroll = conversationList.scrollHeight > conversationList.clientHeight + 2;
+    if (!canScroll) return;
+
+    const before = conversationList.scrollTop;
+    conversationList.scrollTop += event.deltaY;
+
+    if (conversationList.scrollTop !== before) {
+      event.preventDefault();
+      event.stopPropagation();
+      saveConversationListScrollPosition();
+    }
+  }, { passive: false });
+}
+
+bindConversationListWheelScroll();
+
 const composerTabs = Array.from(document.querySelectorAll(".composer-tab[data-mode]"));
 const replyComposerPane = document.getElementById("replyComposerPane");
 const noteComposerPane = document.getElementById("noteComposerPane");
@@ -9034,17 +9115,21 @@ referenceFilterPills.forEach(function(btn) {
 
 referenceBranchTabs.forEach(function(btn) {
   btn.addEventListener("click", function() {
+    saveConversationListScrollPosition();
     const value = btn.dataset.branch || "";
     branchFilter.value = branchFilter.value === value ? "" : value;
     selectedConversationKey = "";
     renderConversationList();
     renderChat();
+    requestAnimationFrame(restoreConversationListScrollPosition);
   });
 });
 
 if (refreshListBtn) {
   refreshListBtn.addEventListener("click", function() {
+    saveConversationListScrollPosition();
     loadMessages();
+    requestAnimationFrame(restoreConversationListScrollPosition);
   });
 }
 
@@ -9877,6 +9962,7 @@ function formatConversationPreview(message) {
 }
 
 function renderConversationList() {
+  saveConversationListScrollPosition();
   const conversations = filteredConversations();
 
   if (!conversations.length) {
@@ -9885,6 +9971,7 @@ function renderConversationList() {
     selectedConversationKey = "";
     renderChat();
     updateReferenceFilterUi(0);
+    requestAnimationFrame(restoreConversationListScrollPosition);
     return;
   }
 
@@ -9931,6 +10018,7 @@ function renderConversationList() {
   });
 
   updateReferenceFilterUi(conversations.length);
+  requestAnimationFrame(restoreConversationListScrollPosition);
 }
 
 function selectConversation(key) {
