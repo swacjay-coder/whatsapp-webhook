@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-auto-video-reply-from-v31-4-3";
+const BOT_VERSION = "iconic-team-inbox-v31-5-1-services-media-hint-from-v31-5";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -10780,13 +10780,15 @@ app.post("/webhook", async (req, res) => {
         "1️⃣ مظهر طبيعي وغير واضح\n" +
         "2️⃣ معرفة السعر حسب حالتك\n" +
         "3️⃣ استشارة خاصة مع الفريق\n\n" +
+        "إذا تحب تشوف صور أو فيديو قصير عن الخدمة، فقط اكتب: صورة أو فيديو، وسيصلك المحتوى مباشرة.\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Let us guide you clearly.\n\n" +
         "Choose what matters most right now, and we will direct you to the right next step:\n\n" +
         "1️⃣ Natural, undetectable look\n" +
         "2️⃣ Price based on your case\n" +
-        "3️⃣ Private team consultation";
+        "3️⃣ Private team consultation\n\n" +
+        "If you would like to see photos or a short video about the service, just type: photo or video, and we will send it to you directly.";
 
       replyButtons = getServicesDeepMenuButtons();
     }
