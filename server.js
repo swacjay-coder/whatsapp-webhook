@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-6-sidebar-responsive-lock-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-7-auto-intent-tags";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1149,6 +1149,180 @@ function getDueFollowUpReminders(messages, delayDays = FOLLOW_UP_DELAY_DAYS) {
 
 function getReminderBodyForLog(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
   return `Template sent: ${getFollowUpTemplateName(phoneNumberId)}`;
+}
+
+function normalizeIntentTags(tags) {
+  const seen = new Set();
+  return (Array.isArray(tags) ? tags : []).map((tag) => (tag || "").toString().trim()).filter((tag) => {
+    if (!tag || seen.has(tag)) return false;
+    seen.add(tag);
+    return true;
+  });
+}
+
+function getAutoIntentWorkflow(text) {
+  const value = compactText(text);
+
+  if (!value) return null;
+
+  const hasAny = (items) => items.some((item) => value.includes(item));
+
+  if (
+    value === "1" ||
+    value === "١" ||
+    hasAny(["book_appointment", "حجز موعد", "احجز", "موعد", "appointment", "book consultation", "book appointment", "book"])
+  ) {
+    return {
+      status: "Booking Request",
+      tags: ["Booking", "Need Details"],
+      assignee: "Consultation Team",
+      notifyStaff: true
+    };
+  }
+
+  if (
+    hasAny(["private_consult", "consult", "consultation", "استشارة", "خاص", "خاصة"])
+  ) {
+    return {
+      status: "Consultation Request",
+      tags: ["Consultation", "Need Details"],
+      assignee: "Consultation Team",
+      notifyStaff: true
+    };
+  }
+
+  if (
+    value === "6" ||
+    value === "٦" ||
+    hasAny(["talk_to_team", "موظف", "فريق", "support", "team", "human"])
+  ) {
+    return {
+      status: "Talk to Team",
+      tags: ["Human Support", "Need Details"],
+      assignee: "Consultation Team",
+      notifyStaff: true
+    };
+  }
+
+  if (
+    hasAny(["call_branch", "call", "اتصل", "اتصال"])
+  ) {
+    return {
+      status: "Call Requested",
+      tags: ["Call Requested", "Need Details"],
+      assignee: "Consultation Team",
+      notifyStaff: true
+    };
+  }
+
+  if (
+    value === "3" ||
+    value === "٣" ||
+    hasAny(["price_info", "price", "prices", "cost", "سعر", "السعر", "الاسعار", "الأسعار"])
+  ) {
+    return {
+      status: "Price Question",
+      tags: ["Price", "Need Details"],
+      assignee: "Consultation Team",
+      notifyStaff: true
+    };
+  }
+
+  if (
+    hasAny(["location_branch", "open_location", "location", "locations", "map", "maps", "موقع", "الموقع", "فرع", "فروع"])
+  ) {
+    return {
+      status: "Location Requested",
+      tags: ["Location"],
+      assignee: "Unassigned",
+      notifyStaff: false
+    };
+  }
+
+  if (
+    hasAny(["natural_look", "natural", "طبيعي", "طبيعية", "مظهر طبيعي"])
+  ) {
+    return {
+      status: "Service Interest",
+      tags: ["Service Interest", "Natural Look"],
+      assignee: "Unassigned",
+      notifyStaff: false
+    };
+  }
+
+  if (
+    value === "2" ||
+    value === "٢" ||
+    hasAny(["services", "service", "خدمات", "الخدمات"])
+  ) {
+    return {
+      status: "Service Interest",
+      tags: ["Service Interest"],
+      assignee: "Unassigned",
+      notifyStaff: false
+    };
+  }
+
+  if (isAutoVideoRequestText(value)) {
+    return {
+      status: "Media Requested",
+      tags: ["Media Requested", "Service Interest"],
+      assignee: "Unassigned",
+      notifyStaff: false
+    };
+  }
+
+  return null;
+}
+
+async function saveConversationStateToGoogleSheetFromServer({ phone, phoneNumberId, branch, status, assignee, tags, updatedBy = "Auto Intent Tags" }) {
+  const sheetUrl = process.env.SHEET_WEBHOOK_URL;
+
+  if (!sheetUrl) {
+    console.log("SHEET_WEBHOOK_URL is missing. Auto intent state save skipped.");
+    return;
+  }
+
+  const cleanPhone = (phone || "").toString().trim();
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
+
+  if (!cleanPhone || !cleanPhoneNumberId) {
+    console.log("Auto intent state save skipped: missing phone or phoneNumberId.");
+    return;
+  }
+
+  const payload = {
+    action: "saveConversationState",
+    phone: cleanPhone,
+    phoneNumberId: cleanPhoneNumberId,
+    branch: (branch || getLineConfig(cleanPhoneNumberId).branch || "").toString().trim(),
+    conversation_status: (status || "Open").toString().trim(),
+    assigned_to: (assignee || "Unassigned").toString().trim(),
+    tags: normalizeIntentTags(tags || []),
+    last_updated_by: updatedBy
+  };
+
+  try {
+    const response = await fetch(sheetUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      console.log("Auto intent state save HTTP failed:");
+      console.log(response.status, responseText);
+      return;
+    }
+
+    console.log("Auto intent state saved:");
+    console.log(responseText);
+  } catch (error) {
+    console.log("Auto intent state save failed:");
+    console.log(error);
+  }
 }
 
 
@@ -8840,6 +9014,7 @@ app.get("/inbox", protectInbox, (req, res) => {
           <div class="reference-pill-row reference-secondary-pills" aria-label="Workflow filters">
             <button type="button" class="reference-pill" data-status="Human Reply">Human Reply</button>
             <button type="button" class="reference-pill reference-soft-pill" data-status="Follow-up">Follow-up</button>
+            <button type="button" class="reference-pill reference-soft-pill" data-status="Needs Team">Needs Team</button>
             <button type="button" class="reference-pill reference-soft-pill" data-status="Talk to Team">Talk to Team</button>
           </div>
 
@@ -8874,6 +9049,11 @@ app.get("/inbox", protectInbox, (req, res) => {
               <option value="Price">Price</option>
               <option value="Location">Location</option>
               <option value="Follow-up">Follow-up</option>
+              <option value="Human Support">Human Support</option>
+              <option value="Call Requested">Call Requested</option>
+              <option value="Service Interest">Service Interest</option>
+              <option value="Media Requested">Media Requested</option>
+              <option value="Natural Look">Natural Look</option>
               <option value="VIP">VIP</option>
               <option value="Private">Private</option>
               <option value="Need Details">Need Details</option>
@@ -8905,6 +9085,14 @@ app.get("/inbox", protectInbox, (req, res) => {
               <option value="Open">Open</option>
               <option value="Waiting">Waiting</option>
               <option value="Need Follow-up">Need Follow-up</option>
+              <option value="Needs Team">Needs Team</option>
+              <option value="Booking Request">Booking Request</option>
+              <option value="Consultation Request">Consultation Request</option>
+              <option value="Price Question">Price Question</option>
+              <option value="Call Requested">Call Requested</option>
+              <option value="Location Requested">Location Requested</option>
+              <option value="Service Interest">Service Interest</option>
+              <option value="Media Requested">Media Requested</option>
               <option value="Talk to Team">Talk to Team</option>
               <option value="Closed">Closed</option>
             </select>
@@ -9051,6 +9239,11 @@ app.get("/inbox", protectInbox, (req, res) => {
               <label class="tag-option"><input type="checkbox" value="Price" /> Price</label>
               <label class="tag-option"><input type="checkbox" value="Location" /> Location</label>
               <label class="tag-option"><input type="checkbox" value="Follow-up" /> Follow-up</label>
+              <label class="tag-option"><input type="checkbox" value="Human Support" /> Human Support</label>
+              <label class="tag-option"><input type="checkbox" value="Call Requested" /> Call Requested</label>
+              <label class="tag-option"><input type="checkbox" value="Service Interest" /> Service Interest</label>
+              <label class="tag-option"><input type="checkbox" value="Media Requested" /> Media Requested</label>
+              <label class="tag-option"><input type="checkbox" value="Natural Look" /> Natural Look</label>
               <label class="tag-option"><input type="checkbox" value="VIP" /> VIP</label>
               <label class="tag-option"><input type="checkbox" value="Private" /> Private</label>
               <label class="tag-option"><input type="checkbox" value="Need Details" /> Need Details</label>
@@ -9436,6 +9629,11 @@ function tagClass(tag) {
   if (value.includes("follow")) return "tag-follow-up";
   if (value.includes("price")) return "tag-price";
   if (value.includes("booking")) return "tag-booking";
+  if (value.includes("human")) return "tag-need-details";
+  if (value.includes("call")) return "tag-follow-up";
+  if (value.includes("service")) return "tag-general";
+  if (value.includes("media")) return "tag-general";
+  if (value.includes("natural")) return "tag-general";
   if (value.includes("need")) return "tag-need-details";
   return "tag-general";
 }
@@ -9865,6 +10063,14 @@ function buildStatusOptions() {
     "Waiting",
     "Closed",
     "Need Follow-up",
+    "Needs Team",
+    "Booking Request",
+    "Consultation Request",
+    "Price Question",
+    "Call Requested",
+    "Location Requested",
+    "Service Interest",
+    "Media Requested",
     "Talk to Team",
     "Customer Reply",
     "Human Reply",
@@ -9919,7 +10125,7 @@ function buildAdvancedFilterOptions() {
   }
 
   if (tagFilter) {
-    const defaultTags = ["Consultation", "New Customer", "Booking", "Price", "Location", "Follow-up", "VIP", "Private", "Need Details"];
+    const defaultTags = ["Consultation", "New Customer", "Booking", "Price", "Location", "Follow-up", "Human Support", "Call Requested", "Service Interest", "Media Requested", "Natural Look", "VIP", "Private", "Need Details"];
     const dynamicTags = [];
     buildConversations().forEach(function(c) {
       normalizeTags(c.tags || []).forEach(function(tag) {
@@ -9976,6 +10182,28 @@ function conversationHasStatus(conversation, wantedStatus) {
   const wanted = (wantedStatus || "").toLowerCase().trim();
   if (!wanted) return true;
 
+  if (wanted === "needs team") {
+    const workflowHay = [
+      conversation.status,
+      conversation.replyFilterStatus,
+      conversation.assignee,
+      (conversation.tags || []).join(" ")
+    ].join(" ").toLowerCase();
+
+    if (
+      workflowHay.includes("need details") ||
+      workflowHay.includes("consultation") ||
+      workflowHay.includes("booking") ||
+      workflowHay.includes("human support") ||
+      workflowHay.includes("talk to team") ||
+      workflowHay.includes("call requested") ||
+      workflowHay.includes("price") ||
+      workflowHay.includes("consultation team")
+    ) {
+      return true;
+    }
+  }
+
   return (conversation.messages || []).some(function(message) {
     const combined = [
       message.status,
@@ -10008,6 +10236,20 @@ function conversationHasStatus(conversation, wantedStatus) {
         combined.includes("chat with team") ||
         combined.includes("talk_to_team") ||
         combined.includes("الفريق") ||
+        combined.includes("فريق");
+    }
+
+    if (wanted === "needs team") {
+      return combined.includes("need details") ||
+        combined.includes("booking request") ||
+        combined.includes("consultation request") ||
+        combined.includes("price question") ||
+        combined.includes("call requested") ||
+        combined.includes("human support") ||
+        combined.includes("talk to team") ||
+        combined.includes("team handoff") ||
+        combined.includes("استشارة") ||
+        combined.includes("موعد") ||
         combined.includes("فريق");
     }
 
@@ -10212,7 +10454,7 @@ function renderChat() {
   const headerTagsHtml = headerTags.length ? tagBadges(headerTags, "tag-chip", 3) : "";
   chatMeta.innerHTML = branchBadge(c.branch) + '<span class="status ' + statusClass(c.status) + '">' + escapeHtml(c.status || "") + '</span>' + headerTagsHtml + '<div class="workflow-status-bar"><span class="workflow-status-chip ' + statusClass(c.status) + '">Workflow: ' + escapeHtml(c.status || "Open") + '</span>' + assigneeBadge(c.assignee) + '</div>';
   if (conversationStatusSelect) {
-    const allowedStatuses = ["Open", "Waiting", "Need Follow-up", "Talk to Team", "Closed"];
+    const allowedStatuses = ["Open", "Waiting", "Need Follow-up", "Needs Team", "Booking Request", "Consultation Request", "Price Question", "Call Requested", "Location Requested", "Service Interest", "Media Requested", "Talk to Team", "Closed"];
     conversationStatusSelect.value = allowedStatuses.includes(c.status) ? c.status : "Open";
     conversationStatusSelect.disabled = false;
   }
@@ -10608,6 +10850,24 @@ app.post("/webhook", async (req, res) => {
     const originalText = getIncomingMessageText(message);
     const text = normalizeText(originalText);
     const optEventDate = getDubaiTimestamp();
+    const autoIntentWorkflow = (
+      isOptInText(text) ||
+      isOptOutText(text) ||
+      isReminderOptInDeclineText(text)
+    ) ? null : getAutoIntentWorkflow(originalText || text);
+
+    if (autoIntentWorkflow && autoIntentWorkflow.status) {
+      setConversationStatus(from, autoIntentWorkflow.status);
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: autoIntentWorkflow.status,
+        assignee: autoIntentWorkflow.assignee || "Unassigned",
+        tags: autoIntentWorkflow.tags || [],
+        updatedBy: "Auto Intent Tags"
+      });
+    }
 
     if (isOptInText(text)) {
       setConversationStatus(from, "Opted In");
@@ -10723,13 +10983,16 @@ app.post("/webhook", async (req, res) => {
 
     const incomingCustomerImageBody = message.type === "image" ? buildIncomingCustomerImageBody(message) : "";
     const customerMessageBody = incomingCustomerImageBody || (profileName ? `${profileName}: ${originalText}` : originalText);
-    const customerMessageType = incomingCustomerImageBody ? "Customer Image Message" : "Customer Message";
+    const customerMessageStatus = autoIntentWorkflow?.status || "Bot";
+    const customerMessageType = incomingCustomerImageBody
+      ? "Customer Image Message"
+      : (autoIntentWorkflow?.status ? `Customer Intent - ${autoIntentWorkflow.status}` : "Customer Message");
 
     addInboxMessage(
       from,
       "customer",
       customerMessageBody,
-      "Bot",
+      customerMessageStatus,
       incomingPhoneNumberId,
       {
         customerName: profileName,
@@ -10973,7 +11236,7 @@ app.post("/webhook", async (req, res) => {
       text.includes("book appointment") ||
       text.includes("book")
     ) {
-      setConversationStatus(from, "Consultation Request");
+      setConversationStatus(from, "Booking Request");
 
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
@@ -11007,6 +11270,8 @@ app.post("/webhook", async (req, res) => {
       text.includes("خدمات") ||
       text.includes("الخدمات")
     ) {
+      setConversationStatus(from, "Service Interest");
+
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "خلينا نختصر عليك الطريق.\n\n" +
@@ -11034,6 +11299,8 @@ app.post("/webhook", async (req, res) => {
       text.includes("طبيعية") ||
       text.includes("مظهر طبيعي")
     ) {
+      setConversationStatus(from, "Service Interest");
+
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "تمام، هذا أهم سؤال.\n\n" +
@@ -11066,6 +11333,8 @@ app.post("/webhook", async (req, res) => {
       text.includes("عرض") ||
       text.includes("عروض")
     ) {
+      setConversationStatus(from, "Price Question");
+
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "أكيد، السعر لازم يكون واضح — لكن ما نعطي رقم عشوائي قبل فهم الحالة.\n\n" +
@@ -11207,6 +11476,7 @@ app.post("/webhook", async (req, res) => {
 
     /* إشعار الموظف عند طلب استشارة أو موظف */
     const shouldNotifyStaff =
+      Boolean(autoIntentWorkflow?.notifyStaff) ||
       text === "1" || text === "١" ||
       text === "6" || text === "٦" ||
       text.includes("احجز") ||
@@ -11220,7 +11490,11 @@ app.post("/webhook", async (req, res) => {
       text.includes("support") ||
       text.includes("team") ||
       text.includes("human") ||
-      text.includes("consultation");
+      text.includes("consultation") ||
+      text.includes("price") ||
+      text.includes("سعر") ||
+      text.includes("call") ||
+      text.includes("اتصل");
 
     if (shouldNotifyStaff && STAFF_NUMBER) {
       try {
