@@ -22,7 +22,7 @@ app.get("/api/wake", (req, res) => {
 });
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v31-3-move-internal-notes-to-note-tab-from-v30-10";
+const BOT_VERSION = "iconic-team-inbox-v31-4-1-reminder-offers-opt-in-copy-from-v31-4";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -323,7 +323,21 @@ function isOptInText(text) {
   const value = compactText(text);
   return value === "yes, i agree to receive appointment reminders and service follow-ups from iconic hair care." ||
     value === "yes, i agree to receive appointment reminders and service follow-ups from iconic hair care" ||
-    value.includes("yes, i agree to receive appointment reminders and service follow-ups from iconic hair care");
+    value.includes("yes, i agree to receive appointment reminders and service follow-ups from iconic hair care") ||
+    value === "أوافق / yes" ||
+    value === "اوافق / yes" ||
+    value === "yes, remind me" ||
+    value === "yes remind me" ||
+    value === "yes reminders" ||
+    value === "yes offers" ||
+    value.includes("أوافق على التذكير") ||
+    value.includes("اوافق على التذكير") ||
+    value.includes("أوافق على تذكير") ||
+    value.includes("اوافق على تذكير") ||
+    value.includes("أوافق على العروض") ||
+    value.includes("اوافق على العروض") ||
+    value.includes("remind me after service") ||
+    value.includes("service follow-up reminder");
 }
 
 function isOptOutText(text) {
@@ -335,6 +349,21 @@ function isOptOutText(text) {
     value === "ايقاف" ||
     value === "الغاء" ||
     value === "إلغاء";
+}
+
+function isReminderOptInDeclineText(text) {
+  const value = compactText(text);
+  return value === "لا شكراً / no" ||
+    value === "لا شكرا / no" ||
+    value === "لا / no" ||
+    value === "no" ||
+    value === "no, thanks" ||
+    value === "no thanks" ||
+    value === "not now" ||
+    value === "لا شكراً" ||
+    value === "لا شكرا" ||
+    value === "ليس الآن" ||
+    value === "ليس الان";
 }
 
 function getIncomingMessageText(message) {
@@ -709,6 +738,24 @@ function getAfterCallButtons() {
     { id: "services", title: "الخدمات / Services" },
     { id: "location_branch", title: "الموقع / Location" }
   ];
+}
+
+function getReminderOptInButtons() {
+  return [
+    { id: "reminder_opt_in_yes", title: "أوافق / Yes" },
+    { id: "reminder_opt_in_no", title: "لا / No" },
+    { id: "talk_to_team", title: "الفريق / Team" }
+  ];
+}
+
+function buildReminderOptInBody() {
+  return `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "حتى نحافظ على نتيجة الخدمة ونساعدك بالمتابعة، هل تحب نرسل لك تذكير متابعة بعد حوالي 20 يوم؟\n\n" +
+    "الموافقة اختيارية، ويمكنك إيقاف التذكيرات بأي وقت بإرسال STOP أو إيقاف.\n\n" +
+    "------------------------------\n\n" +
+    `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "Would you like to receive a service follow-up reminder after around 20 days?\n\n" +
+    "This is optional. You can stop reminders anytime by sending STOP.";
 }
 
 function formatButtonLog(body, buttons) {
@@ -4851,7 +4898,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reply-panel::after {
-      content: "V31.3" !important;
+      content: "V31.4" !important;
     }
 
     .reply-panel .panel-head {
@@ -10180,7 +10227,7 @@ app.post("/webhook", async (req, res) => {
           extraFields: {
             opt_in: "yes",
             opt_in_date: optEventDate,
-            opt_in_source: "Branch QR / WhatsApp direct message",
+            opt_in_source: "Auto-reply WhatsApp - Reminder and Offers",
             opt_out: "",
             opt_out_date: ""
           }
@@ -10239,6 +10286,44 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+
+    if (isReminderOptInDeclineText(text)) {
+      setConversationStatus(from, "Reminder Declined");
+
+      addInboxMessage(
+        from,
+        "customer",
+        originalText,
+        "Reminder Declined",
+        incomingPhoneNumberId,
+        {
+          customerName: profileName,
+          messageType: "Reminder Opt-in Declined",
+          extraFields: {
+            opt_in: "no",
+            opt_in_date: "",
+            opt_in_source: "Auto-reply WhatsApp - Reminder and Offers declined",
+            opt_out: "",
+            opt_out_date: ""
+          }
+        }
+      );
+
+      const declineReply =
+        `${BUSINESS_NAME_SPACED} ✨\n\n` +
+        "تمام، لن ندخلك في تذكيرات المتابعة الآن ✅\n\n" +
+        "إذا احتجت أي مساعدة، فريقنا جاهز للرد عليك.\n\n" +
+        "------------------------------\n\n" +
+        `${BUSINESS_NAME_SPACED} ✨\n\n` +
+        "No problem, we will not add you to service follow-up reminders now ✅\n\n" +
+        "If you need any help, our team is ready to assist you.";
+
+      await sendWhatsAppMessage(from, declineReply, incomingPhoneNumberId);
+      addInboxMessage(from, "bot", declineReply, "Reminder Declined", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
+
+      return res.sendStatus(200);
+    }
+
     const incomingCustomerImageBody = message.type === "image" ? buildIncomingCustomerImageBody(message) : "";
     const customerMessageBody = incomingCustomerImageBody || (profileName ? `${profileName}: ${originalText}` : originalText);
     const customerMessageType = incomingCustomerImageBody ? "Customer Image Message" : "Customer Message";
@@ -10261,6 +10346,7 @@ app.post("/webhook", async (req, res) => {
     let replyText = "";
     let replyButtons = null;
     let replyOptions = {};
+    let sendReminderOptInPrompt = false;
     const branchNameAr = getArabicBranchName(lineConfig.branch);
 
     /* خارج أوقات العمل — معطل مؤقتاً للاختبار حتى تظهر الأزرار دائماً */
@@ -10403,6 +10489,20 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    /* طلب تذكير المتابعة */
+    else if (
+      text.includes("reminder") ||
+      text.includes("reminders") ||
+      text.includes("follow-up") ||
+      text.includes("follow up") ||
+      text.includes("تذكير") ||
+      text.includes("ذكرني") ||
+      text.includes("متابعة الخدمة")
+    ) {
+      replyText = buildReminderOptInBody();
+      replyButtons = getReminderOptInButtons();
+    }
+
     /* 1 — حجز استشارة */
     else if (
       text === "1" ||
@@ -10437,6 +10537,7 @@ app.post("/webhook", async (req, res) => {
         "You can also use the buttons below for a direct call or branch location.";
 
       replyButtons = getConsultActionButtons();
+      sendReminderOptInPrompt = true;
     }
 
     /* 2 — الخدمات: بوابة ذكية أعمق */
@@ -10552,6 +10653,7 @@ app.post("/webhook", async (req, res) => {
         "Use the buttons below for the branch location or a direct call.";
 
       replyButtons = getConsultActionButtons();
+      sendReminderOptInPrompt = true;
     }
 
     /* 5 — الموقع وساعات العمل */
@@ -10623,6 +10725,24 @@ app.post("/webhook", async (req, res) => {
     } else {
       await sendWhatsAppMessage(from, replyText, incomingPhoneNumberId);
       addInboxMessage(from, "bot", replyText, conversationStatus[from] || "Bot", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
+    }
+
+    if (sendReminderOptInPrompt) {
+      const reminderOptInBody = buildReminderOptInBody();
+      const reminderOptInButtons = getReminderOptInButtons();
+
+      await sendWhatsAppButtonMessage(from, reminderOptInBody, reminderOptInButtons, incomingPhoneNumberId);
+      addInboxMessage(
+        from,
+        "bot",
+        formatButtonLog(reminderOptInBody, reminderOptInButtons),
+        conversationStatus[from] || "Bot",
+        incomingPhoneNumberId,
+        {
+          customerName: profileName,
+          messageType: "Reminder Opt-in Prompt"
+        }
+      );
     }
 
     /* إشعار الموظف عند طلب استشارة أو موظف */
