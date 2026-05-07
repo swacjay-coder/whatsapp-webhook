@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-7-auto-intent-tags";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-8-branch-staff-notification-routing-only";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -59,6 +59,8 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const DUBAI_PHONE_NUMBER_ID = process.env.DUBAI_PHONE_NUMBER_ID || PHONE_NUMBER_ID || "1100042333191350";
 const ABU_DHABI_PHONE_NUMBER_ID = process.env.ABU_DHABI_PHONE_NUMBER_ID || "1000146433192239";
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
+const DUBAI_STAFF_NUMBER = process.env.DUBAI_STAFF_NUMBER || STAFF_NUMBER || "";
+const ABU_DHABI_STAFF_NUMBER = process.env.ABU_DHABI_STAFF_NUMBER || STAFF_NUMBER || "";
 const INBOX_USER = process.env.INBOX_USER || "admin";
 const INBOX_PASS = process.env.INBOX_PASS || "123456";
 
@@ -176,6 +178,16 @@ function getLineConfig(phoneNumberId, displayPhoneNumber = "") {
     displayNumber: "+971 4 396 3333",
     locationUrl: DUBAI_LOCATION_URL
   };
+}
+
+function getStaffNotificationNumber(phoneNumberId, displayPhoneNumber = "") {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+
+  if (isAbuDhabiLine(finalPhoneNumberId, displayPhoneNumber)) {
+    return ABU_DHABI_STAFF_NUMBER || STAFF_NUMBER || "";
+  }
+
+  return DUBAI_STAFF_NUMBER || STAFF_NUMBER || "";
 }
 
 /* Mini Inbox مؤقت للعرض والتجربة */
@@ -11496,7 +11508,9 @@ app.post("/webhook", async (req, res) => {
       text.includes("call") ||
       text.includes("اتصل");
 
-    if (shouldNotifyStaff && STAFF_NUMBER) {
+    const staffNotificationNumber = getStaffNotificationNumber(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
+
+    if (shouldNotifyStaff && staffNotificationNumber) {
       try {
         const customerChatLink = getCustomerChatLink(from);
 
@@ -11531,7 +11545,7 @@ app.post("/webhook", async (req, res) => {
           "\n\n" +
           "Open Mini Inbox to review and reply from the landline number.";
 
-        await sendWhatsAppMessage(STAFF_NUMBER, staffBody, incomingPhoneNumberId);
+        await sendWhatsAppMessage(staffNotificationNumber, staffBody, incomingPhoneNumberId);
       } catch (staffError) {
         console.log("Staff notification failed:");
         console.log(staffError);
