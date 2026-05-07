@@ -22,7 +22,7 @@ app.get("/api/wake", (req, res) => {
 });
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-team-inbox-v31-1-privacy-crm-profile-from-v30-10";
+const BOT_VERSION = "iconic-team-inbox-v31-2-remove-duplicate-quick-actions-from-v30-10";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -5908,8 +5908,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       min-height: 18px !important;
     }
 
-    .customer-profile-note,
-    .customer-quick-actions {
+    .customer-profile-note {
       padding: 12px;
       margin: 10px 0 16px;
       border-radius: 18px;
@@ -5931,24 +5930,8 @@ app.get("/inbox", protectInbox, (req, res) => {
       line-height: 1.55;
     }
 
-    .customer-quick-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    .customer-quick-grid .quick-btn {
-      min-height: 38px;
-      padding: 9px 10px;
-      font-size: 11px;
-      font-weight: 900;
-      border-radius: 13px;
-      justify-content: center;
-    }
-
     @media (max-width: 1180px) {
-      .customer-profile-grid,
-      .customer-quick-grid { grid-template-columns: 1fr; }
+      .customer-profile-grid { grid-template-columns: 1fr; }
     }
 
 
@@ -5985,58 +5968,6 @@ app.get("/inbox", protectInbox, (req, res) => {
       color: #16352b;
       font-weight: 800;
       outline: none;
-    }
-
-    /* V30.2 - Restore Reply From selector in composer + keep reference quick actions. UI-only; no webhook, auto-reply, send, image, opt-in, reminders, or history changes. */
-    .reference-quick-actions {
-      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,252,246,.96)) !important;
-      border-color: rgba(120,184,62,.22) !important;
-    }
-
-    .reference-action-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 9px;
-    }
-
-    .reference-action-btn {
-      min-height: 38px;
-      padding: 9px 10px;
-      border-radius: 14px;
-      border: 1px solid rgba(215,226,212,.96);
-      background: #ffffff;
-      color: #21382b;
-      font-size: 10.7px;
-      font-weight: 950;
-      cursor: pointer;
-      text-align: left;
-      box-shadow: 0 8px 16px rgba(15,23,42,.04);
-    }
-
-    .reference-action-btn:hover {
-      border-color: rgba(120,184,62,.52);
-      background: #f7fbf5;
-      transform: translateY(-1px);
-    }
-
-    .reference-action-btn.is-primary {
-      background: linear-gradient(135deg, #128c7e, #25d366);
-      color: #ffffff;
-      border-color: rgba(18,140,126,.38);
-      box-shadow: 0 10px 20px rgba(37,211,102,.14);
-    }
-
-    .reference-action-btn.is-warning {
-      color: #92400e;
-      background: #fff8e7;
-      border-color: rgba(245,158,11,.26);
-    }
-
-    .reference-action-btn.is-closed {
-      color: #475569;
-      background: #f8fafc;
-      border-color: rgba(148,163,184,.28);
     }
 
     .about-iconic-card {
@@ -6080,11 +6011,6 @@ app.get("/inbox", protectInbox, (req, res) => {
       font-weight: 900;
       white-space: nowrap;
     }
-
-    @media (max-width: 1180px) {
-      .reference-action-grid { grid-template-columns: 1fr; }
-    }
-
 
     /* V23.1: sidebar logo + Created by avatar visual upgrade only */
     .sidebar-brand {
@@ -6925,26 +6851,6 @@ app.get("/inbox", protectInbox, (req, res) => {
       accent-color: #22c55e;
     }
 
-    .compact-reference-actions {
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      gap: 10px !important;
-      margin-top: 0 !important;
-    }
-
-    .compact-reference-actions .reference-action-btn {
-      min-height: 38px !important;
-      border-radius: 10px !important;
-      padding: 8px 10px !important;
-      text-align: center !important;
-      color: #344054 !important;
-      background: #ffffff !important;
-      border: 1px solid rgba(218,226,218,.98) !important;
-      font-size: 11px !important;
-      font-weight: 850 !important;
-      box-shadow: none !important;
-    }
-
-    .is-hidden-action { display: none !important; }
     .is-hidden-compat { display: none !important; }
 
     .customer-summary-card .profile-note-text {
@@ -8199,7 +8105,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     /* V30.8.4 - Show selected conversation tags in chat header only.
        UI-only: moves VIP/tags before workflow/assigned so they cannot be hidden by long assignee text. */
     .topbar-sub::after {
-      content: "V31.1" !important;
+      content: "V31.2" !important;
     }
 
     @media (min-width: 1181px) {
@@ -8258,7 +8164,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V31.1 - Privacy CRM Profile. UI/local notes only; no WhatsApp, webhook, send, image, reminders, or Google Sheets structure changes. */
+    /* V31.2 - Privacy CRM Profile without duplicate Quick Actions. UI/local notes only; no WhatsApp, webhook, send, image, reminders, or Google Sheets structure changes. */
     .customer-details-card .reference-card-head h3::after {
       content: "CRM";
       display: inline-flex;
@@ -8385,7 +8291,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reference-version-badge::after {
-      content: "V31.1" !important;
+      content: "V31.2" !important;
     }
 </style>
 </head>
@@ -8691,21 +8597,6 @@ app.get("/inbox", protectInbox, (req, res) => {
             </div>
           </section>
 
-          <section class="reference-card quick-actions-card">
-            <div class="reference-card-head">
-              <h3>Quick Actions</h3>
-            </div>
-            <div class="reference-action-grid compact-reference-actions">
-              <button type="button" class="reference-action-btn" id="markNeedFollowBtn">Need details</button>
-              <button type="button" class="reference-action-btn" id="openWhatsAppChatBtn">Team handoff</button>
-              <button type="button" class="reference-action-btn" id="setVipBtn">VIP</button>
-              <button type="button" class="reference-action-btn" id="markPrivateBtn">Private</button>
-              <button type="button" class="reference-action-btn" id="markClosedBtn">Book Appointment</button>
-              <button type="button" class="reference-action-btn is-hidden-action" id="copyPhoneProfileBtn">Copy Phone</button>
-              <button type="button" class="reference-action-btn is-hidden-action" id="markReadProfileBtn">Mark Read</button>
-            </div>
-          </section>
-
           <section class="reference-card customer-summary-card">
             <div class="reference-card-head">
               <h3>Customer summary</h3>
@@ -8718,7 +8609,7 @@ app.get("/inbox", protectInbox, (req, res) => {
               <h3>Internal Notes</h3>
             </div>
             <textarea id="customerInternalNote" placeholder="Private internal note for the team. Do not write anything that should be sent to the customer." disabled></textarea>
-            <div class="internal-note-hint" id="customerInternalNoteStatus">Select a customer to add a note. V31.1 saves notes in this browser only.</div>
+            <div class="internal-note-hint" id="customerInternalNoteStatus">Select a customer to add a note. V31.2 saves notes in this browser only.</div>
           </section>
 
           <section class="about-iconic-card reference-about-card">
@@ -9139,14 +9030,14 @@ function syncInternalNoteBox(c) {
   if (!c) {
     customerInternalNote.value = "";
     customerInternalNote.disabled = true;
-    customerInternalNoteStatus.textContent = "Select a customer to add a note. V31.1 saves notes in this browser only.";
+    customerInternalNoteStatus.textContent = "Select a customer to add a note. V31.2 saves notes in this browser only.";
     return;
   }
 
   const key = getInternalNoteKey(c);
   customerInternalNote.disabled = false;
   customerInternalNote.value = internalNotesMap[key] || "";
-  customerInternalNoteStatus.textContent = "Internal note is private to Team Inbox. V31.1 stores it in this browser only.";
+  customerInternalNoteStatus.textContent = "Internal note is private to Team Inbox. V31.2 stores it in this browser only.";
 }
 
 function buildCustomerProfileSummary(c) {
@@ -10103,85 +9994,6 @@ Array.from(document.querySelectorAll(".status-btn")).forEach(function(btn) {
   btn.addEventListener("click", function() {
     updateStatus(btn.getAttribute("data-status") || "Need Follow-up");
   });
-});
-
-function bindReferenceActionButton(id, handler) {
-  const button = document.getElementById(id);
-  if (button) {
-    button.addEventListener("click", handler);
-  }
-}
-
-bindReferenceActionButton("openWhatsAppChatBtn", function() {
-  const phone = inputTo.value.trim() || selectedPhone;
-  if (!phone) {
-    resultBox.textContent = "Select a customer first.";
-    return;
-  }
-  window.open(getCustomerChatLink(phone), "_blank", "noopener");
-  resultBox.textContent = "Opening WhatsApp chat: " + phone;
-});
-
-bindReferenceActionButton("copyPhoneProfileBtn", function() {
-  const phone = inputTo.value.trim() || selectedPhone;
-  if (!phone) {
-    resultBox.textContent = "Select a customer first.";
-    return;
-  }
-  if (navigator.clipboard) navigator.clipboard.writeText(phone);
-  resultBox.textContent = "Phone copied: " + phone;
-});
-
-bindReferenceActionButton("markNeedFollowBtn", function() {
-  updateStatus("Need Follow-up");
-});
-
-bindReferenceActionButton("markClosedBtn", function() {
-  updateStatus("Closed");
-});
-
-bindReferenceActionButton("markReadProfileBtn", function() {
-  if (!selectedConversationKey) {
-    resultBox.textContent = "Select a customer first.";
-    return;
-  }
-  markConversationRead(selectedConversationKey);
-  resultBox.textContent = "Marked as read.";
-  renderAll();
-});
-
-bindReferenceActionButton("setVipBtn", async function() {
-  if (!selectedConversationKey) {
-    resultBox.textContent = "Select a customer first.";
-    return;
-  }
-  const currentTags = getTags(selectedConversationKey);
-  const nextTags = currentTags.includes("VIP") ? currentTags : currentTags.concat(["VIP"]);
-  setTags(selectedConversationKey, nextTags);
-  const currentConversation = getCurrentConversationForState();
-  if (currentConversation) {
-    currentConversation.tags = nextTags;
-    await saveConversationStateToGoogleSheet(currentConversation);
-  }
-  resultBox.textContent = "VIP tag applied.";
-  renderAll();
-});
-
-bindReferenceActionButton("markPrivateBtn", async function() {
-  if (!selectedConversationKey) {
-    resultBox.textContent = "Select a customer first.";
-    return;
-  }
-  const currentTags = getTags(selectedConversationKey);
-  const nextTags = currentTags.includes("Private") ? currentTags : currentTags.concat(["Private"]);
-  setTags(selectedConversationKey, nextTags);
-  const currentConversation = getCurrentConversationForState();
-  if (currentConversation) {
-    currentConversation.tags = nextTags;
-    await saveConversationStateToGoogleSheet(currentConversation);
-  }
-  resultBox.textContent = "Private tag applied.";
-  renderAll();
 });
 
 if (customerInternalNote) {
