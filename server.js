@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-3-footer-clean-finish-final-order";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-4-left-panel-footer-reserved-row-only";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -8541,51 +8541,49 @@ app.get("/inbox", protectInbox, (req, res) => {
       height: 0 !important;
     }
 
-
-    /* V31.5.8.3 - Footer Clean Finish Final Order.
-       Reason: earlier footer CSS was overridden by later stylesheet blocks.
-       Scope: messages-panel footer finish only. Keeps conversationList as the internal scroll area. */
+    /* V31.5.8.4 - Left panel footer reserved row only.
+       Fixes the bottom footer finish under the conversation cards.
+       Scope only: actual left conversation panel (.page .app > .panel:first-child),
+       conversation list area, and reference-list-footer.
+       Do not touch WhatsApp, Google Sheets, Webhook, send image/text, reminders, bot pause, or chat layout. */
     @media (min-width: 1181px) {
-      .messages-panel {
+      .page .app > .panel:first-child {
         display: grid !important;
-        grid-template-rows: auto minmax(0, 1fr) 46px !important;
+        grid-template-rows: auto minmax(0, 1fr) 42px !important;
         min-height: 0 !important;
         height: 100% !important;
         max-height: 100% !important;
         overflow: hidden !important;
-        border-radius: 24px !important;
-        background: #ffffff !important;
       }
 
-      #conversationList.conversation-list,
-      #conversationList.reference-conversation-list,
-      .messages-panel > .conversation-list {
+      .page .app > .panel:first-child > .reference-conversation-filters {
+        grid-row: 1 !important;
+        min-height: 0 !important;
+      }
+
+      .page .app > .panel:first-child > #conversationList.reference-conversation-list {
         grid-row: 2 !important;
         min-height: 0 !important;
         height: auto !important;
-        max-height: 100% !important;
+        max-height: none !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
-        padding: 10px 10px 8px !important;
         margin: 0 !important;
+        padding-bottom: 10px !important;
         border-bottom: 0 !important;
-        background:
-          linear-gradient(180deg, rgba(250, 253, 248, .96), rgba(246, 250, 244, .96)) !important;
-        scrollbar-gutter: stable both-edges !important;
       }
 
-      .messages-panel > .reference-list-footer {
+      .page .app > .panel:first-child > .reference-list-footer {
         grid-row: 3 !important;
-        height: 46px !important;
-        min-height: 46px !important;
-        max-height: 46px !important;
-        flex: 0 0 46px !important;
-        padding: 0 14px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        max-height: 42px !important;
+        flex: 0 0 42px !important;
         margin: 0 !important;
+        padding: 0 14px !important;
         border-top: 1px solid rgba(226, 232, 226, .95) !important;
-        border-radius: 0 0 24px 24px !important;
-        background:
-          linear-gradient(180deg, #ffffff 0%, #fbfdf9 100%) !important;
+        border-radius: 0 0 18px 18px !important;
+        background: linear-gradient(180deg, #ffffff 0%, #fbfdf9 100%) !important;
         color: #64748b !important;
         display: flex !important;
         align-items: center !important;
@@ -8594,11 +8592,11 @@ app.get("/inbox", protectInbox, (req, res) => {
         font-size: 11.5px !important;
         font-weight: 750 !important;
         line-height: 1 !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.96) !important;
         z-index: 5 !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.96) !important;
       }
 
-      .messages-panel > .reference-list-footer #conversationFooterText {
+      .page .app > .panel:first-child > .reference-list-footer #conversationFooterText {
         display: inline-flex !important;
         align-items: center !important;
         min-width: 0 !important;
@@ -8607,19 +8605,11 @@ app.get("/inbox", protectInbox, (req, res) => {
         white-space: nowrap !important;
       }
 
-      .messages-panel > .reference-list-footer button,
-      .messages-panel > .reference-list-footer #refreshListBtn {
-        width: 30px !important;
-        height: 30px !important;
-        min-width: 30px !important;
-        min-height: 30px !important;
-        border: 0 !important;
-        border-radius: 999px !important;
-        background: #f6faf3 !important;
-        color: #64748b !important;
-        cursor: pointer !important;
-        font-size: 16px !important;
-        line-height: 1 !important;
+      .page .app > .panel:first-child > .reference-list-footer #refreshListBtn {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
