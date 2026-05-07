@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-filtered-footer-count-fix-from-v31-5-7";
+const BOT_VERSION = "iconic-team-inbox-v31-5-9-footer-visibility-fix-from-v31-5-8";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -8356,7 +8356,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     /* V30.8.4 - Show selected conversation tags in chat header only.
        UI-only: moves VIP/tags before workflow/assigned so they cannot be hidden by long assignee text. */
     .topbar-sub::after {
-      content: "V31.2" !important;
+      content: "V31.5.9" !important;
     }
 
     @media (min-width: 1181px) {
@@ -8514,7 +8514,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .reference-version-badge::after {
-      content: "V31.2" !important;
+      content: "V31.5.9" !important;
     }
 
 
@@ -8540,6 +8540,69 @@ app.get("/inbox", protectInbox, (req, res) => {
       width: 0 !important;
       height: 0 !important;
     }
+
+
+    /* V31.5.9 - Footer Visibility Fix
+       Scope only: conversations panel footer visibility.
+       Do not touch sidebar, WhatsApp, Google Sheets, auto-reply, video, media, or reminders. */
+    .messages-panel {
+      display: grid !important;
+      grid-template-rows: auto minmax(0, 1fr) 44px !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .messages-panel > .filters {
+      grid-row: 1 !important;
+      min-height: 0 !important;
+      flex: 0 0 auto !important;
+    }
+
+    #conversationList.reference-conversation-list,
+    #conversationList.conversation-list,
+    .messages-panel > #conversationList {
+      grid-row: 2 !important;
+      min-height: 0 !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      padding-bottom: 10px !important;
+      overscroll-behavior: contain !important;
+    }
+
+    .reference-list-footer {
+      grid-row: 3 !important;
+      position: relative !important;
+      inset: auto !important;
+      height: 44px !important;
+      min-height: 44px !important;
+      max-height: 44px !important;
+      flex: 0 0 44px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 0 14px !important;
+      margin: 0 !important;
+      background: #ffffff !important;
+      border-top: 1px solid rgba(226, 232, 226, .95) !important;
+      border-radius: 0 0 24px 24px !important;
+      z-index: 25 !important;
+      color: #64748b !important;
+      font-size: 11.5px !important;
+      font-weight: 800 !important;
+      line-height: 1 !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+
+    #conversationFooterText {
+      display: inline-flex !important;
+      align-items: center !important;
+      min-width: 0 !important;
+      white-space: nowrap !important;
+    }
+
 </style>
 </head>
 <body>
