@@ -12,6 +12,14 @@ const fetch = (...args) => {
 };
 
 const app = express();
+
+app.get("/api/wake", (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    message: "Iconic server is awake",
+    time: new Date().toISOString()
+  });
+});
 app.use(express.json({ limit: "12mb" }));
 
 const BOT_VERSION = "iconic-team-inbox-v30-9-inline-image-messages-from-v30-8-4";
