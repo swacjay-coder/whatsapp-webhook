@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-9-consultation-only-notify-premium-booking-reply";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-10-bilingual-request-replies-only";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -887,7 +887,7 @@ function getServicesDeepMenuButtons() {
   return [
     { id: "natural_look", title: "طبيعي / Natural" },
     { id: "price_info", title: "السعر / Price" },
-    { id: "private_consult", title: "استشارة / Consult" }
+    { id: "private_consult", title: "استشارة/Consultation" }
   ];
 }
 
@@ -11252,14 +11252,14 @@ app.post("/webhook", async (req, res) => {
 
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `تم، نرتب لك طلب الحجز مع فرع ${branchNameAr} ✅\n\n` +
-        "اكتب لنا الوقت المناسب لك برسالة قصيرة، وسنساعدك بالخطوة التالية.\n\n" +
-        "وللتواصل الأسرع، يمكنك استخدام الأزرار بالأسفل للاتصال أو فتح موقع الفرع.\n\n" +
+        `تم استلام طلب الحجز مع فرع ${branchNameAr} بنجاح ✅\n\n` +
+        "فريق Iconic Hair Care سيراجع المحادثة ويرد عليك بالخطوة المناسبة في أقرب وقت.\n\n" +
+        "إذا عندك وقت مفضل أو ملاحظة إضافية، يمكنك إرسالها هنا.\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `Your booking request with our ${lineConfig.branch} branch is ready ✅\n\n` +
-        "Send us your preferred time in one short message, and we will guide you with the next step.\n\n" +
-        "For faster contact, you can use the buttons below to call or open the branch location.";
+        `Your booking request with our ${lineConfig.branch} branch has been received successfully ✅\n\n` +
+        "The Iconic Hair Care team will review the conversation and reply with the next suitable step as soon as possible.\n\n" +
+        "If you have a preferred time or any additional note, you may send it here.";
 
       replyButtons = getConsultActionButtons();
       sendReminderOptInPrompt = true;
@@ -11370,13 +11370,13 @@ app.post("/webhook", async (req, res) => {
 
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `تم استلام طلب الاستشارة بنجاح ✅\n\n` +
-        `تم تحويل محادثتك إلى فريق الاستشارات في فرع ${branchNameAr}. سيتم الرد عليك في أقرب وقت ممكن بسرية واهتمام.\n\n` +
+        "تم استلام طلب الاستشارة بنجاح ✅\n\n" +
+        "تم تحويل محادثتك إلى فريق الاستشارات في Iconic Hair Care، وسيتم الرد عليك في أقرب وقت ممكن بسرية واهتمام.\n\n" +
         "يمكنك إرسال أي ملاحظة إضافية هنا، وسيقوم الفريق بمراجعتها قبل التواصل معك.\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `Your consultation request has been received successfully ✅\n\n` +
-        `Your conversation has been forwarded to the ${lineConfig.branch} consultation team. They will reply as soon as possible with privacy and care.\n\n` +
+        "Your consultation request has been received successfully ✅\n\n" +
+        "Your conversation has been forwarded to the Iconic Hair Care consultation team, and they will reply as soon as possible with privacy and care.\n\n" +
         "You may send any additional note here, and our team will review it before contacting you.";
 
       replyButtons = getConsultActionButtons();
@@ -11414,14 +11414,14 @@ app.post("/webhook", async (req, res) => {
 
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `تم تحويل طلبك إلى فريق فرع ${branchNameAr} ✅\n\n` +
-        "سيقوم أحد أعضاء الفريق بالرد عليك قريباً.\n\n" +
-        "للمكالمة المباشرة أو فتح موقع الفرع، استخدم الأزرار بالأسفل.\n\n" +
+        `تم تحويل محادثتك إلى فريق فرع ${branchNameAr} ✅\n\n` +
+        "سيتم الرد عليك في أقرب وقت ممكن.\n\n" +
+        "يمكنك إرسال أي ملاحظة إضافية هنا.\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `Your request has been transferred to our ${lineConfig.branch} team ✅\n\n` +
-        "A team member will reply to you shortly.\n\n" +
-        "Use the buttons below for a direct call or the branch location.";
+        `Your conversation has been forwarded to our ${lineConfig.branch} team ✅\n\n` +
+        "They will reply as soon as possible.\n\n" +
+        "You may send any additional note here.";
 
       replyButtons = getAfterCallButtons();
     }
