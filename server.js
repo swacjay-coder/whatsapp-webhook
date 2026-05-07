@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-filtered-footer-count-fix-from-v31-5-7";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-1-footer-count-logic-only";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -9041,8 +9041,8 @@ function updateReferenceFilterUi(currentCount) {
   });
 
   if (conversationFooterText) {
+    const total = buildConversations().length;
     const shown = Number(currentCount || 0);
-    const total = shown;
     conversationFooterText.textContent = shown ? "Showing 1 - " + shown + " of " + total : "Showing 0 - 0 of " + total;
   }
 }
