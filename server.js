@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-4-left-panel-footer-reserved-row-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-5-instant-whatsapp-profile-name-display";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -9699,6 +9699,11 @@ function buildConversations() {
 
   return Object.values(map).map(function(c) {
     const savedState = conversationStateMap[c.key] || {};
+    const customerNameMessage = (c.messages || []).find(function(m) {
+      return (m.customerName || "").toString().trim();
+    });
+
+    c.customerName = customerNameMessage ? (customerNameMessage.customerName || "").toString().trim() : "";
     c.replyFilterStatus = getConversationReplyFilterStatus(c.messages);
     c.status = savedState.status || getStatusOverride(c.key) || getConversationBusinessStatus(c.messages, c.replyFilterStatus);
     c.assignee = savedState.assignee || getAssignee(c.key);
@@ -10072,8 +10077,9 @@ function renderChat() {
     return;
   }
 
-  chatTitle.textContent = c.phone;
-  chatAvatar.textContent = avatarText(c.phone);
+  const displayName = formatConversationDisplayName(c);
+  chatTitle.textContent = displayName;
+  chatAvatar.textContent = avatarText(displayName || c.phone);
   const headerTags = normalizeTags(c.tags || []);
   const headerTagsHtml = headerTags.length ? tagBadges(headerTags, "tag-chip", 3) : "";
   chatMeta.innerHTML = branchBadge(c.branch) + '<span class="status ' + statusClass(c.status) + '">' + escapeHtml(c.status || "") + '</span>' + headerTagsHtml + '<div class="workflow-status-bar"><span class="workflow-status-chip ' + statusClass(c.status) + '">Workflow: ' + escapeHtml(c.status || "Open") + '</span>' + assigneeBadge(c.assignee) + '</div>';
