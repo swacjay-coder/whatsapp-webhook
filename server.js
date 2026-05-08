@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-20-hide-conversation-tags-ui";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-21-clean-right-panel-no-scroll";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -9600,6 +9600,143 @@ app.get("/inbox", protectInbox, (req, res) => {
       visibility: hidden !important;
       pointer-events: none !important;
     }
+
+
+    /* V31.5.8.21 - Clean right panel, remove Customer Summary/About cards, and keep the right panel without internal scroll. */
+    .right-reference-panel {
+      overflow: visible !important;
+    }
+
+    .right-reference-scroll {
+      height: 100% !important;
+      max-height: none !important;
+      overflow-y: visible !important;
+      padding: 0 2px 0 !important;
+      display: grid !important;
+      grid-template-columns: 1fr !important;
+      grid-template-rows: auto auto !important;
+      align-content: start !important;
+      gap: 10px !important;
+      scrollbar-width: none !important;
+    }
+
+    .right-reference-scroll::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+
+    .customer-summary-card,
+    .reference-about-card {
+      display: none !important;
+    }
+
+    .right-reference-panel .customer-details-card,
+    .right-reference-panel .booking-request-card {
+      margin: 0 !important;
+    }
+
+    .right-reference-panel .reference-card {
+      padding: 13px 14px !important;
+      border-radius: 16px !important;
+      box-shadow: 0 7px 18px rgba(15,23,42,.045) !important;
+    }
+
+    .right-reference-panel .reference-card-head {
+      margin-bottom: 8px !important;
+    }
+
+    .right-reference-panel .reference-card-head h3 {
+      font-size: 15px !important;
+      line-height: 1.15 !important;
+    }
+
+    .right-reference-panel .customer-details-top {
+      gap: 10px !important;
+      margin: 0 0 10px !important;
+    }
+
+    .right-reference-panel .reference-avatar {
+      width: 42px !important;
+      height: 42px !important;
+      flex: 0 0 42px !important;
+      font-size: 13px !important;
+    }
+
+    .right-reference-panel .customer-name {
+      font-size: 13px !important;
+      line-height: 1.15 !important;
+    }
+
+    .right-reference-panel .customer-phone-small {
+      font-size: 11px !important;
+      margin-top: 2px !important;
+    }
+
+    .right-reference-panel .crm-privacy-strip {
+      margin: 8px 0 9px !important;
+      padding: 7px 9px !important;
+      border-radius: 12px !important;
+      font-size: 10px !important;
+    }
+
+    .right-reference-panel .crm-privacy-strip strong {
+      font-size: 10px !important;
+    }
+
+    .right-reference-panel .reference-detail-list {
+      gap: 7px !important;
+    }
+
+    .right-reference-panel .reference-detail-row {
+      grid-template-columns: 104px minmax(0,1fr) !important;
+      gap: 8px !important;
+      min-height: 18px !important;
+    }
+
+    .right-reference-panel .reference-detail-row span,
+    .right-reference-panel .reference-detail-row strong {
+      font-size: 11px !important;
+      line-height: 1.25 !important;
+    }
+
+    .right-reference-panel .reference-status-pill,
+    .right-reference-panel .booking-status-pill,
+    .right-reference-panel .crm-code-pill {
+      min-height: 20px !important;
+      padding: 3px 8px !important;
+      font-size: 10px !important;
+      border-radius: 8px !important;
+    }
+
+    .right-reference-panel .booking-note-input {
+      min-height: 34px !important;
+      margin-top: 8px !important;
+      padding: 7px 10px !important;
+      font-size: 11px !important;
+      border-radius: 10px !important;
+    }
+
+    .right-reference-panel .booking-actions-grid {
+      gap: 7px !important;
+      margin-top: 8px !important;
+    }
+
+    .right-reference-panel .booking-action-btn {
+      min-height: 32px !important;
+      border-radius: 10px !important;
+      font-size: 10.5px !important;
+    }
+
+    .right-reference-panel .booking-send-update-btn {
+      margin-top: 7px !important;
+    }
+
+    .right-reference-panel .booking-result-text {
+      min-height: 16px !important;
+      margin-top: 6px !important;
+      font-size: 10.5px !important;
+    }
 </style>
 </head>
 <body>
@@ -9931,22 +10068,6 @@ app.get("/inbox", protectInbox, (req, res) => {
             </div>
             <button type="button" class="booking-action-btn booking-send-update-btn" id="bookingSendCustomerUpdateBtn">Send update to customer</button>
             <div class="booking-result-text" id="bookingRequestResult">Ready.</div>
-          </section>
-
-          <section class="reference-card customer-summary-card">
-            <div class="reference-card-head">
-              <h3>Customer summary</h3>
-            </div>
-            <div class="profile-note-text" id="customerProfileLongSummary">No customer selected yet.</div>
-          </section>
-
-          <section class="about-iconic-card reference-about-card">
-            <div class="about-iconic-title">About Iconic Hair Care</div>
-            <div class="about-iconic-text">Premium hair care and natural hair solutions.</div>
-            <div class="about-iconic-text">Visit our branches in Dubai and Abu Dhabi.</div>
-            <div class="reference-contact-line"><span>☎</span><strong>Dubai: 04 396 3333</strong></div>
-            <div class="reference-contact-line"><span>☎</span><strong>Abu Dhabi: 02 562 2778</strong></div>
-            <div class="reference-contact-line"><span>🌐</span><strong>www.iconichaircare.com</strong></div>
           </section>
 
           <div class="customer-profile-note is-hidden-compat">
