@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-18-booking-notes-draft-lock";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-19-clean-right-panel-header-tags";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -8257,6 +8257,95 @@ app.get("/inbox", protectInbox, (req, res) => {
       line-height: 1 !important;
     }
 
+
+    /* V31.5.8.19 - Move Conversation Tags into the header three-dot menu and clean the right panel. */
+    .chat-tags-menu-wrap {
+      position: relative !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .chat-tags-popover {
+      position: absolute !important;
+      top: calc(100% + 8px) !important;
+      right: 0 !important;
+      width: 340px !important;
+      max-width: min(340px, 82vw) !important;
+      padding: 14px !important;
+      border: 1px solid rgba(190, 220, 180, .95) !important;
+      border-radius: 18px !important;
+      background: rgba(255, 255, 255, .98) !important;
+      box-shadow: 0 18px 42px rgba(15, 23, 42, .16) !important;
+      z-index: 80 !important;
+    }
+
+    .chat-tags-popover.is-hidden {
+      display: none !important;
+    }
+
+    .chat-tags-popover-head {
+      display: flex !important;
+      align-items: flex-start !important;
+      justify-content: space-between !important;
+      gap: 10px !important;
+      margin-bottom: 10px !important;
+    }
+
+    .chat-tags-popover-head h3 {
+      margin: 0 !important;
+      color: #111827 !important;
+      font-size: 14px !important;
+      font-weight: 950 !important;
+      line-height: 1.2 !important;
+    }
+
+    .chat-tags-popover .reference-current-tags {
+      max-width: 145px !important;
+      margin: 0 !important;
+      color: #14532d !important;
+      font-size: 10.5px !important;
+      font-weight: 950 !important;
+      text-align: right !important;
+      line-height: 1.25 !important;
+    }
+
+    .chat-tags-popover .header-tags-row {
+      margin-bottom: 10px !important;
+    }
+
+    .chat-tags-popover .header-tag-picker {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 8px !important;
+    }
+
+    .chat-tags-popover .tag-option {
+      display: flex !important;
+      align-items: center !important;
+      gap: 7px !important;
+      min-height: 34px !important;
+      padding: 7px 10px !important;
+      border-radius: 11px !important;
+      border: 1px solid rgba(218,226,218,.98) !important;
+      background: #ffffff !important;
+      color: #344054 !important;
+      font-size: 10px !important;
+      font-weight: 900 !important;
+      letter-spacing: .045em !important;
+      text-transform: uppercase !important;
+      box-shadow: none !important;
+      cursor: pointer !important;
+      user-select: none !important;
+    }
+
+    .chat-tags-popover .tag-option input {
+      width: 12px !important;
+      height: 12px !important;
+      margin: 0 !important;
+      accent-color: #25d366 !important;
+    }
+
     .reference-list-footer {
       height: 30px !important;
       min-height: 30px !important;
@@ -9677,7 +9766,32 @@ app.get("/inbox", protectInbox, (req, res) => {
             </select>
             <button type="button" class="mini-btn" id="copyPhoneBtn">Copy phone</button>
             <button type="button" class="mini-btn" id="markReadBtn">Mark read</button>
-            <button type="button" class="mini-btn more-btn" aria-label="More actions">⋮</button>
+            <div class="chat-tags-menu-wrap">
+              <button type="button" class="mini-btn more-btn" id="chatTagsMenuBtn" aria-label="Conversation tags">⋮</button>
+              <div class="chat-tags-popover is-hidden" id="chatTagsPopover">
+                <div class="chat-tags-popover-head">
+                  <h3>Conversation Tags</h3>
+                  <strong id="customerProfileTags" class="reference-current-tags">No tags</strong>
+                </div>
+                <div class="reference-tags-row header-tags-row" id="tagDisplay"></div>
+                <div class="reference-tag-picker header-tag-picker" id="tagPicker">
+                  <label class="tag-option"><input type="checkbox" value="Consultation" /> Consultation</label>
+                  <label class="tag-option"><input type="checkbox" value="New Customer" /> New Customer</label>
+                  <label class="tag-option"><input type="checkbox" value="Booking" /> Booking</label>
+                  <label class="tag-option"><input type="checkbox" value="Price" /> Price</label>
+                  <label class="tag-option"><input type="checkbox" value="Location" /> Location</label>
+                  <label class="tag-option"><input type="checkbox" value="Follow-up" /> Follow-up</label>
+                  <label class="tag-option"><input type="checkbox" value="Human Support" /> Human Support</label>
+                  <label class="tag-option"><input type="checkbox" value="Call Requested" /> Call Requested</label>
+                  <label class="tag-option"><input type="checkbox" value="Service Interest" /> Service Interest</label>
+                  <label class="tag-option"><input type="checkbox" value="Media Requested" /> Media Requested</label>
+                  <label class="tag-option"><input type="checkbox" value="Natural Look" /> Natural Look</label>
+                  <label class="tag-option"><input type="checkbox" value="VIP" /> VIP</label>
+                  <label class="tag-option"><input type="checkbox" value="Private" /> Private</label>
+                  <label class="tag-option"><input type="checkbox" value="Need Details" /> Need Details</label>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -9782,29 +9896,6 @@ app.get("/inbox", protectInbox, (req, res) => {
             </div>
           </section>
 
-          <section class="reference-card conversation-info-card">
-            <div class="reference-card-head">
-              <h3>Conversation Info</h3>
-            </div>
-            <div class="reference-detail-list">
-              <div class="reference-detail-row"><span>Channel</span><strong id="conversationInfoChannel">WhatsApp</strong></div>
-              <div class="reference-detail-row"><span>Branch</span><strong id="customerProfileBranch">—</strong></div>
-              <div class="reference-detail-row conversation-assignee-row"><span>Assigned To</span><strong id="customerProfileAssigned">Unassigned</strong></div>
-              <div class="reference-assignee-control">
-                <select id="assigneeSelect" class="profile-assignee-select" aria-label="Assigned to">
-                  <option value="Unassigned">Unassigned</option>
-                  <option value="Dubai Team">Dubai Team</option>
-                  <option value="Abu Dhabi Team">Abu Dhabi Team</option>
-                  <option value="Consultation Team">Consultation Team</option>
-                  <option value="Follow-up Team">Follow-up Team</option>
-                </select>
-              </div>
-              <div class="reference-detail-row"><span>Status</span><strong><span class="reference-status-pill" id="conversationInfoStatus">Open</span></strong></div>
-              <div class="reference-detail-row"><span>Last Activity</span><strong id="customerProfileLastActivity">—</strong></div>
-              <div class="reference-detail-row"><span>Last Action</span><strong id="customerProfileLastAction">—</strong></div>
-            </div>
-          </section>
-
           <section class="reference-card booking-request-card is-hidden" id="bookingRequestCard">
             <div class="reference-card-head">
               <h3>Booking Request</h3>
@@ -9826,30 +9917,6 @@ app.get("/inbox", protectInbox, (req, res) => {
             </div>
             <button type="button" class="booking-action-btn booking-send-update-btn" id="bookingSendCustomerUpdateBtn">Send update to customer</button>
             <div class="booking-result-text" id="bookingRequestResult">Ready.</div>
-          </section>
-
-          <section class="reference-card conversation-tags-card">
-            <div class="reference-card-head">
-              <h3>Conversation Tags</h3>
-            </div>
-            <strong id="customerProfileTags" class="reference-current-tags">No tags</strong>
-            <div class="reference-tags-row" id="tagDisplay"></div>
-            <div class="reference-tag-picker" id="tagPicker">
-              <label class="tag-option"><input type="checkbox" value="Consultation" /> Consultation</label>
-              <label class="tag-option"><input type="checkbox" value="New Customer" /> New Customer</label>
-              <label class="tag-option"><input type="checkbox" value="Booking" /> Booking</label>
-              <label class="tag-option"><input type="checkbox" value="Price" /> Price</label>
-              <label class="tag-option"><input type="checkbox" value="Location" /> Location</label>
-              <label class="tag-option"><input type="checkbox" value="Follow-up" /> Follow-up</label>
-              <label class="tag-option"><input type="checkbox" value="Human Support" /> Human Support</label>
-              <label class="tag-option"><input type="checkbox" value="Call Requested" /> Call Requested</label>
-              <label class="tag-option"><input type="checkbox" value="Service Interest" /> Service Interest</label>
-              <label class="tag-option"><input type="checkbox" value="Media Requested" /> Media Requested</label>
-              <label class="tag-option"><input type="checkbox" value="Natural Look" /> Natural Look</label>
-              <label class="tag-option"><input type="checkbox" value="VIP" /> VIP</label>
-              <label class="tag-option"><input type="checkbox" value="Private" /> Private</label>
-              <label class="tag-option"><input type="checkbox" value="Need Details" /> Need Details</label>
-            </div>
           </section>
 
           <section class="reference-card customer-summary-card">
@@ -9952,6 +10019,8 @@ const assigneeSelect = document.getElementById("assigneeSelect");
 const assigneeDisplay = document.getElementById("assigneeDisplay");
 const tagPicker = document.getElementById("tagPicker");
 const tagDisplay = document.getElementById("tagDisplay");
+const chatTagsMenuBtn = document.getElementById("chatTagsMenuBtn");
+const chatTagsPopover = document.getElementById("chatTagsPopover");
 const inputTo = document.getElementById("to");
 const inputLine = document.getElementById("phoneNumberId");
 const inputBody = document.getElementById("body");
@@ -10720,6 +10789,12 @@ function syncTagPicker(tags) {
   }
 }
 
+function closeChatTagsPopover() {
+  if (chatTagsPopover) {
+    chatTagsPopover.classList.add("is-hidden");
+  }
+}
+
 function statusClass(status) {
   const value = (status || "").toString().toLowerCase();
   if (value.includes("wait")) return "status-waiting";
@@ -11304,6 +11379,8 @@ function renderChat() {
       conversationStatusSelect.value = "Open";
       conversationStatusSelect.disabled = true;
     }
+    if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = true;
+    closeChatTagsPopover();
     if (assigneeSelect) {
       assigneeSelect.value = "Unassigned";
       assigneeSelect.disabled = true;
@@ -11329,6 +11406,7 @@ function renderChat() {
     conversationStatusSelect.value = allowedStatuses.includes(c.status) ? c.status : "Open";
     conversationStatusSelect.disabled = false;
   }
+  if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = false;
   if (assigneeSelect) {
     assigneeSelect.value = c.assignee || "Unassigned";
     assigneeSelect.disabled = false;
@@ -11669,6 +11747,20 @@ if (assigneeSelect) {
   });
 }
 
+if (chatTagsMenuBtn && chatTagsPopover) {
+  chatTagsMenuBtn.addEventListener("click", function(event) {
+    event.stopPropagation();
+    if (chatTagsMenuBtn.disabled) return;
+    chatTagsPopover.classList.toggle("is-hidden");
+  });
+
+  chatTagsPopover.addEventListener("click", function(event) {
+    event.stopPropagation();
+  });
+
+  document.addEventListener("click", closeChatTagsPopover);
+}
+
 if (tagPicker) {
   Array.from(tagPicker.querySelectorAll('input[type="checkbox"]')).forEach(function(input) {
     input.addEventListener("change", async function() {
@@ -11683,6 +11775,7 @@ if (tagPicker) {
         await saveConversationStateToGoogleSheet(currentConversation);
       }
       resultBox.textContent = tags.length ? "Tags updated: " + tags.join(", ") : "Tags cleared.";
+      closeChatTagsPopover();
       renderAll();
     });
   });
