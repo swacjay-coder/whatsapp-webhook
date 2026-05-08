@@ -65,7 +65,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-32-branch-team-assignment";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-33-right-panel-scroll-fix";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -10105,28 +10105,41 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V31.5.8.21 - Clean right panel, remove Customer Summary/About cards, and keep the right panel without internal scroll. */
+    /* V31.5.8.33 - Right panel scroll fix.
+       Staff Assignment added more vertical content, so the right CRM / Booking column must scroll safely.
+       This fixes hidden Booking Request buttons: Approve / Suggest time / Need follow-up / Cancel. */
     .right-reference-panel {
-      overflow: visible !important;
+      overflow: hidden !important;
+      min-height: 0 !important;
     }
 
     .right-reference-scroll {
       height: 100% !important;
-      max-height: none !important;
-      overflow-y: visible !important;
-      padding: 0 2px 0 !important;
-      display: grid !important;
-      grid-template-columns: 1fr !important;
-      grid-template-rows: auto auto !important;
-      align-content: start !important;
+      max-height: 100% !important;
+      min-height: 0 !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      padding: 0 6px 14px 2px !important;
+      display: flex !important;
+      flex-direction: column !important;
       gap: 10px !important;
-      scrollbar-width: none !important;
+      scrollbar-width: thin !important;
+      overscroll-behavior: contain !important;
     }
 
     .right-reference-scroll::-webkit-scrollbar {
-      display: none !important;
-      width: 0 !important;
+      display: block !important;
+      width: 6px !important;
       height: 0 !important;
+    }
+
+    .right-reference-scroll::-webkit-scrollbar-thumb {
+      background: rgba(120,184,62,.28) !important;
+      border-radius: 999px !important;
+    }
+
+    .right-reference-scroll::-webkit-scrollbar-track {
+      background: transparent !important;
     }
 
     .customer-summary-card,
