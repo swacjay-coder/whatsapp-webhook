@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-19-clean-right-panel-header-tags";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-20-hide-conversation-tags-ui";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -9586,6 +9586,20 @@ app.get("/inbox", protectInbox, (req, res) => {
       }
     }
 
+
+
+    /* V31.5.8.20 - Hide Conversation Tags UI, keep internal tags/filter logic active. */
+    .chat-tags-menu-wrap,
+    .chat-tags-popover,
+    .right-reference-panel .reference-tag-picker,
+    .right-reference-panel .reference-tags-row,
+    .tags-team-card,
+    .tags-card,
+    .profile-tags-editor {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
 </style>
 </head>
 <body>
