@@ -65,7 +65,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-27-live-inbox-notifications";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-28-customer-card-live-notification-badge";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -2850,6 +2850,65 @@ app.get("/inbox", protectInbox, (req, res) => {
       background: var(--whatsapp);
       border-radius: 50%;
       box-shadow: 0 0 0 4px rgba(37,211,102,.16);
+    }
+
+    .conversation-card.card-live-alert {
+      border-color: rgba(37,211,102,.42);
+      background:
+        linear-gradient(135deg, rgba(232,255,239,.98), rgba(255,255,255,.92));
+      box-shadow:
+        0 16px 32px rgba(15, 118, 60, .12),
+        0 0 0 1px rgba(37,211,102,.10);
+      animation: iconicCardNewMessagePulse 1.8s ease-in-out infinite;
+    }
+
+    .conversation-card.card-live-alert::after {
+      display: none;
+    }
+
+    @keyframes iconicCardNewMessagePulse {
+      0%, 100% {
+        box-shadow:
+          0 16px 32px rgba(15, 118, 60, .10),
+          0 0 0 1px rgba(37,211,102,.10);
+      }
+      50% {
+        box-shadow:
+          0 18px 38px rgba(15, 118, 60, .16),
+          0 0 0 4px rgba(37,211,102,.10);
+      }
+    }
+
+    .conv-side {
+      display: grid;
+      justify-items: end;
+      align-content: start;
+      gap: 6px;
+      min-width: 74px;
+    }
+
+    .live-card-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(37,211,102,.16);
+      color: #067a3c;
+      font-size: 10.5px;
+      font-weight: 950;
+      white-space: nowrap;
+      border: 1px solid rgba(37,211,102,.26);
+      box-shadow: 0 7px 15px rgba(37,211,102,.12);
+    }
+
+    .live-card-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--whatsapp);
+      box-shadow: 0 0 0 3px rgba(37,211,102,.14);
     }
 
     .conversation-main {
@@ -11420,6 +11479,26 @@ function isUnreadConversation(c) {
   return readMap[c.key] !== messageKey(latest);
 }
 
+function getUnreadCustomerMessageCount(c) {
+  const latest = c?.latest || {};
+  if (latest.sender !== "customer") return 0;
+
+  const readMarker = readMap[c.key] || "";
+  let count = 0;
+
+  for (const message of (c.messages || [])) {
+    if (readMarker && messageKey(message) === readMarker) {
+      break;
+    }
+
+    if (message.sender === "customer") {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
 function markConversationRead(key) {
   const c = buildConversations().find(function(item) { return item.key === key; });
   if (!c || !c.latest) return;
@@ -11985,7 +12064,8 @@ function renderConversationList() {
 
   conversationList.innerHTML = conversations.map(function(c) {
     const active = c.key === selectedConversationKey ? " active" : "";
-    const unread = isUnreadConversation(c) ? " unread" : "";
+    const unreadCustomerCount = getUnreadCustomerMessageCount(c);
+    const unread = unreadCustomerCount > 0 ? " unread card-live-alert" : "";
     const listSenderFilter = statusToSenderFilter(statusFilter.value);
     const filteredLatest = listSenderFilter ? (c.messages || []).find(function(m) { return m.sender === listSenderFilter; }) : null;
     const latest = filteredLatest || c.latest || {};
@@ -11993,6 +12073,9 @@ function renderConversationList() {
     const preview = formatConversationPreview(latest);
     const displayName = formatConversationDisplayName(c);
     const messageCount = (c.messages || []).length;
+    const liveBadge = unreadCustomerCount > 0
+      ? '<span class="live-card-badge"><span class="live-card-dot"></span>New ' + escapeHtml(String(unreadCustomerCount > 99 ? "99+" : unreadCustomerCount)) + '</span>'
+      : '';
     const tagRow = (c.tags || []).length ? '<div class="conversation-tags-row">' + tagBadges(c.tags, "conversation-tag-chip", 3) + '</div>' : '';
 
     return '<button type="button" class="conversation-card reference-conversation-card' + active + unread + '" data-key="' + escapeHtml(c.key) + '" data-status="' + escapeHtml(displayStatus || '') + '">' +
@@ -12003,7 +12086,10 @@ function renderConversationList() {
             '<div class="conv-name reference-card-name">' + escapeHtml(displayName) + '</div>' +
             '<div class="conv-preview reference-card-preview">' + escapeHtml(shortText(preview, 76)) + '</div>' +
           '</div>' +
-          '<div class="conv-time reference-card-time">' + escapeHtml(latest.time || "") + '</div>' +
+          '<div class="conv-side reference-card-side">' +
+            '<div class="conv-time reference-card-time">' + escapeHtml(latest.time || "") + '</div>' +
+            liveBadge +
+          '</div>' +
         '</div>' +
         '<div class="conv-footer reference-card-footer">' +
           '<div class="badges reference-card-badges">' + branchBadge(c.branch) + '<span class="status ' + statusClass(displayStatus) + '">' + escapeHtml(displayStatus || "") + '</span>' + tagBadges(c.tags || [], "conversation-tag-chip", 1) + '</div>' +
