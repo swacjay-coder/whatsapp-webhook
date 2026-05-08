@@ -65,7 +65,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-26-chat-background-only-from-stable-base";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-27-live-inbox-notifications";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -9877,7 +9877,102 @@ app.get("/inbox", protectInbox, (req, res) => {
     .chat-composer-wrap .send-image-btn {
       box-shadow: 0 12px 26px rgba(37,211,102,.18) !important;
     }
-</style>
+
+    /* V31.5.8.27 Live Inbox Notifications */
+    .topbar-notification .notification-count {
+      display: none !important;
+    }
+
+    .topbar-notification.has-unread .notification-count {
+      display: grid !important;
+    }
+
+    .topbar-notification.notifications-enabled {
+      border-color: rgba(120, 184, 62, .42) !important;
+      background: #f2faee !important;
+      color: #16352b !important;
+    }
+
+    .topbar-notification.notifications-disabled {
+      opacity: .86 !important;
+    }
+
+    .topbar-notification.has-unread {
+      animation: iconicBellPulse 1.4s ease-in-out infinite !important;
+    }
+
+    @keyframes iconicBellPulse {
+      0%, 100% { transform: translateY(0) scale(1); }
+      45% { transform: translateY(-1px) scale(1.04); }
+    }
+
+    .live-toast-stack {
+      position: fixed !important;
+      right: 22px !important;
+      bottom: 22px !important;
+      z-index: 99999 !important;
+      display: grid !important;
+      gap: 10px !important;
+      width: min(360px, calc(100vw - 32px)) !important;
+      pointer-events: none !important;
+    }
+
+    .live-toast {
+      pointer-events: auto !important;
+      border: 1px solid rgba(120, 184, 62, .35) !important;
+      border-radius: 18px !important;
+      background: rgba(255, 255, 255, .98) !important;
+      box-shadow: 0 20px 45px rgba(15, 23, 42, .16) !important;
+      padding: 13px 14px !important;
+      display: grid !important;
+      grid-template-columns: 38px 1fr !important;
+      gap: 12px !important;
+      cursor: pointer !important;
+      animation: liveToastIn .22s ease-out !important;
+    }
+
+    @keyframes liveToastIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .live-toast-icon {
+      width: 38px !important;
+      height: 38px !important;
+      border-radius: 14px !important;
+      background: #f2faee !important;
+      color: #16352b !important;
+      display: grid !important;
+      place-items: center !important;
+      font-size: 18px !important;
+      border: 1px solid rgba(120, 184, 62, .35) !important;
+    }
+
+    .live-toast-title {
+      font-size: 13px !important;
+      font-weight: 900 !important;
+      color: #111827 !important;
+      margin: 0 0 3px !important;
+    }
+
+    .live-toast-meta {
+      font-size: 11px !important;
+      font-weight: 800 !important;
+      color: #4b5563 !important;
+      margin: 0 0 5px !important;
+    }
+
+    .live-toast-body {
+      font-size: 12px !important;
+      color: #374151 !important;
+      line-height: 1.45 !important;
+      margin: 0 !important;
+      max-height: 42px !important;
+      overflow: hidden !important;
+    }
+
+
+  </style>
 </head>
 <body>
   <div class="workspace-shell">
@@ -9932,7 +10027,7 @@ app.get("/inbox", protectInbox, (req, res) => {
           </div>
         </div>
         <div class="topbar-actions">
-          <div class="topbar-system"><span class="system-dot"></span>All systems operational</div>
+          <div class="topbar-system" id="liveNotificationStatus"><span class="system-dot"></span>All systems operational</div>
           <div class="topbar-quick-wrap" id="quickRepliesWrap">
             <button type="button" class="topbar-quick" id="topbarQuickRepliesBtn" aria-expanded="false" aria-controls="quickRepliesMenu">⚡ Quick Replies</button>
             <div class="quick-replies-menu" id="quickRepliesMenu" role="menu" aria-label="Quick replies">
@@ -9950,7 +10045,7 @@ app.get("/inbox", protectInbox, (req, res) => {
               </div>
             </div>
           </div>
-          <button type="button" class="topbar-notification" aria-label="Notifications">🔔<span class="notification-count">3</span></button>
+          <button type="button" class="topbar-notification notifications-disabled" id="liveNotificationBtn" aria-label="Live inbox notifications" title="Click to enable live notification sound">🔔<span class="notification-count" id="liveNotificationCount">0</span></button>
           <div class="topbar-profile-avatar" aria-label="Iconic profile">ICONIC</div>
         </div>
       </section>
@@ -10248,6 +10343,12 @@ try {
   readMap = {};
 }
 
+let liveNotificationsReady = false;
+let knownCustomerMessageKeys = new Set();
+let liveAlertCount = 0;
+let liveNotificationsEnabled = localStorage.getItem("iconic_live_notifications_enabled") === "yes";
+let liveNotificationAudioContext = null;
+
 let statusOverrideMap = {};
 try {
   statusOverrideMap = JSON.parse(localStorage.getItem("iconic_status_override_map") || "{}");
@@ -10302,6 +10403,10 @@ const inputBody = document.getElementById("body");
 const imageFileInput = document.getElementById("imageFile");
 const imageCaptionInput = document.getElementById("imageCaption");
 const resultBox = document.getElementById("result");
+const liveNotificationBtn = document.getElementById("liveNotificationBtn");
+const liveNotificationCount = document.getElementById("liveNotificationCount");
+const liveNotificationStatus = document.getElementById("liveNotificationStatus");
+const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
 const customerProfilePhone = document.getElementById("customerProfilePhone");
 const customerProfileBranch = document.getElementById("customerProfileBranch");
 const customerProfileLastActivity = document.getElementById("customerProfileLastActivity");
@@ -11322,6 +11427,245 @@ function markConversationRead(key) {
   saveReadMap();
 }
 
+function customerNotificationKey(message) {
+  return [
+    message.phone || "",
+    message.phoneNumberId || "",
+    message.time || "",
+    message.sender || "",
+    (message.body || "").toString().slice(0, 80)
+  ].join("|");
+}
+
+function getCustomerNotificationKeys(messages) {
+  return new Set((messages || []).filter(function(message) {
+    return message.sender === "customer";
+  }).slice(0, 500).map(customerNotificationKey));
+}
+
+function getUnreadConversationCount() {
+  return buildConversations().filter(isUnreadConversation).length;
+}
+
+function setLiveNotificationStatusText(text) {
+  if (!liveNotificationStatus) return;
+  liveNotificationStatus.innerHTML = '<span class="system-dot"></span>' + escapeHtml(text || "Live inbox ready");
+}
+
+function updatePageNotificationTitle() {
+  if (liveAlertCount > 0) {
+    document.title = "(" + liveAlertCount + ") " + originalPageTitle;
+  } else {
+    document.title = originalPageTitle;
+  }
+}
+
+function updateLiveNotificationUi() {
+  const unreadCount = getUnreadConversationCount();
+  const visibleCount = Math.max(unreadCount, liveAlertCount);
+
+  if (liveNotificationCount) {
+    liveNotificationCount.textContent = visibleCount > 99 ? "99+" : String(visibleCount);
+  }
+
+  if (liveNotificationBtn) {
+    liveNotificationBtn.classList.toggle("has-unread", visibleCount > 0);
+    liveNotificationBtn.classList.toggle("notifications-enabled", liveNotificationsEnabled);
+    liveNotificationBtn.classList.toggle("notifications-disabled", !liveNotificationsEnabled);
+    liveNotificationBtn.title = liveNotificationsEnabled
+      ? "Live notifications are ON. Click to clear the tab counter."
+      : "Click to enable live notification sound.";
+  }
+
+  setLiveNotificationStatusText(liveNotificationsEnabled ? "Live alerts ON" : "Live alerts ready");
+  updatePageNotificationTitle();
+}
+
+function getLiveToastStack() {
+  let stack = document.getElementById("liveToastStack");
+
+  if (!stack) {
+    stack = document.createElement("div");
+    stack.id = "liveToastStack";
+    stack.className = "live-toast-stack";
+    document.body.appendChild(stack);
+  }
+
+  return stack;
+}
+
+function getMessageConversationKey(message) {
+  return conversationKey(message.phone || "unknown", message.phoneNumberId || "", message.branch || "");
+}
+
+function resetLiveAlertCounter() {
+  liveAlertCount = 0;
+  updateLiveNotificationUi();
+}
+
+function openConversationFromLiveMessage(message) {
+  if (!message) return;
+  const key = getMessageConversationKey(message);
+  selectedConversationKey = key;
+  selectedPhone = message.phone || selectedPhone;
+  selectedPhoneNumberId = message.phoneNumberId || selectedPhoneNumberId || "";
+  markConversationRead(key);
+  resetLiveAlertCounter();
+  renderAll();
+}
+
+function showLiveNotificationToast(message, newCount) {
+  if (!message) return;
+
+  const stack = getLiveToastStack();
+  const toast = document.createElement("div");
+  const branch = message.branch || "Dubai";
+  const phone = message.phone || "Unknown";
+  const bodyText = (message.body || "").toString().replace(/\s+/g, " ").trim() || "New customer message";
+  const title = newCount > 1 ? newCount + " new customer messages" : "New customer message";
+
+  toast.className = "live-toast";
+  toast.innerHTML =
+    '<div class="live-toast-icon">🔔</div>' +
+    '<div>' +
+      '<div class="live-toast-title">' + escapeHtml(title) + '</div>' +
+      '<div class="live-toast-meta">' + escapeHtml(branch + " • " + phone) + '</div>' +
+      '<div class="live-toast-body">' + escapeHtml(bodyText) + '</div>' +
+    '</div>';
+
+  toast.addEventListener("click", function() {
+    openConversationFromLiveMessage(message);
+    toast.remove();
+  });
+
+  stack.prepend(toast);
+
+  window.setTimeout(function() {
+    if (toast && toast.parentNode) {
+      toast.remove();
+    }
+  }, 8000);
+}
+
+function unlockLiveNotificationSound() {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    if (!liveNotificationAudioContext) {
+      liveNotificationAudioContext = new AudioContextClass();
+    }
+
+    if (liveNotificationAudioContext.state === "suspended") {
+      liveNotificationAudioContext.resume().catch(function() {});
+    }
+  } catch (error) {
+    // Sound is optional. Keep inbox working even if browser blocks audio.
+  }
+}
+
+function playLiveNotificationSound() {
+  if (!liveNotificationsEnabled) return;
+
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    if (!liveNotificationAudioContext) {
+      liveNotificationAudioContext = new AudioContextClass();
+    }
+
+    const ctx = liveNotificationAudioContext;
+
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(function() {});
+    }
+
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(660, ctx.currentTime + 0.12);
+
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.24);
+  } catch (error) {
+    // Sound is optional. Keep inbox working even if browser blocks audio.
+  }
+}
+
+function requestBrowserNotificationPermission() {
+  if (!("Notification" in window)) return Promise.resolve("unsupported");
+  if (Notification.permission !== "default") return Promise.resolve(Notification.permission);
+  return Notification.requestPermission().catch(function() {
+    return "denied";
+  });
+}
+
+function showBrowserLiveNotification(message, newCount) {
+  if (!liveNotificationsEnabled) return;
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  if (document.visibilityState === "visible") return;
+
+  const branch = message.branch || "Dubai";
+  const phone = message.phone || "Unknown";
+  const bodyText = (message.body || "").toString().replace(/\s+/g, " ").trim() || "New customer message";
+
+  try {
+    const notification = new Notification(newCount > 1 ? newCount + " new Iconic messages" : "New Iconic message", {
+      body: branch + " • " + phone + "\\n" + bodyText,
+      tag: getMessageConversationKey(message),
+      silent: true
+    });
+
+    notification.onclick = function() {
+      window.focus();
+      openConversationFromLiveMessage(message);
+      notification.close();
+    };
+  } catch (error) {
+    // Browser notifications are optional.
+  }
+}
+
+function processLiveInboxNotifications(nextMessages) {
+  const newKnownKeys = getCustomerNotificationKeys(nextMessages);
+  const newCustomerMessages = (nextMessages || []).filter(function(message) {
+    return message.sender === "customer" && !knownCustomerMessageKeys.has(customerNotificationKey(message));
+  });
+
+  if (!liveNotificationsReady) {
+    knownCustomerMessageKeys = newKnownKeys;
+    liveNotificationsReady = true;
+    updateLiveNotificationUi();
+    return;
+  }
+
+  knownCustomerMessageKeys = newKnownKeys;
+
+  if (!newCustomerMessages.length) {
+    updateLiveNotificationUi();
+    return;
+  }
+
+  const newestMessage = newCustomerMessages[0];
+  liveAlertCount += newCustomerMessages.length;
+
+  showLiveNotificationToast(newestMessage, newCustomerMessages.length);
+  playLiveNotificationSound();
+  showBrowserLiveNotification(newestMessage, newCustomerMessages.length);
+  updateLiveNotificationUi();
+}
+
 function buildStatusOptions() {
   const current = statusFilter.value;
 
@@ -11445,6 +11789,7 @@ function updateStats() {
   }, { dubai: 0, abu: 0 });
   if (tabDubaiCount) tabDubaiCount.textContent = conversationBranchCounts.dubai;
   if (tabAbuCount) tabAbuCount.textContent = conversationBranchCounts.abu;
+  updateLiveNotificationUi();
 }
 
 function conversationHasStatus(conversation, wantedStatus) {
@@ -11786,7 +12131,9 @@ async function loadMessages() {
   try {
     const res = await fetch("/api/messages");
     const data = await res.json();
-    allMessages = data.messages || [];
+    const nextMessages = data.messages || [];
+    processLiveInboxNotifications(nextMessages);
+    allMessages = nextMessages;
     allBookingRequests = data.bookingRequests || [];
     applyConversationStates(data.conversationStates || []);
     renderAll();
@@ -12124,6 +12471,40 @@ if (clearFiltersBtn) {
     renderAll();
   });
 }
+
+if (liveNotificationBtn) {
+  liveNotificationBtn.addEventListener("click", function() {
+    if (!liveNotificationsEnabled) {
+      liveNotificationsEnabled = true;
+      localStorage.setItem("iconic_live_notifications_enabled", "yes");
+      unlockLiveNotificationSound();
+      requestBrowserNotificationPermission().then(function() {
+        updateLiveNotificationUi();
+      });
+      showLiveNotificationToast({
+        phone: "Live Inbox",
+        branch: "Iconic",
+        body: "Live inbox alerts are enabled for this browser.",
+        phoneNumberId: ""
+      }, 1);
+    } else {
+      resetLiveAlertCounter();
+      updateLiveNotificationUi();
+    }
+  });
+}
+
+window.addEventListener("focus", function() {
+  resetLiveAlertCounter();
+});
+
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "visible") {
+    resetLiveAlertCounter();
+  }
+});
+
+updateLiveNotificationUi();
 
 loadMessages();
 setInterval(loadMessages, 3000);
