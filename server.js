@@ -65,7 +65,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-29-customer-card-badge-hard-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-30-premium-created-by-ossama-visual-upgrade";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -6459,18 +6459,63 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
   
-    /* V22.8.1: real creator card fix + safe bigger chat logo */
+    /* V31.5.8.30: Premium Created by Ossama visual upgrade only */
     .sidebar-user {
       display: flex !important;
       align-items: center !important;
-      gap: 10px !important;
-      padding: 11px 12px !important;
-      border-radius: 18px !important;
-      background: rgba(255,255,255,.96) !important;
-      border: 1px solid rgba(215,226,212,.95) !important;
+      gap: 12px !important;
+      padding: 12px 13px !important;
+      border-radius: 20px !important;
+      position: relative !important;
+      overflow: hidden !important;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.95), rgba(247,255,242,.92)) !important;
+      border: 1px solid rgba(186,211,176,.78) !important;
       color: #0f172a !important;
-      box-shadow: 0 10px 24px rgba(15,23,42,.07) !important;
+      box-shadow:
+        0 14px 34px rgba(15,23,42,.10),
+        inset 0 1px 0 rgba(255,255,255,.75) !important;
       margin-top: 12px !important;
+      backdrop-filter: blur(10px) !important;
+      -webkit-backdrop-filter: blur(10px) !important;
+      isolation: isolate !important;
+      transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease !important;
+    }
+
+    .sidebar-user::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: -1px !important;
+      background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.00) 28%, rgba(255,255,255,.52) 48%, rgba(255,255,255,0) 68%, transparent 100%) !important;
+      transform: translateX(-135%) !important;
+      animation: creatorCardShine 7.6s linear infinite !important;
+      pointer-events: none !important;
+      z-index: 0 !important;
+    }
+
+    .sidebar-user::after {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      border-radius: inherit !important;
+      background: radial-gradient(circle at 0% 100%, rgba(120,184,62,.14), transparent 38%), radial-gradient(circle at 100% 0%, rgba(18,140,126,.12), transparent 36%) !important;
+      pointer-events: none !important;
+      z-index: 0 !important;
+    }
+
+    .sidebar-user:hover {
+      transform: translateY(-1px) !important;
+      box-shadow:
+        0 16px 38px rgba(15,23,42,.12),
+        inset 0 1px 0 rgba(255,255,255,.82) !important;
+      border-color: rgba(120,184,62,.34) !important;
+    }
+
+    .sidebar-user-avatar,
+    .sidebar-user-copy,
+    .sidebar-user-caret {
+      position: relative !important;
+      z-index: 1 !important;
     }
 
     .sidebar-user-avatar {
@@ -6479,11 +6524,24 @@ app.get("/inbox", protectInbox, (req, res) => {
       border-radius: 999px !important;
       display: grid !important;
       place-items: center !important;
-      background: linear-gradient(135deg, rgba(120,184,62,.24), rgba(18,140,126,.14)) !important;
+      background: linear-gradient(135deg, rgba(120,184,62,.26), rgba(18,140,126,.15)) !important;
       border: 1px solid rgba(120,184,62,.22) !important;
       color: #16352b !important;
       font-weight: 950 !important;
       flex: 0 0 auto !important;
+      box-shadow: 0 0 0 4px rgba(255,255,255,.82), 0 10px 24px rgba(18,140,126,.16) !important;
+      animation: creatorAvatarFloat 5.8s ease-in-out infinite !important;
+    }
+
+    .sidebar-user-avatar::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: -5px !important;
+      border-radius: inherit !important;
+      border: 1px solid rgba(120,184,62,.22) !important;
+      opacity: .72 !important;
+      animation: creatorRingPulse 3.8s ease-in-out infinite !important;
+      pointer-events: none !important;
     }
 
     .sidebar-user-copy {
@@ -6494,22 +6552,48 @@ app.get("/inbox", protectInbox, (req, res) => {
     .sidebar-user-name {
       font-size: 12px !important;
       font-weight: 950 !important;
-      color: #16352b !important;
       line-height: 1.2 !important;
+      letter-spacing: .25px !important;
+      color: #16352b !important;
+      text-shadow: 0 1px 0 rgba(255,255,255,.55) !important;
+      animation: creatorTextGlow 5.8s ease-in-out infinite !important;
     }
 
     .sidebar-user-role {
-      margin-top: 2px !important;
-      font-size: 11px !important;
-      color: #64748b !important;
-      font-weight: 800 !important;
+      margin-top: 4px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      padding: 4px 9px !important;
+      border-radius: 999px !important;
+      font-size: 10px !important;
+      color: #4a6473 !important;
+      font-weight: 900 !important;
+      letter-spacing: .9px !important;
+      text-transform: uppercase !important;
+      background: rgba(255,255,255,.62) !important;
+      border: 1px solid rgba(120,184,62,.17) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.62) !important;
+    }
+
+    .sidebar-user-role::before {
+      content: "" !important;
+      width: 7px !important;
+      height: 7px !important;
+      border-radius: 999px !important;
+      background: #78b83e !important;
+      box-shadow: 0 0 0 4px rgba(120,184,62,.13) !important;
+      animation: creatorDotPulse 2.5s ease-in-out infinite !important;
+      flex: 0 0 auto !important;
     }
 
     .sidebar-user-caret {
-      color: #64748b !important;
+      color: #517362 !important;
       font-size: 13px !important;
       font-weight: 900 !important;
       flex: 0 0 auto !important;
+      opacity: .9 !important;
+      transform: translateY(1px) !important;
     }
 
     .credit-tag {
@@ -6907,8 +6991,8 @@ app.get("/inbox", protectInbox, (req, res) => {
       padding: 0 !important;
       overflow: hidden !important;
       background: #050505 !important;
-      border: 2px solid rgba(120,184,62,.24) !important;
-      box-shadow: 0 9px 20px rgba(15,23,42,.10) !important;
+      border: 2px solid rgba(120,184,62,.26) !important;
+      box-shadow: 0 12px 26px rgba(15,23,42,.12) !important;
     }
 
     .sidebar-user-avatar img {
@@ -6916,6 +7000,44 @@ app.get("/inbox", protectInbox, (req, res) => {
       height: 100% !important;
       object-fit: cover !important;
       display: block !important;
+      transform-origin: center center !important;
+      animation: creatorAvatarBreath 5.8s ease-in-out infinite !important;
+      filter: saturate(1.04) contrast(1.03) brightness(1.01) !important;
+    }
+
+    @keyframes creatorCardShine {
+      0% { transform: translateX(-135%); opacity: 0; }
+      8% { opacity: .25; }
+      18% { opacity: .72; }
+      32% { transform: translateX(135%); opacity: 0; }
+      100% { transform: translateX(135%); opacity: 0; }
+    }
+
+    @keyframes creatorAvatarFloat {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      25% { transform: translateY(-2px) rotate(-1deg); }
+      50% { transform: translateY(-4px) rotate(.9deg); }
+      75% { transform: translateY(-2px) rotate(-.7deg); }
+    }
+
+    @keyframes creatorAvatarBreath {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.045); }
+    }
+
+    @keyframes creatorRingPulse {
+      0%, 100% { transform: scale(.96); opacity: .24; }
+      50% { transform: scale(1.08); opacity: .58; }
+    }
+
+    @keyframes creatorDotPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.12); opacity: .82; }
+    }
+
+    @keyframes creatorTextGlow {
+      0%, 100% { letter-spacing: .25px; text-shadow: 0 1px 0 rgba(255,255,255,.55), 0 0 0 rgba(120,184,62,0); }
+      50% { letter-spacing: .48px; text-shadow: 0 1px 0 rgba(255,255,255,.55), 0 0 12px rgba(120,184,62,.12); }
     }
 
 
