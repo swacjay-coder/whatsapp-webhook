@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-34-whatsapp-dynamic-flow-prep";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-35-whatsapp-flow-health-check-base64-fix";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -2578,9 +2578,14 @@ app.post("/api/flows/iconic-booking", async (req, res) => {
     const flowResponse = buildIconicBookingFlowExchangeResponse(flowRequest);
 
     if (decrypted) {
-      return res.json({
-        encrypted_flow_data: encryptWhatsAppFlowResponse(flowResponse, decrypted.aesKey, decrypted.iv)
-      });
+      const encryptedResponse = encryptWhatsAppFlowResponse(flowResponse, decrypted.aesKey, decrypted.iv);
+
+      // WhatsApp Flow data exchange requires the HTTP response body itself
+      // to be the encrypted Base64 string, not a JSON wrapper object.
+      return res
+        .status(200)
+        .set("Content-Type", "text/plain")
+        .send(encryptedResponse);
     }
 
     return res.json({
