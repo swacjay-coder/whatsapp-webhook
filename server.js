@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-35-whatsapp-flow-health-check-base64-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-36-exact-time-slots-for-whatsapp-flow";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1038,6 +1038,11 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
             data: {
               default_branch: options.branch || lineConfig.branch,
               customer_name: options.customerName || "",
+              preferred_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
+              today_available: isTodayAvailableForFlow(),
+              today_unavailable_message: isTodayAvailableForFlow()
+                ? ""
+                : "Today is no longer available, please choose Tomorrow or This Week.",
               today_time_options: getBookingTimeOptionsForFlow("Today"),
               default_time_options: getBookingTimeOptionsForFlow("Tomorrow")
             }
@@ -1112,24 +1117,48 @@ function getMainMenuButtons() {
 
 /* V31.5.8.34 - WhatsApp Dynamic Flow Booking Prep
    Independent safe layer for WhatsApp Flow booking.
-   It only calculates valid time options and turns Flow submits into Booking Requests. */
+   It only calculates valid time options and turns Flow submits into Booking Requests.
+
+   V31.5.8.36 - Exact Time Slots for WhatsApp Flow:
+   Preferred Time now returns exact appointment slots from 10:00 AM to 6:30 PM.
+   Today still hides elapsed times based on Dubai time. */
 function getDubaiMinutesNow() {
   const now = new Date();
   const dubaiTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Dubai" }));
   return (dubaiTime.getHours() * 60) + dubaiTime.getMinutes();
 }
 
-function makeBookingTimeOption(id, title) {
-  return { id, title };
+function makeBookingTimeOption(id, title, minutes = null) {
+  return { id, title, ...(Number.isFinite(minutes) ? { minutes } : {}) };
+}
+
+function getExactBookingTimeSlotsForFlow() {
+  return [
+    makeBookingTimeOption("time_10_00", "10:00 AM", 10 * 60),
+    makeBookingTimeOption("time_11_00", "11:00 AM", 11 * 60),
+    makeBookingTimeOption("time_12_00", "12:00 PM", 12 * 60),
+    makeBookingTimeOption("time_13_00", "1:00 PM", 13 * 60),
+    makeBookingTimeOption("time_14_00", "2:00 PM", 14 * 60),
+    makeBookingTimeOption("time_15_00", "3:00 PM", 15 * 60),
+    makeBookingTimeOption("time_16_00", "4:00 PM", 16 * 60),
+    makeBookingTimeOption("time_17_00", "5:00 PM", 17 * 60),
+    makeBookingTimeOption("time_18_00", "6:00 PM", 18 * 60),
+    makeBookingTimeOption("time_18_30", "6:30 PM", (18 * 60) + 30)
+  ];
+}
+
+function stripInternalFlowOptionFields(options = []) {
+  return options.map((option) => ({
+    id: option.id,
+    title: option.title
+  }));
 }
 
 function getAllBookingTimeOptionsForFlow() {
-  return [
-    makeBookingTimeOption("morning_10_1", "Morning: 10:00 AM - 1:00 PM"),
-    makeBookingTimeOption("afternoon_1_4", "Afternoon: 1:00 PM - 4:00 PM"),
-    makeBookingTimeOption("evening_4_630", "Evening: 4:00 PM - 6:30 PM"),
+  return stripInternalFlowOptionFields([
+    ...getExactBookingTimeSlotsForFlow(),
     makeBookingTimeOption("flexible_any", "Flexible / Any available time")
-  ];
+  ]);
 }
 
 function normalizeFlowChoiceText(value) {
@@ -1153,35 +1182,27 @@ function normalizeFlowChoiceText(value) {
 
 function getBookingTimeOptionsForFlow(preferredDay = "") {
   const day = compactText(preferredDay);
-  const allOptions = getAllBookingTimeOptionsForFlow();
+  const exactSlots = getExactBookingTimeSlotsForFlow();
+  const flexibleOption = makeBookingTimeOption("flexible_any", "Flexible / Any available time");
+  const allOptions = [...exactSlots, flexibleOption];
 
   if (!day || (!day.includes("today") && !day.includes("اليوم"))) {
-    return allOptions;
+    return stripInternalFlowOptionFields(allOptions);
   }
 
   const minutesNow = getDubaiMinutesNow();
-  const tenAm = 10 * 60;
-  const onePm = 13 * 60;
-  const fourPm = 16 * 60;
   const sixThirtyPm = (18 * 60) + 30;
 
-  if (minutesNow < tenAm) {
-    return allOptions;
+  if (minutesNow >= sixThirtyPm) {
+    return [];
   }
 
-  if (minutesNow >= tenAm && minutesNow < onePm) {
-    return allOptions.filter((option) => option.id !== "morning_10_1");
-  }
+  const remainingSlots = exactSlots.filter((option) => option.minutes > minutesNow);
 
-  if (minutesNow >= onePm && minutesNow < fourPm) {
-    return allOptions.filter((option) => ["evening_4_630", "flexible_any"].includes(option.id));
-  }
-
-  if (minutesNow >= fourPm && minutesNow < sixThirtyPm) {
-    return allOptions.filter((option) => option.id === "flexible_any");
-  }
-
-  return [];
+  return stripInternalFlowOptionFields([
+    ...remainingSlots,
+    flexibleOption
+  ]);
 }
 
 function isTodayAvailableForFlow() {
@@ -1359,11 +1380,20 @@ function normalizeFlowDay(value) {
 
 function normalizeFlowTime(value) {
   const cleanValue = compactText(value);
+  const exactOptions = getAllBookingTimeOptionsForFlow();
+  const matchedOption = exactOptions.find((option) => {
+    const optionId = compactText(option.id);
+    const optionTitle = compactText(option.title);
+    return cleanValue === optionId || cleanValue === optionTitle || cleanValue.includes(optionId) || cleanValue.includes(optionTitle);
+  });
 
-  if (cleanValue.includes("morning") || cleanValue.includes("10")) return "Morning: 10:00 AM - 1:00 PM";
-  if (cleanValue.includes("afternoon") || cleanValue.includes("1:00") || cleanValue.includes("1_4")) return "Afternoon: 1:00 PM - 4:00 PM";
-  if (cleanValue.includes("evening") || cleanValue.includes("4:00") || cleanValue.includes("630")) return "Evening: 4:00 PM - 6:30 PM";
-  if (cleanValue.includes("flexible") || cleanValue.includes("any")) return "Flexible / Any available time";
+  if (matchedOption) {
+    return matchedOption.title;
+  }
+
+  if (cleanValue.includes("flexible") || cleanValue.includes("any")) {
+    return "Flexible / Any available time";
+  }
 
   return value || "Flexible / Any available time";
 }
@@ -1371,11 +1401,19 @@ function normalizeFlowTime(value) {
 function normalizeFlowServiceInterest(value) {
   const cleanValue = compactText(value);
 
+  if (cleanValue.includes("service_appointment") || cleanValue.includes("service appointment") || cleanValue.includes("سيرفس")) {
+    return "Service Appointment";
+  }
+
   if (cleanValue.includes("team") || cleanValue.includes("فريق")) {
     return "Talk to Team";
   }
 
-  return "Hair Replacement Consultation";
+  if (cleanValue.includes("hair_replacement") || cleanValue.includes("hair replacement") || cleanValue.includes("consultation")) {
+    return "Hair Replacement Consultation";
+  }
+
+  return normalizeFlowChoiceText(value) || "Hair Replacement Consultation";
 }
 
 function getWhatsAppFlowBookingData(message, lineConfig = {}) {
