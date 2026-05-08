@@ -65,7 +65,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-28-customer-card-live-notification-badge";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-29-customer-card-badge-hard-fix";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -2850,65 +2850,6 @@ app.get("/inbox", protectInbox, (req, res) => {
       background: var(--whatsapp);
       border-radius: 50%;
       box-shadow: 0 0 0 4px rgba(37,211,102,.16);
-    }
-
-    .conversation-card.card-live-alert {
-      border-color: rgba(37,211,102,.42);
-      background:
-        linear-gradient(135deg, rgba(232,255,239,.98), rgba(255,255,255,.92));
-      box-shadow:
-        0 16px 32px rgba(15, 118, 60, .12),
-        0 0 0 1px rgba(37,211,102,.10);
-      animation: iconicCardNewMessagePulse 1.8s ease-in-out infinite;
-    }
-
-    .conversation-card.card-live-alert::after {
-      display: none;
-    }
-
-    @keyframes iconicCardNewMessagePulse {
-      0%, 100% {
-        box-shadow:
-          0 16px 32px rgba(15, 118, 60, .10),
-          0 0 0 1px rgba(37,211,102,.10);
-      }
-      50% {
-        box-shadow:
-          0 18px 38px rgba(15, 118, 60, .16),
-          0 0 0 4px rgba(37,211,102,.10);
-      }
-    }
-
-    .conv-side {
-      display: grid;
-      justify-items: end;
-      align-content: start;
-      gap: 6px;
-      min-width: 74px;
-    }
-
-    .live-card-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 5px;
-      padding: 5px 9px;
-      border-radius: 999px;
-      background: rgba(37,211,102,.16);
-      color: #067a3c;
-      font-size: 10.5px;
-      font-weight: 950;
-      white-space: nowrap;
-      border: 1px solid rgba(37,211,102,.26);
-      box-shadow: 0 7px 15px rgba(37,211,102,.12);
-    }
-
-    .live-card-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 999px;
-      background: var(--whatsapp);
-      box-shadow: 0 0 0 3px rgba(37,211,102,.14);
     }
 
     .conversation-main {
@@ -7400,6 +7341,75 @@ app.get("/inbox", protectInbox, (req, res) => {
       color: #fff !important;
     }
 
+    /* V31.5.8.29: Strong customer-card notification styles.
+       These rules are intentionally scoped to #conversationList so they override
+       the premium reference card styling without touching other UI areas. */
+    #conversationList .conversation-card.reference-conversation-card.unread,
+    #conversationList .conversation-card.reference-conversation-card.card-live-alert {
+      background: linear-gradient(135deg, #efffed 0%, #ffffff 100%) !important;
+      border-left: 5px solid #25d366 !important;
+      padding-left: 8px !important;
+      box-shadow: inset 0 0 0 1px rgba(37,211,102,.16), 0 8px 18px rgba(37,211,102,.10) !important;
+    }
+
+    #conversationList .conversation-card.reference-conversation-card.unread .reference-card-name::after {
+      content: "NEW";
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 7px;
+      height: 17px;
+      padding: 0 7px;
+      border-radius: 999px;
+      background: #25d366;
+      color: #fff;
+      font-size: 9px;
+      line-height: 17px;
+      font-weight: 950;
+      letter-spacing: .03em;
+      vertical-align: middle;
+      box-shadow: 0 0 0 3px rgba(37,211,102,.14);
+    }
+
+    #conversationList .conversation-card.reference-conversation-card.unread .reference-card-preview {
+      color: #166534 !important;
+      font-weight: 850 !important;
+    }
+
+    #conversationList .reference-card-side {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: flex-end !important;
+      justify-content: flex-start !important;
+      gap: 6px !important;
+      min-width: 72px !important;
+    }
+
+    #conversationList .live-card-badge {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 5px !important;
+      height: 22px !important;
+      padding: 0 9px !important;
+      border-radius: 999px !important;
+      background: #25d366 !important;
+      color: #fff !important;
+      font-size: 10px !important;
+      line-height: 22px !important;
+      font-weight: 950 !important;
+      white-space: nowrap !important;
+      box-shadow: 0 0 0 3px rgba(37,211,102,.15), 0 8px 16px rgba(37,211,102,.18) !important;
+    }
+
+    #conversationList .live-card-dot {
+      width: 7px !important;
+      height: 7px !important;
+      border-radius: 999px !important;
+      background: #fff !important;
+      opacity: .95 !important;
+    }
+
     #conversationList .reference-avatar {
       width: 42px !important;
       height: 42px !important;
@@ -11387,6 +11397,17 @@ function messageKey(m) {
   return [m.phone || "", m.time || "", m.sender || "", (m.body || "").slice(0, 30)].join("|");
 }
 
+function getMessageTimeValue(message) {
+  const value = message?.time || "";
+  const direct = new Date(value).getTime();
+
+  if (!Number.isNaN(direct)) {
+    return direct;
+  }
+
+  return 0;
+}
+
 function getConversationReplyFilterStatus(messages) {
   const msgs = messages || [];
   const latestMessage = msgs[0] || {};
@@ -11458,6 +11479,16 @@ function buildConversations() {
 
   return Object.values(map).map(function(c) {
     const savedState = conversationStateMap[c.key] || {};
+
+    // V31.5.8.29:
+    // Keep every conversation internally newest-first.
+    // This makes card notifications reliable even when Google Sheet order changes
+    // or when an automatic bot reply arrives right after the customer message.
+    c.messages = (c.messages || []).slice().sort(function(a, b) {
+      return getMessageTimeValue(b) - getMessageTimeValue(a);
+    });
+    c.latest = c.messages[0] || c.latest || {};
+
     const customerNameMessage = (c.messages || []).find(function(m) {
       return (m.customerName || "").toString().trim();
     });
@@ -11473,20 +11504,13 @@ function buildConversations() {
   });
 }
 
-function isUnreadConversation(c) {
-  const latest = c.latest || {};
-  if (latest.sender !== "customer") return false;
-  return readMap[c.key] !== messageKey(latest);
-}
-
 function getUnreadCustomerMessageCount(c) {
-  const latest = c?.latest || {};
-  if (latest.sender !== "customer") return 0;
+  if (!c || !Array.isArray(c.messages)) return 0;
 
   const readMarker = readMap[c.key] || "";
   let count = 0;
 
-  for (const message of (c.messages || [])) {
+  for (const message of c.messages) {
     if (readMarker && messageKey(message) === readMarker) {
       break;
     }
@@ -11497,6 +11521,10 @@ function getUnreadCustomerMessageCount(c) {
   }
 
   return count;
+}
+
+function isUnreadConversation(c) {
+  return getUnreadCustomerMessageCount(c) > 0;
 }
 
 function markConversationRead(key) {
@@ -12086,7 +12114,7 @@ function renderConversationList() {
             '<div class="conv-name reference-card-name">' + escapeHtml(displayName) + '</div>' +
             '<div class="conv-preview reference-card-preview">' + escapeHtml(shortText(preview, 76)) + '</div>' +
           '</div>' +
-          '<div class="conv-side reference-card-side">' +
+          '<div class="reference-card-side">' +
             '<div class="conv-time reference-card-time">' + escapeHtml(latest.time || "") + '</div>' +
             liveBadge +
           '</div>' +
