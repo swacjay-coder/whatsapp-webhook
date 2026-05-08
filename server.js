@@ -97,6 +97,7 @@ const FOLLOW_UP_TEMPLATE_NAME_ABU_DHABI =
   process.env.ABU_DHABI_FOLLOW_UP_TEMPLATE_NAME ||
   "service_review_follow_up_abudhabi";
 const FOLLOW_UP_TEMPLATE_LANGUAGE = process.env.FOLLOW_UP_TEMPLATE_LANGUAGE || "en";
+const FOLLOW_UP_DELAY_DAYS = Number(process.env.FOLLOW_UP_DELAY_DAYS || process.env.REMINDER_DELAY_DAYS || 15);
 const FOLLOW_UP_HEADER_IMAGE_URL = process.env.FOLLOW_UP_HEADER_IMAGE_URL || "";
 const MAIN_MENU_HEADER_IMAGE_URL =
   process.env.MAIN_MENU_HEADER_IMAGE_URL ||
