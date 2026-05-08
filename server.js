@@ -65,7 +65,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-31-legendary-whatsapp-fast-booking-buttons";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-32-branch-team-assignment";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -194,6 +194,11 @@ function getLineConfig(phoneNumberId, displayPhoneNumber = "") {
     displayNumber: "+971 4 396 3333",
     locationUrl: DUBAI_LOCATION_URL
   };
+}
+
+function getBranchTeamAssignee(branch = "") {
+  const value = (branch || "").toString().toLowerCase();
+  return value.includes("abu") ? "Abu Dhabi Team" : "Dubai Team";
 }
 
 function getStaffNotificationRouting(phoneNumberId, displayPhoneNumber = "") {
@@ -1157,7 +1162,7 @@ async function handleFastBookingButtons({
       phoneNumberId: incomingPhoneNumberId,
       branch: lineConfig.branch,
       status: "Fast Booking - Choose Branch",
-      assignee: "Consultation Team",
+      assignee: getBranchTeamAssignee(lineConfig.branch),
       tags: ["Booking", "Fast Booking"],
       updatedBy: "WhatsApp Fast Booking"
     });
@@ -1185,7 +1190,7 @@ async function handleFastBookingButtons({
       phoneNumberId: incomingPhoneNumberId,
       branch: chosenBranch,
       status: "Fast Booking - Choose Time",
-      assignee: "Consultation Team",
+      assignee: getBranchTeamAssignee(chosenBranch),
       tags: ["Booking", "Fast Booking"],
       updatedBy: "WhatsApp Fast Booking"
     });
@@ -1209,7 +1214,7 @@ async function handleFastBookingButtons({
       phoneNumberId: incomingPhoneNumberId,
       branch: selectedBranch,
       status: "Booking Request",
-      assignee: "Consultation Team",
+      assignee: getBranchTeamAssignee(selectedBranch),
       tags: ["Booking", "Fast Booking", "Need Confirmation"],
       updatedBy: "WhatsApp Fast Booking"
     });
@@ -1664,7 +1669,7 @@ async function saveConversationStateToGoogleSheetFromServer({ phone, phoneNumber
     phoneNumberId: cleanPhoneNumberId,
     branch: (branch || getLineConfig(cleanPhoneNumberId).branch || "").toString().trim(),
     conversation_status: (status || "Open").toString().trim(),
-    assigned_to: (assignee || "Unassigned").toString().trim(),
+    assigned_to: getBranchTeamAssignee(branch || getLineConfig(cleanPhoneNumberId).branch),
     tags: normalizeIntentTags(tags || []),
     last_updated_by: updatedBy
   };
@@ -5231,6 +5236,37 @@ app.get("/inbox", protectInbox, (req, res) => {
     .workflow-status-bar .assignee-chip {
       margin-left: 6px;
     }
+    .branch-team-assignment-card {
+      margin-top: 12px;
+    }
+
+    .branch-team-select {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid rgba(120,184,62,.28);
+      border-radius: 14px;
+      padding: 8px 10px;
+      color: #16352b;
+      background: rgba(255,255,255,.96);
+      font-size: 12px;
+      font-weight: 900;
+      outline: none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+    }
+
+    .branch-team-select:focus {
+      border-color: rgba(120,184,62,.58);
+      box-shadow: 0 0 0 3px rgba(120,184,62,.13);
+    }
+
+    .branch-team-assignment-note {
+      margin-top: 8px;
+      color: #64748b;
+      font-size: 10px;
+      line-height: 1.35;
+      font-weight: 800;
+    }
+
 
     .conversation-card .assignee-chip {
       max-width: 145px;
@@ -10540,11 +10576,8 @@ app.get("/inbox", protectInbox, (req, res) => {
             </select>
             <select id="assigneeFilter">
               <option value="">All assigned</option>
-              <option value="Unassigned">Unassigned</option>
               <option value="Dubai Team">Dubai Team</option>
               <option value="Abu Dhabi Team">Abu Dhabi Team</option>
-              <option value="Consultation Team">Consultation Team</option>
-              <option value="Follow-up Team">Follow-up Team</option>
             </select>
             <select id="tagFilter">
               <option value="">All tags</option>
@@ -10731,6 +10764,21 @@ app.get("/inbox", protectInbox, (req, res) => {
               <div class="reference-detail-row"><span>Lead Source</span><strong id="customerProfileLeadSource">WhatsApp</strong></div>
               <div class="reference-detail-row"><span>Language</span><strong id="customerProfileLanguage">English</strong></div>
               <div class="reference-detail-row"><span>Status</span><strong><span class="reference-status-pill" id="customerProfileStatus">Open</span></strong></div>
+            </div>
+
+            <div class="assign-team-card branch-team-assignment-card">
+              <div class="assign-top">
+                <div class="assign-icon">👥</div>
+                <div>
+                  <div class="assign-title">Staff Assignment</div>
+                  <div class="assign-sub">Assign this conversation to the right branch team.</div>
+                </div>
+              </div>
+              <select id="assigneeSelect" class="branch-team-select" disabled>
+                <option value="Dubai Team">Dubai Team</option>
+                <option value="Abu Dhabi Team">Abu Dhabi Team</option>
+              </select>
+              <div class="branch-team-assignment-note">Auto-selected by branch. Staff can change it manually.</div>
             </div>
           </section>
 
@@ -11060,12 +11108,18 @@ function saveAssigneeMap() {
   localStorage.setItem("iconic_assignee_map", JSON.stringify(assigneeMap));
 }
 
-function normalizeAssigneeValue(assignee) {
-  const value = (assignee || "Unassigned").toString().trim() || "Unassigned";
-  const allowed = ["Unassigned", "Dubai Team", "Abu Dhabi Team", "Consultation Team", "Follow-up Team"];
+function getDefaultBranchAssignee(branch) {
+  const value = (branch || "").toString().toLowerCase();
+  return value.includes("abu") ? "Abu Dhabi Team" : "Dubai Team";
+}
 
-  // V23 keeps assignment team-based only. Any old local browser value is hidden safely.
-  return allowed.includes(value) ? value : "Unassigned";
+function normalizeAssigneeValue(assignee, branch) {
+  const value = (assignee || "").toString().trim();
+  const allowed = ["Dubai Team", "Abu Dhabi Team"];
+
+  // V31.5.8.32 keeps assignment branch-team only.
+  // Old values such as Unassigned / Consultation Team / Follow-up Team safely fall back to the branch team.
+  return allowed.includes(value) ? value : getDefaultBranchAssignee(branch);
 }
 
 function setAssignee(key, assignee) {
@@ -11075,8 +11129,8 @@ function setAssignee(key, assignee) {
   saveAssigneeMap();
 }
 
-function getAssignee(key) {
-  return key && assigneeMap[key] ? normalizeAssigneeValue(assigneeMap[key]) : "Unassigned";
+function getAssignee(key, branch) {
+  return key && assigneeMap[key] ? normalizeAssigneeValue(assigneeMap[key], branch) : getDefaultBranchAssignee(branch);
 }
 
 function assigneeClass(assignee) {
@@ -11137,7 +11191,7 @@ function applyConversationStates(states) {
 
     const key = conversationKey(phone, phoneNumberId, state.branch || "");
     const status = (state.conversation_status || "").toString().trim();
-    const assignee = normalizeAssigneeValue(state.assigned_to || "Unassigned");
+    const assignee = normalizeAssigneeValue(state.assigned_to || "", state.branch || "");
     const tags = parseStateTags(state.tags || "");
 
     conversationStateMap[key] = {
@@ -11598,7 +11652,7 @@ function updateCustomerProfile(c) {
     setProfileText(customerProfileLastAction, "—");
     setProfileText(customerProfileStatus, "—");
     setProfileText(conversationInfoStatus, "—");
-    setProfileText(customerProfileAssigned, "Unassigned");
+    setProfileText(customerProfileAssigned, "—");
     setProfileText(customerProfileTags, "No tags");
     setProfileText(customerProfileSummary, "Select a conversation to view customer details.");
     setProfileText(customerProfileLongSummary, "No customer selected yet.");
@@ -11879,7 +11933,7 @@ function buildConversations() {
     c.customerName = customerNameMessage ? (customerNameMessage.customerName || "").toString().trim() : "";
     c.replyFilterStatus = getConversationReplyFilterStatus(c.messages);
     c.status = savedState.status || getStatusOverride(c.key) || getConversationBusinessStatus(c.messages, c.replyFilterStatus);
-    c.assignee = savedState.assignee || getAssignee(c.key);
+    c.assignee = normalizeAssigneeValue(savedState.assignee || getAssignee(c.key, c.branch), c.branch);
     c.tags = normalizeTags(savedState.tags || getTags(c.key));
     c.stateUpdatedAt = savedState.last_updated_at || "";
     c.stateUpdatedBy = savedState.last_updated_by || "";
@@ -12220,7 +12274,7 @@ function buildAdvancedFilterOptions() {
   const currentTag = tagFilter ? tagFilter.value : "";
 
   if (assigneeFilter) {
-    const assigneeOptions = ["Unassigned", "Dubai Team", "Abu Dhabi Team", "Consultation Team", "Follow-up Team"];
+    const assigneeOptions = ["Dubai Team", "Abu Dhabi Team"];
     assigneeFilter.innerHTML = '<option value="">All assigned</option>' + assigneeOptions.map(function(value) {
       return '<option value="' + escapeHtml(value) + '">' + escapeHtml(value) + '</option>';
     }).join("");
@@ -12547,12 +12601,12 @@ function renderChat() {
     if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = true;
     closeChatTagsPopover();
     if (assigneeSelect) {
-      assigneeSelect.value = "Unassigned";
+      assigneeSelect.value = "Dubai Team";
       assigneeSelect.disabled = true;
     }
     if (assigneeDisplay) {
-      assigneeDisplay.className = "assignee-chip assignee-unassigned";
-      assigneeDisplay.textContent = "Assigned: Unassigned";
+      assigneeDisplay.className = "assignee-chip assignee-dubai";
+      assigneeDisplay.textContent = "Assigned: —";
     }
     syncTagPicker([]);
     updateCustomerProfile(null);
@@ -12574,12 +12628,12 @@ function renderChat() {
   }
   if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = false;
   if (assigneeSelect) {
-    assigneeSelect.value = c.assignee || "Unassigned";
+    assigneeSelect.value = normalizeAssigneeValue(c.assignee, c.branch);
     assigneeSelect.disabled = false;
   }
   if (assigneeDisplay) {
-    assigneeDisplay.className = "assignee-chip " + assigneeClass(c.assignee);
-    assigneeDisplay.textContent = "Assigned: " + (c.assignee || "Unassigned");
+    assigneeDisplay.className = "assignee-chip " + assigneeClass(normalizeAssigneeValue(c.assignee, c.branch));
+    assigneeDisplay.textContent = "Assigned: " + normalizeAssigneeValue(c.assignee, c.branch);
   }
   syncTagPicker(c.tags || []);
   updateCustomerProfile(c);
@@ -12903,7 +12957,7 @@ if (conversationStatusSelect) {
 if (assigneeSelect) {
   assigneeSelect.addEventListener("change", async function() {
     if (!selectedConversationKey) return;
-    const value = assigneeSelect.value || "Unassigned";
+    const value = normalizeAssigneeValue(assigneeSelect.value, currentConversation?.branch || "");
     setAssignee(selectedConversationKey, value);
     if (assigneeDisplay) {
       assigneeDisplay.className = "assignee-chip " + assigneeClass(value);
@@ -13061,7 +13115,7 @@ app.post("/webhook", async (req, res) => {
         phoneNumberId: incomingPhoneNumberId,
         branch: lineConfig.branch,
         status: autoIntentWorkflow.status,
-        assignee: autoIntentWorkflow.assignee || "Unassigned",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
         tags: autoIntentWorkflow.tags || [],
         updatedBy: "Auto Intent Tags"
       });
