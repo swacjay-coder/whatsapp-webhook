@@ -65,7 +65,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-31-vip-created-by-and-premium-sidebar-logo";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-30-premium-created-by-ossama-visual-upgrade";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -6459,7 +6459,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
   
-    /* V31.5.8.31: VIP Created by Ossama visual upgrade only */
+    /* V31.5.8.30: Premium Created by Ossama visual upgrade only */
     .sidebar-user {
       display: flex !important;
       align-items: center !important;
@@ -6469,16 +6469,15 @@ app.get("/inbox", protectInbox, (req, res) => {
       position: relative !important;
       overflow: hidden !important;
       background:
-        linear-gradient(135deg, rgba(255,255,255,.97), rgba(246,255,240,.95)) !important;
-      border: 1px solid rgba(186,211,176,.82) !important;
+        linear-gradient(135deg, rgba(255,255,255,.95), rgba(247,255,242,.92)) !important;
+      border: 1px solid rgba(186,211,176,.78) !important;
       color: #0f172a !important;
       box-shadow:
-        0 16px 40px rgba(15,23,42,.11),
-        0 0 0 1px rgba(255,255,255,.56) inset,
-        inset 0 1px 0 rgba(255,255,255,.88) !important;
+        0 14px 34px rgba(15,23,42,.10),
+        inset 0 1px 0 rgba(255,255,255,.75) !important;
       margin-top: 12px !important;
-      backdrop-filter: blur(12px) !important;
-      -webkit-backdrop-filter: blur(12px) !important;
+      backdrop-filter: blur(10px) !important;
+      -webkit-backdrop-filter: blur(10px) !important;
       isolation: isolate !important;
       transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease !important;
     }
@@ -6487,9 +6486,9 @@ app.get("/inbox", protectInbox, (req, res) => {
       content: "" !important;
       position: absolute !important;
       inset: -1px !important;
-      background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,.02) 28%, rgba(255,255,255,.72) 48%, rgba(255,255,255,0) 67%, transparent 100%) !important;
+      background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.00) 28%, rgba(255,255,255,.52) 48%, rgba(255,255,255,0) 68%, transparent 100%) !important;
       transform: translateX(-135%) !important;
-      animation: creatorCardShine 6.8s linear infinite !important;
+      animation: creatorCardShine 7.6s linear infinite !important;
       pointer-events: none !important;
       z-index: 0 !important;
     }
@@ -6499,7 +6498,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       position: absolute !important;
       inset: 0 !important;
       border-radius: inherit !important;
-      background: radial-gradient(circle at 0% 100%, rgba(120,184,62,.18), transparent 38%), radial-gradient(circle at 100% 0%, rgba(18,140,126,.15), transparent 36%) !important;
+      background: radial-gradient(circle at 0% 100%, rgba(120,184,62,.14), transparent 38%), radial-gradient(circle at 100% 0%, rgba(18,140,126,.12), transparent 36%) !important;
       pointer-events: none !important;
       z-index: 0 !important;
     }
@@ -6507,10 +6506,9 @@ app.get("/inbox", protectInbox, (req, res) => {
     .sidebar-user:hover {
       transform: translateY(-1px) !important;
       box-shadow:
-        0 18px 44px rgba(15,23,42,.13),
-        0 0 0 1px rgba(255,255,255,.62) inset,
-        inset 0 1px 0 rgba(255,255,255,.92) !important;
-      border-color: rgba(120,184,62,.36) !important;
+        0 16px 38px rgba(15,23,42,.12),
+        inset 0 1px 0 rgba(255,255,255,.82) !important;
+      border-color: rgba(120,184,62,.34) !important;
     }
 
     .sidebar-user-avatar,
@@ -6526,13 +6524,13 @@ app.get("/inbox", protectInbox, (req, res) => {
       border-radius: 999px !important;
       display: grid !important;
       place-items: center !important;
-      background: linear-gradient(135deg, rgba(120,184,62,.28), rgba(18,140,126,.18)) !important;
-      border: 1px solid rgba(120,184,62,.24) !important;
+      background: linear-gradient(135deg, rgba(120,184,62,.26), rgba(18,140,126,.15)) !important;
+      border: 1px solid rgba(120,184,62,.22) !important;
       color: #16352b !important;
       font-weight: 950 !important;
       flex: 0 0 auto !important;
-      box-shadow: 0 0 0 4px rgba(255,255,255,.84), 0 14px 30px rgba(18,140,126,.19) !important;
-      animation: creatorAvatarFloat 5.2s ease-in-out infinite !important;
+      box-shadow: 0 0 0 4px rgba(255,255,255,.82), 0 10px 24px rgba(18,140,126,.16) !important;
+      animation: creatorAvatarFloat 5.8s ease-in-out infinite !important;
     }
 
     .sidebar-user-avatar::before {
@@ -6540,9 +6538,9 @@ app.get("/inbox", protectInbox, (req, res) => {
       position: absolute !important;
       inset: -5px !important;
       border-radius: inherit !important;
-      border: 1px solid rgba(120,184,62,.28) !important;
-      opacity: .78 !important;
-      animation: creatorRingPulse 3.2s ease-in-out infinite !important;
+      border: 1px solid rgba(120,184,62,.22) !important;
+      opacity: .72 !important;
+      animation: creatorRingPulse 3.8s ease-in-out infinite !important;
       pointer-events: none !important;
     }
 
@@ -6555,15 +6553,10 @@ app.get("/inbox", protectInbox, (req, res) => {
       font-size: 12px !important;
       font-weight: 950 !important;
       line-height: 1.2 !important;
-      letter-spacing: .35px !important;
-      background: linear-gradient(90deg, #16352b 0%, #6ea93a 24%, #ffffff 37%, #194439 50%, #7fc242 68%, #16352b 100%) !important;
-      background-size: 240% auto !important;
-      -webkit-background-clip: text !important;
-      background-clip: text !important;
-      color: transparent !important;
-      -webkit-text-fill-color: transparent !important;
-      filter: drop-shadow(0 1px 0 rgba(255,255,255,.52)) !important;
-      animation: creatorNameShimmer 4.6s ease-in-out infinite, creatorTextGlow 5.2s ease-in-out infinite !important;
+      letter-spacing: .25px !important;
+      color: #16352b !important;
+      text-shadow: 0 1px 0 rgba(255,255,255,.55) !important;
+      animation: creatorTextGlow 5.8s ease-in-out infinite !important;
     }
 
     .sidebar-user-role {
@@ -6578,9 +6571,9 @@ app.get("/inbox", protectInbox, (req, res) => {
       font-weight: 900 !important;
       letter-spacing: .9px !important;
       text-transform: uppercase !important;
-      background: rgba(255,255,255,.68) !important;
-      border: 1px solid rgba(120,184,62,.19) !important;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.68), 0 8px 18px rgba(18,140,126,.07) !important;
+      background: rgba(255,255,255,.62) !important;
+      border: 1px solid rgba(120,184,62,.17) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.62) !important;
     }
 
     .sidebar-user-role::before {
@@ -6589,8 +6582,8 @@ app.get("/inbox", protectInbox, (req, res) => {
       height: 7px !important;
       border-radius: 999px !important;
       background: #78b83e !important;
-      box-shadow: 0 0 0 4px rgba(120,184,62,.16), 0 0 10px rgba(120,184,62,.26) !important;
-      animation: creatorDotPulse 2.2s ease-in-out infinite !important;
+      box-shadow: 0 0 0 4px rgba(120,184,62,.13) !important;
+      animation: creatorDotPulse 2.5s ease-in-out infinite !important;
       flex: 0 0 auto !important;
     }
 
@@ -6599,7 +6592,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       font-size: 13px !important;
       font-weight: 900 !important;
       flex: 0 0 auto !important;
-      opacity: .92 !important;
+      opacity: .9 !important;
       transform: translateY(1px) !important;
     }
 
@@ -7014,60 +7007,37 @@ app.get("/inbox", protectInbox, (req, res) => {
 
     @keyframes creatorCardShine {
       0% { transform: translateX(-135%); opacity: 0; }
-      8% { opacity: .32; }
-      18% { opacity: .82; }
+      8% { opacity: .25; }
+      18% { opacity: .72; }
       32% { transform: translateX(135%); opacity: 0; }
       100% { transform: translateX(135%); opacity: 0; }
     }
 
     @keyframes creatorAvatarFloat {
       0%, 100% { transform: translateY(0) rotate(0deg); }
-      25% { transform: translateY(-2px) rotate(-1.1deg); }
-      50% { transform: translateY(-4px) rotate(1deg); }
-      75% { transform: translateY(-2px) rotate(-.8deg); }
+      25% { transform: translateY(-2px) rotate(-1deg); }
+      50% { transform: translateY(-4px) rotate(.9deg); }
+      75% { transform: translateY(-2px) rotate(-.7deg); }
     }
 
     @keyframes creatorAvatarBreath {
       0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.055); }
+      50% { transform: scale(1.045); }
     }
 
     @keyframes creatorRingPulse {
-      0%, 100% { transform: scale(.95); opacity: .24; }
-      50% { transform: scale(1.09); opacity: .66; }
+      0%, 100% { transform: scale(.96); opacity: .24; }
+      50% { transform: scale(1.08); opacity: .58; }
     }
 
     @keyframes creatorDotPulse {
       0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.15); opacity: .84; }
+      50% { transform: scale(1.12); opacity: .82; }
     }
 
     @keyframes creatorTextGlow {
-      0%, 100% { letter-spacing: .35px; filter: drop-shadow(0 0 0 rgba(120,184,62,0)); }
-      50% { letter-spacing: .54px; filter: drop-shadow(0 0 10px rgba(120,184,62,.16)); }
-    }
-
-    @keyframes creatorNameShimmer {
-      0%, 100% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-    }
-
-    @keyframes premiumLogoShine {
-      0% { transform: translateX(-135%); opacity: 0; }
-      8% { opacity: .28; }
-      18% { opacity: .78; }
-      34% { transform: translateX(135%); opacity: 0; }
-      100% { transform: translateX(135%); opacity: 0; }
-    }
-
-    @keyframes premiumLogoFloat {
-      0%, 100% { transform: translateY(0) scale(1); }
-      50% { transform: translateY(-2px) scale(1.012); }
-    }
-
-    @keyframes premiumLogoGlow {
-      0%, 100% { filter: drop-shadow(0 7px 14px rgba(15,23,42,.10)) drop-shadow(0 0 0 rgba(120,184,62,0)); }
-      50% { filter: drop-shadow(0 9px 18px rgba(15,23,42,.12)) drop-shadow(0 0 12px rgba(120,184,62,.18)); }
+      0%, 100% { letter-spacing: .25px; text-shadow: 0 1px 0 rgba(255,255,255,.55), 0 0 0 rgba(120,184,62,0); }
+      50% { letter-spacing: .48px; text-shadow: 0 1px 0 rgba(255,255,255,.55), 0 0 12px rgba(120,184,62,.12); }
     }
 
 
@@ -7684,8 +7654,9 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V31.5.8.31: premium horizontal sidebar logo only
-       Keep one horizontal Iconic logo, make it wider, shinier and subtly animated. */
+    /* V30.5.1: exact reference sidebar logo fix
+       Use one horizontal Iconic logo only, no separate square logo + typed text.
+       Created by card is intentionally preserved. */
     .sidebar-brand {
       display: block !important;
       padding: 18px 10px 24px !important;
@@ -7695,47 +7666,16 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .sidebar-brand .sidebar-logo {
-      width: 198px !important;
+      width: 166px !important;
       height: 78px !important;
-      border-radius: 22px !important;
-      background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(248,255,243,.93)) !important;
-      border: 1px solid rgba(190,216,181,.86) !important;
-      box-shadow: 0 16px 38px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.84) !important;
-      padding: 10px 14px !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      padding: 0 !important;
       margin: 0 auto !important;
       flex: none !important;
       display: block !important;
-      position: relative !important;
-      overflow: hidden !important;
-      isolation: isolate !important;
-      transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease !important;
-    }
-
-    .sidebar-brand .sidebar-logo::before {
-      content: "" !important;
-      position: absolute !important;
-      inset: -1px !important;
-      background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,.00) 28%, rgba(255,255,255,.72) 48%, rgba(255,255,255,0) 66%, transparent 100%) !important;
-      transform: translateX(-135%) !important;
-      animation: premiumLogoShine 6.4s linear infinite !important;
-      z-index: 0 !important;
-      pointer-events: none !important;
-    }
-
-    .sidebar-brand .sidebar-logo::after {
-      content: "" !important;
-      position: absolute !important;
-      inset: 0 !important;
-      border-radius: inherit !important;
-      background: radial-gradient(circle at 0% 100%, rgba(120,184,62,.16), transparent 40%), radial-gradient(circle at 100% 0%, rgba(18,140,126,.11), transparent 36%) !important;
-      z-index: 0 !important;
-      pointer-events: none !important;
-    }
-
-    .sidebar-brand .sidebar-logo:hover {
-      transform: translateY(-1px) !important;
-      box-shadow: 0 18px 42px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.90) !important;
-      border-color: rgba(120,184,62,.34) !important;
     }
 
     .sidebar-brand .sidebar-logo img {
@@ -7744,11 +7684,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       object-fit: contain !important;
       border-radius: 0 !important;
       display: block !important;
-      position: relative !important;
-      z-index: 1 !important;
-      filter: drop-shadow(0 7px 14px rgba(15,23,42,.10)) !important;
-      transform-origin: center center !important;
-      animation: premiumLogoFloat 6.2s ease-in-out infinite, premiumLogoGlow 4.8s ease-in-out infinite !important;
+      filter: none !important;
     }
 
     .sidebar-brand > div:not(.sidebar-logo) {
@@ -9763,7 +9699,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       }
 
       .workspace-shell > .main-sidebar .sidebar-brand .sidebar-logo {
-        width: clamp(152px, 12.2vw, 198px) !important;
+        width: clamp(138px, 10.8vw, 166px) !important;
         height: clamp(58px, 8.4vh, 78px) !important;
         max-width: 100% !important;
         margin: 0 auto !important;
@@ -9838,7 +9774,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       }
 
       .workspace-shell > .main-sidebar .sidebar-brand .sidebar-logo {
-        width: 148px !important;
+        width: 132px !important;
         height: 56px !important;
       }
 
