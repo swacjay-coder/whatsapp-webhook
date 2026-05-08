@@ -65,7 +65,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-30-premium-created-by-ossama-visual-upgrade";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-31-legendary-whatsapp-fast-booking-buttons";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -976,6 +976,266 @@ function getMainMenuButtons() {
     { id: "services", title: "الخدمات / Services" },
     { id: "location_branch", title: "الموقع / Location" }
   ];
+}
+
+/* V31.5.8.31 - Legendary WhatsApp Fast Booking Buttons
+   Safe independent flow: creates a Booking Request only.
+   Does not connect to Flyksoft and does not touch reminder/cron logic. */
+const fastBookingDrafts = {};
+
+function getFastBookingBranchButtons() {
+  return [
+    { id: "fast_book_dubai", title: "Dubai" },
+    { id: "fast_book_abudhabi", title: "Abu Dhabi" },
+    { id: "talk_to_team", title: "Team" }
+  ];
+}
+
+function getFastBookingTimeButtons() {
+  return [
+    { id: "fast_time_today", title: "Today" },
+    { id: "fast_time_tomorrow", title: "Tomorrow" },
+    { id: "fast_time_week", title: "This Week" }
+  ];
+}
+
+function isFastBookingStartText(text) {
+  const value = compactText(text);
+
+  return value === "1" ||
+    value === "١" ||
+    value === "book_appointment" ||
+    value.includes("حجز موعد") ||
+    value.includes("احجز") ||
+    value.includes("موعد") ||
+    value.includes("appointment") ||
+    value.includes("book consultation") ||
+    value.includes("book appointment") ||
+    value === "book" ||
+    value.includes(" book");
+}
+
+function getFastBookingBranchChoice(text) {
+  const value = compactText(text);
+
+  if (value === "fast_book_dubai" || value === "dubai" || value === "دبي") {
+    return "Dubai";
+  }
+
+  if (
+    value === "fast_book_abudhabi" ||
+    value === "abu dhabi" ||
+    value === "abudhabi" ||
+    value === "أبوظبي" ||
+    value === "ابوظبي"
+  ) {
+    return "Abu Dhabi";
+  }
+
+  return "";
+}
+
+function getFastBookingPreferredTime(text) {
+  const value = compactText(text);
+
+  if (value === "fast_time_today" || value === "today" || value === "اليوم") {
+    return "Today";
+  }
+
+  if (value === "fast_time_tomorrow" || value === "tomorrow" || value === "بكرا" || value === "غداً" || value === "غدا") {
+    return "Tomorrow";
+  }
+
+  if (
+    value === "fast_time_week" ||
+    value === "this week" ||
+    value === "week" ||
+    value === "هالأسبوع" ||
+    value === "هذا الاسبوع" ||
+    value === "هذا الأسبوع"
+  ) {
+    return "This Week";
+  }
+
+  return "";
+}
+
+function getFastBookingBranchArabic(branch) {
+  return branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
+}
+
+function buildFastBookingBranchBody() {
+  return `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "احجز طلبك خلال ثواني.\n\n" +
+    "اختر الفرع المناسب لك:\n\n" +
+    "------------------------------\n\n" +
+    `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "Book your request in seconds.\n\n" +
+    "Please choose your preferred branch:";
+}
+
+function buildFastBookingTimeBody(branch) {
+  const branchAr = getFastBookingBranchArabic(branch);
+
+  return `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    `تمام، اختر الوقت المفضل لفرع ${branchAr}:\n\n` +
+    "------------------------------\n\n" +
+    `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    `Great, choose your preferred time for ${branch}:`;
+}
+
+function buildFastBookingConfirmationBody(branch, preferredTime) {
+  const branchAr = getFastBookingBranchArabic(branch);
+
+  return `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "تم استلام طلب الحجز السريع بنجاح ✅\n\n" +
+    `الفرع: ${branchAr}\n` +
+    `الوقت المفضل: ${preferredTime}\n` +
+    "حالة Flyksoft: لم يتم الإدخال بعد\n\n" +
+    "فريقنا سيراجع الطلب ويؤكد الموعد النهائي قريباً.\n" +
+    "إذا عندك اسم أو وقت أدق، أرسله هنا بنفس المحادثة.\n\n" +
+    "------------------------------\n\n" +
+    `${BUSINESS_NAME_SPACED} ✨\n\n` +
+    "Your fast booking request has been received successfully ✅\n\n" +
+    `Branch: ${branch}\n` +
+    `Preferred time: ${preferredTime}\n` +
+    "Flyksoft status: Not added yet\n\n" +
+    "Our team will review the request and confirm the exact appointment shortly.\n" +
+    "If you have a name or exact preferred time, send it here in this chat.";
+}
+
+function buildFastBookingRequestMessage(branch, preferredTime, originalText = "") {
+  return [
+    "Source: WhatsApp Fast Booking Buttons",
+    `Preferred branch: ${branch}`,
+    `Preferred time: ${preferredTime}`,
+    "Flyksoft Status: Not added",
+    originalText ? `Customer selection: ${originalText}` : "Customer selection: Fast booking button"
+  ].join("\\n");
+}
+
+async function handleFastBookingButtons({
+  from,
+  originalText,
+  text,
+  incomingPhoneNumberId,
+  lineConfig,
+  profileName
+}) {
+  const startedFastBooking = isFastBookingStartText(originalText || text);
+  const chosenBranch = getFastBookingBranchChoice(originalText || text);
+  const preferredTime = getFastBookingPreferredTime(originalText || text);
+
+  if (!startedFastBooking && !chosenBranch && !preferredTime) {
+    return false;
+  }
+
+  const customerBody = profileName ? `${profileName}: ${originalText}` : originalText;
+
+  addInboxMessage(
+    from,
+    "customer",
+    customerBody,
+    "Fast Booking",
+    incomingPhoneNumberId,
+    {
+      customerName: profileName,
+      messageType: "Customer Fast Booking Step"
+    }
+  );
+
+  if (startedFastBooking) {
+    fastBookingDrafts[from] = {
+      branch: "",
+      startedAt: getDubaiTimestamp(),
+      phoneNumberId: incomingPhoneNumberId
+    };
+
+    setConversationStatus(from, "Fast Booking - Choose Branch");
+    await saveConversationStateToGoogleSheetFromServer({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      branch: lineConfig.branch,
+      status: "Fast Booking - Choose Branch",
+      assignee: "Consultation Team",
+      tags: ["Booking", "Fast Booking"],
+      updatedBy: "WhatsApp Fast Booking"
+    });
+
+    const branchBody = buildFastBookingBranchBody();
+    const branchButtons = getFastBookingBranchButtons();
+
+    await sendWhatsAppButtonMessage(from, branchBody, branchButtons, incomingPhoneNumberId, { headerImageUrl: MAIN_MENU_HEADER_IMAGE_URL });
+    addInboxMessage(from, "bot", formatButtonLog(branchBody, branchButtons), "Fast Booking - Choose Branch", incomingPhoneNumberId, { customerName: profileName, messageType: "Fast Booking Bot Reply" });
+
+    return true;
+  }
+
+  if (chosenBranch) {
+    fastBookingDrafts[from] = {
+      ...(fastBookingDrafts[from] || {}),
+      branch: chosenBranch,
+      startedAt: fastBookingDrafts[from]?.startedAt || getDubaiTimestamp(),
+      phoneNumberId: incomingPhoneNumberId
+    };
+
+    setConversationStatus(from, "Fast Booking - Choose Time");
+    await saveConversationStateToGoogleSheetFromServer({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      branch: chosenBranch,
+      status: "Fast Booking - Choose Time",
+      assignee: "Consultation Team",
+      tags: ["Booking", "Fast Booking"],
+      updatedBy: "WhatsApp Fast Booking"
+    });
+
+    const timeBody = buildFastBookingTimeBody(chosenBranch);
+    const timeButtons = getFastBookingTimeButtons();
+
+    await sendWhatsAppButtonMessage(from, timeBody, timeButtons, incomingPhoneNumberId);
+    addInboxMessage(from, "bot", formatButtonLog(timeBody, timeButtons), "Fast Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Fast Booking Bot Reply" });
+
+    return true;
+  }
+
+  if (preferredTime) {
+    const draft = fastBookingDrafts[from] || {};
+    const selectedBranch = draft.branch || lineConfig.branch || "Dubai";
+
+    setConversationStatus(from, "Booking Request");
+    await saveConversationStateToGoogleSheetFromServer({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      branch: selectedBranch,
+      status: "Booking Request",
+      assignee: "Consultation Team",
+      tags: ["Booking", "Fast Booking", "Need Confirmation"],
+      updatedBy: "WhatsApp Fast Booking"
+    });
+
+    await saveBookingRequestToGoogleSheetFromServer({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      customerName: profileName,
+      branch: selectedBranch,
+      message: buildFastBookingRequestMessage(selectedBranch, preferredTime, originalText),
+      requestType: "WhatsApp Fast Booking",
+      bookingStatus: "Pending"
+    });
+
+    delete fastBookingDrafts[from];
+
+    const confirmationBody = buildFastBookingConfirmationBody(selectedBranch, preferredTime);
+    const confirmationButtons = getConsultActionButtons();
+
+    await sendWhatsAppButtonMessage(from, confirmationBody, confirmationButtons, incomingPhoneNumberId);
+    addInboxMessage(from, "bot", formatButtonLog(confirmationBody, confirmationButtons), "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Fast Booking Confirmation" });
+
+    return true;
+  }
+
+  return false;
 }
 
 function getServicesDeepMenuButtons() {
@@ -12916,6 +13176,19 @@ app.post("/webhook", async (req, res) => {
       await sendWhatsAppMessage(from, declineReply, incomingPhoneNumberId);
       addInboxMessage(from, "bot", declineReply, "Reminder Declined", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
 
+      return res.sendStatus(200);
+    }
+
+    const fastBookingHandled = await handleFastBookingButtons({
+      from,
+      originalText,
+      text,
+      incomingPhoneNumberId,
+      lineConfig,
+      profileName
+    });
+
+    if (fastBookingHandled) {
       return res.sendStatus(200);
     }
 
