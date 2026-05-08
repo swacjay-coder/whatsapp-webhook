@@ -1,6 +1,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 // Render-safe fetch:
 // Uses Node 18+ built-in fetch first, and falls back to node-fetch only if needed.
@@ -65,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-33-right-panel-scroll-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-34-whatsapp-dynamic-flow-prep";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -117,6 +118,15 @@ const CALL_NOW_TEMPLATE_NAME_ABU_DHABI =
   process.env.ABU_DHABI_CALL_NOW_TEMPLATE_NAME ||
   "iconic_call_now_abudhabi";
 const CALL_NOW_TEMPLATE_LANGUAGE = process.env.CALL_NOW_TEMPLATE_LANGUAGE || "en";
+
+// V31.5.8.34 - WhatsApp Dynamic Flow Booking Prep:
+// Safe independent Flow setup. Does not touch Flyksoft, reminders, cron, opt-in/out, or /api/wake.
+const ICONIC_BOOKING_FLOW_ID = (process.env.ICONIC_BOOKING_FLOW_ID || "").toString().trim();
+const ICONIC_BOOKING_FLOW_TOKEN_PREFIX = (process.env.ICONIC_BOOKING_FLOW_TOKEN_PREFIX || "iconic_booking_flow").toString().trim();
+const ICONIC_BOOKING_FLOW_CTA = (process.env.ICONIC_BOOKING_FLOW_CTA || "Book now").toString().slice(0, 30);
+const ICONIC_BOOKING_FLOW_ENABLED = (process.env.ICONIC_BOOKING_FLOW_ENABLED || "true").toString().toLowerCase() !== "false";
+const WHATSAPP_FLOW_PRIVATE_KEY = (process.env.WHATSAPP_FLOW_PRIVATE_KEY || "").toString().replace(/\\n/g, "\n");
+const WHATSAPP_FLOW_PASSPHRASE = process.env.WHATSAPP_FLOW_PASSPHRASE || "";
 
 function protectInbox(req, res, next) {
   const auth = req.headers.authorization;
@@ -955,6 +965,123 @@ async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phone
   };
 }
 
+async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const lineConfig = getLineConfig(finalPhoneNumberId);
+
+  if (!ICONIC_BOOKING_FLOW_ENABLED) {
+    return {
+      ok: false,
+      status: 400,
+      result: { error: "ICONIC_BOOKING_FLOW_ENABLED is false" }
+    };
+  }
+
+  if (!ICONIC_BOOKING_FLOW_ID) {
+    return {
+      ok: false,
+      status: 400,
+      result: { error: "ICONIC_BOOKING_FLOW_ID is missing" }
+    };
+  }
+
+  const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
+  const flowToken = [
+    ICONIC_BOOKING_FLOW_TOKEN_PREFIX,
+    normalizePhoneDigits(to),
+    Date.now().toString()
+  ].filter(Boolean).join("_");
+
+  const flowBody = [
+    `${BUSINESS_NAME_SPACED} ✨`,
+    "",
+    "احجز طلبك خلال ثواني من داخل واتساب.",
+    "",
+    "اختر الفرع، اليوم، والوقت المفضل. الفريق سيؤكد الموعد النهائي بعد مراجعة التوفر.",
+    "",
+    "------------------------------",
+    "",
+    `${BUSINESS_NAME_SPACED} ✨`,
+    "",
+    "Book your request in seconds inside WhatsApp.",
+    "",
+    "Choose the branch, preferred day, and preferred time. Our team will confirm the final appointment after checking availability."
+  ].join(String.fromCharCode(10));
+
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "flow",
+      header: {
+        type: "text",
+        text: "Book Appointment"
+      },
+      body: {
+        text: flowBody
+      },
+      footer: {
+        text: "Iconic Hair Care"
+      },
+      action: {
+        name: "flow",
+        parameters: {
+          flow_message_version: "3",
+          flow_id: ICONIC_BOOKING_FLOW_ID,
+          flow_token: flowToken,
+          flow_cta: ICONIC_BOOKING_FLOW_CTA,
+          flow_action: "navigate",
+          flow_action_payload: {
+            screen: "BOOKING_DETAILS",
+            data: {
+              default_branch: options.branch || lineConfig.branch,
+              customer_name: options.customerName || "",
+              today_time_options: getBookingTimeOptionsForFlow("Today"),
+              default_time_options: getBookingTimeOptionsForFlow("Tomorrow")
+            }
+          }
+        }
+      }
+    }
+  };
+
+  console.log(`Sending WhatsApp Flow from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to}`);
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const responseText = await response.text();
+  let result;
+
+  try {
+    result = JSON.parse(responseText);
+  } catch (error) {
+    result = { raw: responseText || "" };
+  }
+
+  if (!response.ok) {
+    console.log("WhatsApp Flow send failed:");
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log("WhatsApp Flow sent successfully:");
+    console.log(JSON.stringify(result, null, 2));
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    result
+  };
+}
+
 function getLocationBodyForLog(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
   const lineConfig = getLineConfig(phoneNumberId);
   return `Location CTA sent: ${lineConfig.branch} (${lineConfig.locationUrl})`;
@@ -981,6 +1108,410 @@ function getMainMenuButtons() {
     { id: "services", title: "الخدمات / Services" },
     { id: "location_branch", title: "الموقع / Location" }
   ];
+}
+
+/* V31.5.8.34 - WhatsApp Dynamic Flow Booking Prep
+   Independent safe layer for WhatsApp Flow booking.
+   It only calculates valid time options and turns Flow submits into Booking Requests. */
+function getDubaiMinutesNow() {
+  const now = new Date();
+  const dubaiTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Dubai" }));
+  return (dubaiTime.getHours() * 60) + dubaiTime.getMinutes();
+}
+
+function makeBookingTimeOption(id, title) {
+  return { id, title };
+}
+
+function getAllBookingTimeOptionsForFlow() {
+  return [
+    makeBookingTimeOption("morning_10_1", "Morning: 10:00 AM - 1:00 PM"),
+    makeBookingTimeOption("afternoon_1_4", "Afternoon: 1:00 PM - 4:00 PM"),
+    makeBookingTimeOption("evening_4_630", "Evening: 4:00 PM - 6:30 PM"),
+    makeBookingTimeOption("flexible_any", "Flexible / Any available time")
+  ];
+}
+
+function normalizeFlowChoiceText(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeFlowChoiceText(item)).filter(Boolean).join(", ");
+  }
+
+  if (value && typeof value === "object") {
+    return (
+      value.title ||
+      value.label ||
+      value.name ||
+      value.value ||
+      value.id ||
+      JSON.stringify(value)
+    ).toString().trim();
+  }
+
+  return (value || "").toString().trim();
+}
+
+function getBookingTimeOptionsForFlow(preferredDay = "") {
+  const day = compactText(preferredDay);
+  const allOptions = getAllBookingTimeOptionsForFlow();
+
+  if (!day || (!day.includes("today") && !day.includes("اليوم"))) {
+    return allOptions;
+  }
+
+  const minutesNow = getDubaiMinutesNow();
+  const tenAm = 10 * 60;
+  const onePm = 13 * 60;
+  const fourPm = 16 * 60;
+  const sixThirtyPm = (18 * 60) + 30;
+
+  if (minutesNow < tenAm) {
+    return allOptions;
+  }
+
+  if (minutesNow >= tenAm && minutesNow < onePm) {
+    return allOptions.filter((option) => option.id !== "morning_10_1");
+  }
+
+  if (minutesNow >= onePm && minutesNow < fourPm) {
+    return allOptions.filter((option) => ["evening_4_630", "flexible_any"].includes(option.id));
+  }
+
+  if (minutesNow >= fourPm && minutesNow < sixThirtyPm) {
+    return allOptions.filter((option) => option.id === "flexible_any");
+  }
+
+  return [];
+}
+
+function isTodayAvailableForFlow() {
+  return getDubaiMinutesNow() < ((18 * 60) + 30);
+}
+
+function getIconicBookingFlowData(preferredDay = "") {
+  const timeOptions = getBookingTimeOptionsForFlow(preferredDay);
+
+  return {
+    preferred_time_options: timeOptions,
+    today_available: isTodayAvailableForFlow(),
+    today_unavailable_message: timeOptions.length > 0
+      ? ""
+      : "Today is no longer available, please choose Tomorrow or This Week."
+  };
+}
+
+function decryptWhatsAppFlowRequest(body = {}) {
+  const encryptedAesKey = body.encrypted_aes_key;
+  const encryptedFlowData = body.encrypted_flow_data;
+  const initialVector = body.initial_vector;
+
+  if (!encryptedAesKey || !encryptedFlowData || !initialVector) {
+    return null;
+  }
+
+  if (!WHATSAPP_FLOW_PRIVATE_KEY) {
+    throw new Error("WHATSAPP_FLOW_PRIVATE_KEY is missing for encrypted WhatsApp Flow data exchange.");
+  }
+
+  const privateKey = crypto.createPrivateKey({
+    key: WHATSAPP_FLOW_PRIVATE_KEY,
+    ...(WHATSAPP_FLOW_PASSPHRASE ? { passphrase: WHATSAPP_FLOW_PASSPHRASE } : {})
+  });
+
+  const aesKey = crypto.privateDecrypt(
+    {
+      key: privateKey,
+      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: "sha256"
+    },
+    Buffer.from(encryptedAesKey, "base64")
+  );
+
+  const flowDataBuffer = Buffer.from(encryptedFlowData, "base64");
+  const iv = Buffer.from(initialVector, "base64");
+  const encryptedPayload = flowDataBuffer.subarray(0, flowDataBuffer.length - 16);
+  const authTag = flowDataBuffer.subarray(flowDataBuffer.length - 16);
+
+  const decipher = crypto.createDecipheriv("aes-128-gcm", aesKey, iv);
+  decipher.setAuthTag(authTag);
+
+  const decrypted = Buffer.concat([
+    decipher.update(encryptedPayload),
+    decipher.final()
+  ]);
+
+  return {
+    decryptedBody: JSON.parse(decrypted.toString("utf8")),
+    aesKey,
+    iv
+  };
+}
+
+function encryptWhatsAppFlowResponse(responsePayload, aesKey, iv) {
+  const flippedIv = Buffer.alloc(iv.length);
+
+  for (let index = 0; index < iv.length; index += 1) {
+    flippedIv[index] = iv[index] ^ 0xff;
+  }
+
+  const cipher = crypto.createCipheriv("aes-128-gcm", aesKey, flippedIv);
+  const encrypted = Buffer.concat([
+    cipher.update(JSON.stringify(responsePayload), "utf8"),
+    cipher.final(),
+    cipher.getAuthTag()
+  ]);
+
+  return encrypted.toString("base64");
+}
+
+function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
+  const action = (flowRequest.action || "").toString().trim().toLowerCase();
+
+  if (action === "ping") {
+    return {
+      data: {
+        status: "active"
+      }
+    };
+  }
+
+  const data = flowRequest.data || {};
+  const preferredDay = normalizeFlowChoiceText(
+    data.preferred_day ||
+    data.day ||
+    data.selected_day ||
+    flowRequest.preferred_day ||
+    ""
+  );
+
+  return {
+    screen: "BOOKING_DETAILS",
+    data: getIconicBookingFlowData(preferredDay)
+  };
+}
+
+function isWhatsAppFlowReply(message) {
+  return message?.type === "interactive" && message?.interactive?.type === "nfm_reply";
+}
+
+function parseWhatsAppFlowResponse(message) {
+  const rawResponse = message?.interactive?.nfm_reply?.response_json;
+
+  if (!rawResponse) {
+    return null;
+  }
+
+  if (typeof rawResponse === "object") {
+    return rawResponse;
+  }
+
+  try {
+    return JSON.parse(rawResponse);
+  } catch (error) {
+    console.log("WhatsApp Flow response_json parse failed:");
+    console.log(rawResponse);
+    return null;
+  }
+}
+
+function findFlowResponseValue(payload, patterns = []) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const normalizedPatterns = patterns.map((pattern) => compactText(pattern));
+
+  for (const [key, value] of Object.entries(payload)) {
+    const normalizedKey = compactText(key).replace(/[^a-z0-9_؀-ۿ]+/g, "_");
+
+    if (normalizedPatterns.some((pattern) => normalizedKey.includes(pattern))) {
+      return normalizeFlowChoiceText(value);
+    }
+  }
+
+  return "";
+}
+
+function normalizeFlowBranch(value, fallbackBranch = "Dubai") {
+  const cleanValue = compactText(value);
+
+  if (cleanValue.includes("abu") || cleanValue.includes("أبو") || cleanValue.includes("ابو")) {
+    return "Abu Dhabi";
+  }
+
+  if (cleanValue.includes("dubai") || cleanValue.includes("دبي")) {
+    return "Dubai";
+  }
+
+  return fallbackBranch || "Dubai";
+}
+
+function normalizeFlowDay(value) {
+  const cleanValue = compactText(value);
+
+  if (cleanValue.includes("next")) return "Next Week";
+  if (cleanValue.includes("week") || cleanValue.includes("أسبوع") || cleanValue.includes("اسبوع")) return "This Week";
+  if (cleanValue.includes("tomorrow") || cleanValue.includes("غدا") || cleanValue.includes("غداً") || cleanValue.includes("بكرا")) return "Tomorrow";
+  if (cleanValue.includes("today") || cleanValue.includes("اليوم")) return "Today";
+
+  return value || "Flexible";
+}
+
+function normalizeFlowTime(value) {
+  const cleanValue = compactText(value);
+
+  if (cleanValue.includes("morning") || cleanValue.includes("10")) return "Morning: 10:00 AM - 1:00 PM";
+  if (cleanValue.includes("afternoon") || cleanValue.includes("1:00") || cleanValue.includes("1_4")) return "Afternoon: 1:00 PM - 4:00 PM";
+  if (cleanValue.includes("evening") || cleanValue.includes("4:00") || cleanValue.includes("630")) return "Evening: 4:00 PM - 6:30 PM";
+  if (cleanValue.includes("flexible") || cleanValue.includes("any")) return "Flexible / Any available time";
+
+  return value || "Flexible / Any available time";
+}
+
+function normalizeFlowServiceInterest(value) {
+  const cleanValue = compactText(value);
+
+  if (cleanValue.includes("team") || cleanValue.includes("فريق")) {
+    return "Talk to Team";
+  }
+
+  return "Hair Replacement Consultation";
+}
+
+function getWhatsAppFlowBookingData(message, lineConfig = {}) {
+  const payload = parseWhatsAppFlowResponse(message);
+
+  if (!payload) {
+    return null;
+  }
+
+  const branchValue = findFlowResponseValue(payload, ["branch", "فرع"]);
+  const dayValue = findFlowResponseValue(payload, ["preferred_day", "day", "اليوم"]);
+  const timeValue = findFlowResponseValue(payload, ["preferred_time", "time", "وقت"]);
+  const serviceValue = findFlowResponseValue(payload, ["service_interest", "service", "request_type", "نوع"]);
+  const notesValue = findFlowResponseValue(payload, ["notes", "note", "preferred_exact_time", "ملاحظ"]);
+
+  const branch = normalizeFlowBranch(branchValue, lineConfig.branch || "Dubai");
+
+  return {
+    rawPayload: payload,
+    branch,
+    preferredDay: normalizeFlowDay(dayValue),
+    preferredTime: normalizeFlowTime(timeValue),
+    serviceInterest: normalizeFlowServiceInterest(serviceValue),
+    notes: notesValue || ""
+  };
+}
+
+function buildWhatsAppFlowBookingRequestMessage(flowData = {}) {
+  return [
+    "Source: WhatsApp Flow",
+    `Branch: ${flowData.branch || ""}`,
+    `Preferred day: ${flowData.preferredDay || ""}`,
+    `Preferred time: ${flowData.preferredTime || ""}`,
+    `Service interest: ${flowData.serviceInterest || ""}`,
+    flowData.notes ? `Notes: ${flowData.notes}` : "Notes: ",
+    "Flyksoft Status: Not added",
+    "Customer selection: WhatsApp Flow submit"
+  ].join("\n");
+}
+
+function buildWhatsAppFlowConfirmationBody(flowData = {}) {
+  const branchAr = getFastBookingBranchArabic(flowData.branch || "Dubai");
+
+  return [
+    `${BUSINESS_NAME_SPACED} ✨`,
+    "",
+    "شكراً لك.",
+    "تم استلام طلب الحجز.",
+    "سيقوم فريقنا بمراجعة التوفر وتأكيد الموعد النهائي قريباً.",
+    "",
+    `الفرع: ${branchAr}`,
+    `الوقت المفضل: ${flowData.preferredTime || "Flexible / Any available time"}`,
+    "",
+    "------------------------------",
+    "",
+    `${BUSINESS_NAME_SPACED} ✨`,
+    "",
+    "Your booking request has been received.",
+    "Our team will check availability and confirm the exact appointment shortly.",
+    "",
+    `Branch: ${flowData.branch || "Dubai"}`,
+    `Preferred time: ${flowData.preferredTime || "Flexible / Any available time"}`
+  ].join(String.fromCharCode(10));
+}
+
+
+async function handleWhatsAppFlowBookingSubmit({
+  from,
+  message,
+  incomingPhoneNumberId,
+  lineConfig,
+  profileName
+}) {
+  if (!isWhatsAppFlowReply(message)) {
+    return false;
+  }
+
+  const flowData = getWhatsAppFlowBookingData(message, lineConfig);
+
+  if (!flowData) {
+    return false;
+  }
+
+  const selectedBranch = flowData.branch || lineConfig.branch || "Dubai";
+  const requestMessage = buildWhatsAppFlowBookingRequestMessage(flowData);
+
+  addInboxMessage(
+    from,
+    "customer",
+    requestMessage,
+    "Booking Request",
+    incomingPhoneNumberId,
+    {
+      customerName: profileName,
+      messageType: "WhatsApp Flow Submit"
+    }
+  );
+
+  setConversationStatus(from, "Booking Request");
+  await saveConversationStateToGoogleSheetFromServer({
+    phone: from,
+    phoneNumberId: incomingPhoneNumberId,
+    branch: selectedBranch,
+    status: "Booking Request",
+    assignee: getBranchTeamAssignee(selectedBranch),
+    tags: ["Booking", "WhatsApp Flow", "Need Confirmation"],
+    updatedBy: "WhatsApp Flow"
+  });
+
+  await saveBookingRequestToGoogleSheetFromServer({
+    phone: from,
+    phoneNumberId: incomingPhoneNumberId,
+    customerName: profileName,
+    branch: selectedBranch,
+    message: requestMessage,
+    requestType: "WhatsApp Flow",
+    bookingStatus: "Pending"
+  });
+
+  const confirmationBody = buildWhatsAppFlowConfirmationBody(flowData);
+  const confirmationButtons = getConsultActionButtons();
+
+  await sendWhatsAppButtonMessage(from, confirmationBody, confirmationButtons, incomingPhoneNumberId);
+  addInboxMessage(
+    from,
+    "bot",
+    formatButtonLog(confirmationBody, confirmationButtons),
+    "Booking Request",
+    incomingPhoneNumberId,
+    {
+      customerName: profileName,
+      messageType: "WhatsApp Flow Confirmation"
+    }
+  );
+
+  return true;
 }
 
 /* V31.5.8.31 - Legendary WhatsApp Fast Booking Buttons
@@ -1155,6 +1686,42 @@ async function handleFastBookingButtons({
       startedAt: getDubaiTimestamp(),
       phoneNumberId: incomingPhoneNumberId
     };
+
+    if (ICONIC_BOOKING_FLOW_ENABLED && ICONIC_BOOKING_FLOW_ID) {
+      setConversationStatus(from, "WhatsApp Flow - Opened");
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: "WhatsApp Flow - Opened",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
+        tags: ["Booking", "WhatsApp Flow"],
+        updatedBy: "WhatsApp Flow"
+      });
+
+      const flowSendResult = await sendWhatsAppFlowMessage(from, incomingPhoneNumberId, {
+        branch: lineConfig.branch,
+        customerName: profileName
+      });
+
+      if (flowSendResult.ok) {
+        addInboxMessage(
+          from,
+          "bot",
+          `WhatsApp Flow sent: ${ICONIC_BOOKING_FLOW_ID}`,
+          "WhatsApp Flow - Opened",
+          incomingPhoneNumberId,
+          {
+            customerName: profileName,
+            messageType: "WhatsApp Flow Sent"
+          }
+        );
+
+        return true;
+      }
+
+      console.log("WhatsApp Flow send failed, falling back to Fast Booking Buttons.");
+    }
 
     setConversationStatus(from, "Fast Booking - Choose Branch");
     await saveConversationStateToGoogleSheetFromServer({
@@ -1982,8 +2549,54 @@ app.get("/api/version", (req, res) => {
       dubai: DUBAI_LOCATION_URL,
       abuDhabi: ABU_DHABI_LOCATION_URL
     },
+    whatsappFlow: {
+      enabled: ICONIC_BOOKING_FLOW_ENABLED,
+      flowIdConfigured: Boolean(ICONIC_BOOKING_FLOW_ID),
+      cta: ICONIC_BOOKING_FLOW_CTA,
+      dynamicEndpoint: "/api/flows/iconic-booking"
+    },
     note: "Call Now uses approved templates. Location uses WhatsApp CTA URL buttons."
   });
+});
+
+app.get("/api/flows/iconic-booking/time-options", protectInbox, (req, res) => {
+  const preferredDay = (req.query.preferredDay || req.query.day || "Today").toString().trim();
+
+  return res.json({
+    ok: true,
+    mode: "manual_time_options_test",
+    timezone: "Asia/Dubai",
+    preferredDay,
+    data: getIconicBookingFlowData(preferredDay)
+  });
+});
+
+app.post("/api/flows/iconic-booking", async (req, res) => {
+  try {
+    const decrypted = decryptWhatsAppFlowRequest(req.body || {});
+    const flowRequest = decrypted ? decrypted.decryptedBody : (req.body || {});
+    const flowResponse = buildIconicBookingFlowExchangeResponse(flowRequest);
+
+    if (decrypted) {
+      return res.json({
+        encrypted_flow_data: encryptWhatsAppFlowResponse(flowResponse, decrypted.aesKey, decrypted.iv)
+      });
+    }
+
+    return res.json({
+      ok: true,
+      mode: "plain_json_flow_endpoint_test",
+      response: flowResponse
+    });
+  } catch (error) {
+    console.error("WhatsApp Flow dynamic endpoint failed:");
+    console.error(error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "WhatsApp Flow dynamic endpoint failed"
+    });
+  }
 });
 
 
@@ -12476,7 +13089,7 @@ function filteredConversations() {
         m.interactiveTitle,
         m.interactiveId,
         m.interactivePayload
-      ].join(" ");
+      ].join(String.fromCharCode(10));
     })).join(" ").toLowerCase();
 
     if (q && !hay.includes(q)) return false;
@@ -13243,6 +13856,18 @@ app.post("/webhook", async (req, res) => {
       await sendWhatsAppMessage(from, declineReply, incomingPhoneNumberId);
       addInboxMessage(from, "bot", declineReply, "Reminder Declined", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
 
+      return res.sendStatus(200);
+    }
+
+    const whatsappFlowHandled = await handleWhatsAppFlowBookingSubmit({
+      from,
+      message,
+      incomingPhoneNumberId,
+      lineConfig,
+      profileName
+    });
+
+    if (whatsappFlowHandled) {
       return res.sendStatus(200);
     }
 
