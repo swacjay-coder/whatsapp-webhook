@@ -50,7 +50,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-17-safe-booking-customer-update";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-18-booking-notes-draft-lock";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -7624,7 +7624,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
 
-    /* V31.5.8.17 - Safe booking customer update, preserves V31.5.8.16 layout. */
+    /* V31.5.8.18 - Booking notes draft lock, preserves V31.5.8.17 safe update flow. */
     .booking-request-card {
       border-color: rgba(120,184,62,.34) !important;
       background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,253,241,.96)) !important;
@@ -9999,6 +9999,12 @@ const bookingStatusNote = document.getElementById("bookingStatusNote");
 const bookingSendCustomerUpdateBtn = document.getElementById("bookingSendCustomerUpdateBtn");
 const bookingRequestResult = document.getElementById("bookingRequestResult");
 
+// V31.5.8.18:
+// Keep the Booking Notes text local while staff are typing.
+// Auto-refresh must not overwrite partial suggested times before staff saves/sends.
+const bookingNoteDraftMap = {};
+let bookingNoteIsEditing = false;
+
 const referenceFilterPills = Array.from(document.querySelectorAll(".reference-pill[data-status]"));
 const referenceBranchTabs = Array.from(document.querySelectorAll(".reference-branch-tab[data-branch]"));
 const conversationFooterText = document.getElementById("conversationFooterText");
@@ -10431,6 +10437,29 @@ function cleanBookingNoteForTeamInbox(note) {
   return value;
 }
 
+function getBookingDraftKey(booking) {
+  if (!booking) return "";
+  return (booking.rowNumber || "") + "|" + (booking.phone || "") + "|" + (booking.phoneNumberId || "");
+}
+
+function hasBookingNoteDraft(key) {
+  return Object.prototype.hasOwnProperty.call(bookingNoteDraftMap, key);
+}
+
+function setBookingNoteDraft(key, value) {
+  if (!key) return;
+  bookingNoteDraftMap[key] = (value || "").toString();
+}
+
+function getCurrentBookingNoteDraft() {
+  if (!bookingStatusNote) return "";
+  const key = bookingStatusNote.dataset.draftKey || "";
+  if (key && hasBookingNoteDraft(key)) {
+    return bookingNoteDraftMap[key];
+  }
+  return bookingStatusNote.value || "";
+}
+
 function updateBookingRequestCard(c) {
   if (!bookingRequestCard) return;
 
@@ -10462,7 +10491,21 @@ function updateBookingRequestCard(c) {
   setProfileText(bookingRequestLastUpdated, booking.lastUpdated || booking.date || "—");
 
   if (bookingStatusNote) {
-    bookingStatusNote.value = cleanBookingNoteForTeamInbox(booking.notes || "");
+    const draftKey = getBookingDraftKey(booking);
+    const serverNote = cleanBookingNoteForTeamInbox(booking.notes || "");
+    const currentDraftKey = bookingStatusNote.dataset.draftKey || "";
+    const isSameFocusedDraft = bookingNoteIsEditing && currentDraftKey === draftKey;
+
+    bookingStatusNote.dataset.draftKey = draftKey;
+
+    if (isSameFocusedDraft) {
+      setBookingNoteDraft(draftKey, bookingStatusNote.value || "");
+    } else if (hasBookingNoteDraft(draftKey)) {
+      bookingStatusNote.value = bookingNoteDraftMap[draftKey];
+    } else {
+      bookingStatusNote.value = serverNote;
+      setBookingNoteDraft(draftKey, serverNote);
+    }
   }
 
   if (bookingRequestResult) {
@@ -10489,7 +10532,7 @@ async function updateSelectedBookingStatus(status) {
     return;
   }
 
-  const notes = cleanBookingNoteForTeamInbox(bookingStatusNote ? bookingStatusNote.value.trim() : "");
+  const notes = cleanBookingNoteForTeamInbox(getCurrentBookingNoteDraft().trim());
 
   if (bookingRequestResult) bookingRequestResult.textContent = "Updating booking status...";
   setBookingButtonsDisabled(true);
@@ -10512,11 +10555,14 @@ async function updateSelectedBookingStatus(status) {
       return;
     }
 
+    const draftKey = getBookingDraftKey(booking);
+    setBookingNoteDraft(draftKey, notes);
+
     allBookingRequests = allBookingRequests.map(function(item) {
       if (String(item.rowNumber) !== String(booking.rowNumber)) return item;
       return Object.assign({}, item, {
         status: result.status || status,
-        notes: result.notes || notes,
+        notes: result.notes !== undefined ? result.notes : notes,
         lastUpdated: result.lastUpdated || item.lastUpdated || ""
       });
     });
@@ -10550,7 +10596,7 @@ async function sendSelectedBookingUpdateToCustomer() {
   }
 
   const status = (booking.status || "Pending").toString().trim();
-  const notes = cleanBookingNoteForTeamInbox(bookingStatusNote ? bookingStatusNote.value.trim() : "");
+  const notes = cleanBookingNoteForTeamInbox(getCurrentBookingNoteDraft().trim());
 
   if (!bookingStatusCanSendCustomerUpdate(status)) {
     if (bookingRequestResult) bookingRequestResult.textContent = "Choose booking status before sending to customer.";
@@ -11489,6 +11535,23 @@ async function updateStatus(status) {
 
 document.getElementById("sendBtn").addEventListener("click", sendReply);
 document.getElementById("sendImageBtn").addEventListener("click", sendImage);
+
+if (bookingStatusNote) {
+  bookingStatusNote.addEventListener("focus", function() {
+    bookingNoteIsEditing = true;
+    setBookingNoteDraft(bookingStatusNote.dataset.draftKey || "", bookingStatusNote.value || "");
+  });
+
+  bookingStatusNote.addEventListener("input", function() {
+    bookingNoteIsEditing = true;
+    setBookingNoteDraft(bookingStatusNote.dataset.draftKey || "", bookingStatusNote.value || "");
+  });
+
+  bookingStatusNote.addEventListener("blur", function() {
+    bookingNoteIsEditing = false;
+    setBookingNoteDraft(bookingStatusNote.dataset.draftKey || "", bookingStatusNote.value || "");
+  });
+}
 
 Array.from(document.querySelectorAll("[data-booking-status-action]")).forEach(function(btn) {
   btn.addEventListener("click", function() {
