@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-36-exact-time-slots-for-whatsapp-flow";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-37-customer-name-welcome";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -460,6 +460,31 @@ function normalizeText(value) {
     .toString()
     .toLowerCase()
     .trim();
+}
+
+function cleanCustomerName(value) {
+  const name = (value || "")
+    .toString()
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!name) return "";
+
+  return name.slice(0, 40);
+}
+
+function getWhatsAppCustomerName(contact = {}) {
+  return cleanCustomerName(contact?.profile?.name || "");
+}
+
+function buildPersonalGreeting(customerName = "") {
+  const cleanName = cleanCustomerName(customerName);
+
+  if (!cleanName) {
+    return "مرحبا 👋\nHello 👋";
+  }
+
+  return `مرحبا ${cleanName} 👋\nHello ${cleanName} 👋`;
 }
 
 function getArabicBranchName(branch) {
@@ -13762,7 +13787,7 @@ app.post("/webhook", async (req, res) => {
     const from = message.from;
     const incomingPhoneNumberId = getIncomingPhoneNumberId(value);
     const lineConfig = getLineConfig(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
-    const profileName = value?.contacts?.[0]?.profile?.name || "";
+    const profileName = getWhatsAppCustomerName(value?.contacts?.[0]);
 
     conversationPhoneNumberId[from] = incomingPhoneNumberId;
 
@@ -14374,7 +14399,10 @@ app.post("/webhook", async (req, res) => {
 
     /* القائمة الرئيسية */
     else {
+      const personalGreeting = buildPersonalGreeting(profileName);
+
       replyText =
+        `${personalGreeting}\n\n` +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "أهلًا بك في Iconic Hair Care.\n\n" +
         "النتيجة الطبيعية تبدأ من اختيار صحيح.\n" +
