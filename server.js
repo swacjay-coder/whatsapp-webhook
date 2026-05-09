@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-46-open-flow-on-day-screen";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-47-force-selected-branch-flow-id";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1798,7 +1798,11 @@ async function handleFastBookingButtons({
       phoneNumberId: incomingPhoneNumberId
     };
 
-    if (ICONIC_BOOKING_FLOW_ENABLED && ICONIC_BOOKING_FLOW_ID) {
+    const selectedBookingFlowConfig = getBookingFlowConfigForLine(incomingPhoneNumberId, lineConfig.displayNumber || "");
+
+    console.log(`[WhatsApp Flow Route] branch=${selectedBookingFlowConfig.branch} phoneNumberId=${incomingPhoneNumberId} env=${selectedBookingFlowConfig.envName} flowId=${selectedBookingFlowConfig.flowId}`);
+
+    if (ICONIC_BOOKING_FLOW_ENABLED && selectedBookingFlowConfig.flowId) {
       setConversationStatus(from, "WhatsApp Flow - Opened");
       await saveConversationStateToGoogleSheetFromServer({
         phone: from,
@@ -1819,7 +1823,7 @@ async function handleFastBookingButtons({
         addInboxMessage(
           from,
           "bot",
-          `WhatsApp Flow sent from ${lineConfig.branch}: ${getBookingFlowConfigForLine(incomingPhoneNumberId).flowId}`,
+          `WhatsApp Flow sent from ${selectedBookingFlowConfig.branch}: ${selectedBookingFlowConfig.flowId}`,
           "WhatsApp Flow - Opened",
           incomingPhoneNumberId,
           {
@@ -15627,6 +15631,10 @@ app.get("/api/flow-config", (req, res) => {
         phoneNumberId: ABU_DHABI_PHONE_NUMBER_ID,
         flowIdConfigured: Boolean(ICONIC_BOOKING_FLOW_ID_ABU_DHABI),
         flowId: ICONIC_BOOKING_FLOW_ID_ABU_DHABI
+      },
+      routingCheck: {
+        dubaiSelectedFlowId: getBookingFlowConfigForLine(DUBAI_PHONE_NUMBER_ID).flowId,
+        abuDhabiSelectedFlowId: getBookingFlowConfigForLine(ABU_DHABI_PHONE_NUMBER_ID).flowId
       }
     }
   });
