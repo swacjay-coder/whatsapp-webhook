@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-43-reply-composer-upload-visible-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-44-separate-abu-dhabi-flow-id";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -122,7 +122,31 @@ const CALL_NOW_TEMPLATE_LANGUAGE = process.env.CALL_NOW_TEMPLATE_LANGUAGE || "en
 // V31.5.8.34 - WhatsApp Dynamic Flow Booking Prep:
 // Safe independent Flow setup. Does not touch Flyksoft, reminders, cron, opt-in/out, or /api/wake.
 const ICONIC_BOOKING_FLOW_ID = (process.env.ICONIC_BOOKING_FLOW_ID || "").toString().trim();
+const ICONIC_BOOKING_FLOW_ID_DUBAI = (
+  process.env.ICONIC_BOOKING_FLOW_ID_DUBAI ||
+  process.env.DUBAI_BOOKING_FLOW_ID ||
+  ICONIC_BOOKING_FLOW_ID ||
+  "1278361991159207"
+).toString().trim();
+const ICONIC_BOOKING_FLOW_ID_ABU_DHABI = (
+  process.env.ICONIC_BOOKING_FLOW_ID_ABU_DHABI ||
+  process.env.ABU_DHABI_BOOKING_FLOW_ID ||
+  "1235998871942689"
+).toString().trim();
+
 const ICONIC_BOOKING_FLOW_TOKEN_PREFIX = (process.env.ICONIC_BOOKING_FLOW_TOKEN_PREFIX || "iconic_booking_flow").toString().trim();
+const ICONIC_BOOKING_FLOW_TOKEN_PREFIX_DUBAI = (
+  process.env.ICONIC_BOOKING_FLOW_TOKEN_PREFIX_DUBAI ||
+  process.env.DUBAI_BOOKING_FLOW_TOKEN_PREFIX ||
+  ICONIC_BOOKING_FLOW_TOKEN_PREFIX ||
+  "iconic_booking_flow_dubai"
+).toString().trim();
+const ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI = (
+  process.env.ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI ||
+  process.env.ABU_DHABI_BOOKING_FLOW_TOKEN_PREFIX ||
+  "iconic_booking_flow_abudhabi"
+).toString().trim();
+
 const ICONIC_BOOKING_FLOW_CTA = (process.env.ICONIC_BOOKING_FLOW_CTA || "Book now").toString().slice(0, 30);
 const ICONIC_BOOKING_FLOW_ENABLED = (process.env.ICONIC_BOOKING_FLOW_ENABLED || "true").toString().toLowerCase() !== "false";
 const WHATSAPP_FLOW_PRIVATE_KEY = (process.env.WHATSAPP_FLOW_PRIVATE_KEY || "").toString().replace(/\\n/g, "\n");
@@ -205,6 +229,32 @@ function getLineConfig(phoneNumberId, displayPhoneNumber = "") {
     locationUrl: DUBAI_LOCATION_URL
   };
 }
+
+
+function getBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const isAbuDhabi = isAbuDhabiLine(finalPhoneNumberId, displayPhoneNumber);
+  const lineConfig = getLineConfig(finalPhoneNumberId, displayPhoneNumber);
+
+  if (isAbuDhabi) {
+    return {
+      branch: lineConfig.branch,
+      phoneNumberId: ABU_DHABI_PHONE_NUMBER_ID,
+      flowId: ICONIC_BOOKING_FLOW_ID_ABU_DHABI,
+      tokenPrefix: ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI,
+      envName: "ICONIC_BOOKING_FLOW_ID_ABU_DHABI"
+    };
+  }
+
+  return {
+    branch: lineConfig.branch,
+    phoneNumberId: finalPhoneNumberId || DUBAI_PHONE_NUMBER_ID,
+    flowId: ICONIC_BOOKING_FLOW_ID_DUBAI,
+    tokenPrefix: ICONIC_BOOKING_FLOW_TOKEN_PREFIX_DUBAI,
+    envName: "ICONIC_BOOKING_FLOW_ID_DUBAI"
+  };
+}
+
 
 function getBranchTeamAssignee(branch = "") {
   const value = (branch || "").toString().toLowerCase();
@@ -993,6 +1043,7 @@ async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phone
 async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
+  const bookingFlowConfig = getBookingFlowConfigForLine(finalPhoneNumberId);
 
   if (!ICONIC_BOOKING_FLOW_ENABLED) {
     return {
@@ -1002,17 +1053,17 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
     };
   }
 
-  if (!ICONIC_BOOKING_FLOW_ID) {
+  if (!bookingFlowConfig.flowId) {
     return {
       ok: false,
       status: 400,
-      result: { error: "ICONIC_BOOKING_FLOW_ID is missing" }
+      result: { error: `${bookingFlowConfig.envName} is missing` }
     };
   }
 
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
   const flowToken = [
-    ICONIC_BOOKING_FLOW_TOKEN_PREFIX,
+    bookingFlowConfig.tokenPrefix,
     normalizePhoneDigits(to),
     Date.now().toString()
   ].filter(Boolean).join("_");
@@ -1054,7 +1105,7 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
         name: "flow",
         parameters: {
           flow_message_version: "3",
-          flow_id: ICONIC_BOOKING_FLOW_ID,
+          flow_id: bookingFlowConfig.flowId,
           flow_token: flowToken,
           flow_cta: ICONIC_BOOKING_FLOW_CTA,
           flow_action: "navigate",
@@ -1077,7 +1128,7 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
     }
   };
 
-  console.log(`Sending WhatsApp Flow from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to}`);
+  console.log(`Sending WhatsApp Flow from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to} using ${bookingFlowConfig.envName}=${bookingFlowConfig.flowId}`);
 
   const response = await fetch(url, {
     method: "POST",
@@ -1771,7 +1822,7 @@ async function handleFastBookingButtons({
         addInboxMessage(
           from,
           "bot",
-          `WhatsApp Flow sent: ${ICONIC_BOOKING_FLOW_ID}`,
+          `WhatsApp Flow sent from ${lineConfig.branch}: ${getBookingFlowConfigForLine(incomingPhoneNumberId).flowId}`,
           "WhatsApp Flow - Opened",
           incomingPhoneNumberId,
           {
@@ -15562,6 +15613,28 @@ app.post("/webhook", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
+
+app.get("/api/flow-config", (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    version: BOT_VERSION,
+    whatsappFlow: {
+      enabled: ICONIC_BOOKING_FLOW_ENABLED,
+      dubai: {
+        phoneNumberId: DUBAI_PHONE_NUMBER_ID,
+        flowIdConfigured: Boolean(ICONIC_BOOKING_FLOW_ID_DUBAI),
+        flowId: ICONIC_BOOKING_FLOW_ID_DUBAI
+      },
+      abuDhabi: {
+        phoneNumberId: ABU_DHABI_PHONE_NUMBER_ID,
+        flowIdConfigured: Boolean(ICONIC_BOOKING_FLOW_ID_ABU_DHABI),
+        flowId: ICONIC_BOOKING_FLOW_ID_ABU_DHABI
+      }
+    }
+  });
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
