@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-44-separate-abu-dhabi-flow-id";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-45-two-step-smart-flow-day-time";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1286,9 +1286,13 @@ function isTodayAvailableForFlow() {
 }
 
 function getIconicBookingFlowData(preferredDay = "") {
-  const timeOptions = getBookingTimeOptionsForFlow(preferredDay);
+  const cleanPreferredDay = normalizeFlowChoiceText(preferredDay || "Tomorrow");
+  const normalizedPreferredDay = normalizeFlowDay(cleanPreferredDay);
+  const timeOptions = getBookingTimeOptionsForFlow(normalizedPreferredDay);
 
   return {
+    selected_day: normalizedPreferredDay,
+    preferred_day: normalizedPreferredDay,
     preferred_time_options: timeOptions,
     today_available: isTodayAvailableForFlow(),
     today_unavailable_message: timeOptions.length > 0
