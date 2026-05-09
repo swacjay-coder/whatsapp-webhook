@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-47-force-selected-branch-flow-id";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-48-flow-data-exchange-version-fix";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1363,6 +1363,7 @@ function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
 
   if (action === "ping") {
     return {
+      version: "3.0",
       data: {
         status: "active"
       }
@@ -1379,6 +1380,7 @@ function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
   );
 
   return {
+    version: "3.0",
     screen: "BOOKING_DETAILS",
     data: getIconicBookingFlowData(preferredDay)
   };
@@ -2691,6 +2693,10 @@ app.post("/api/flows/iconic-booking", async (req, res) => {
     const decrypted = decryptWhatsAppFlowRequest(req.body || {});
     const flowRequest = decrypted ? decrypted.decryptedBody : (req.body || {});
     const flowResponse = buildIconicBookingFlowExchangeResponse(flowRequest);
+
+    console.log("[WhatsApp Flow Data Exchange] action:", flowRequest?.action || "");
+    console.log("[WhatsApp Flow Data Exchange] screen:", flowRequest?.screen || "");
+    console.log("[WhatsApp Flow Data Exchange] response:", JSON.stringify(flowResponse));
 
     if (decrypted) {
       const encryptedResponse = encryptWhatsAppFlowResponse(flowResponse, decrypted.aesKey, decrypted.iv);
