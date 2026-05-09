@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-38-team-inbox-fullscreen-desktop-fit";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-39-team-inbox-wide-chat-canvas";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -11389,6 +11389,110 @@ app.get("/inbox", protectInbox, (req, res) => {
         max-height: 198px !important;
         padding-top: 7px !important;
         padding-bottom: 8px !important;
+      }
+    }
+
+
+
+
+    /* V31.5.8.39 - Team Inbox Wide Chat Canvas
+       Scope: UI layout only.
+       Goal: make the conversation window use the full center space instead of keeping messages inside a narrow centered lane.
+       Do not touch WhatsApp, Webhook, Flow, Reminders, Cron, Google Sheets, Booking, or Bot logic. */
+
+    @media (min-width: 1181px) {
+      #chatBody,
+      .chat-body {
+        width: 100% !important;
+        max-width: none !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        padding-left: clamp(26px, 2.4vw, 54px) !important;
+        padding-right: clamp(26px, 2.4vw, 54px) !important;
+      }
+
+      #chatBody .bubble-row,
+      .chat-body .bubble-row {
+        width: 100% !important;
+        max-width: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+      }
+
+      #chatBody .bubble-row.customer,
+      .chat-body .bubble-row.customer {
+        justify-content: flex-start !important;
+      }
+
+      #chatBody .bubble-row.bot,
+      #chatBody .bubble-row.staff,
+      .chat-body .bubble-row.bot,
+      .chat-body .bubble-row.staff {
+        justify-content: flex-end !important;
+      }
+
+      #chatBody .bubble,
+      .chat-body .bubble {
+        max-width: min(820px, 58%) !important;
+      }
+
+      #chatBody .bubble.customer,
+      .chat-body .bubble.customer {
+        max-width: min(620px, 46%) !important;
+      }
+
+      #chatBody .bubble.bot,
+      #chatBody .bubble.staff,
+      .chat-body .bubble.bot,
+      .chat-body .bubble.staff {
+        max-width: min(860px, 62%) !important;
+      }
+
+      #chatBody,
+      .chat-body {
+        background-size: cover, min(1080px, 74%) auto, 28px 28px !important;
+      }
+    }
+
+    @media (min-width: 1500px) {
+      #chatBody,
+      .chat-body {
+        padding-left: clamp(38px, 2.8vw, 70px) !important;
+        padding-right: clamp(38px, 2.8vw, 70px) !important;
+      }
+
+      #chatBody .bubble.customer,
+      .chat-body .bubble.customer {
+        max-width: min(680px, 44%) !important;
+      }
+
+      #chatBody .bubble.bot,
+      #chatBody .bubble.staff,
+      .chat-body .bubble.bot,
+      .chat-body .bubble.staff {
+        max-width: min(920px, 60%) !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1366px) {
+      #chatBody,
+      .chat-body {
+        padding-left: 22px !important;
+        padding-right: 22px !important;
+      }
+
+      #chatBody .bubble.customer,
+      .chat-body .bubble.customer {
+        max-width: min(540px, 48%) !important;
+      }
+
+      #chatBody .bubble.bot,
+      #chatBody .bubble.staff,
+      .chat-body .bubble.bot,
+      .chat-body .bubble.staff {
+        max-width: min(720px, 66%) !important;
       }
     }
 
