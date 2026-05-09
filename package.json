@@ -2,9 +2,9 @@
   "name": "whatsapp-webhook",
   "version": "1.0.0",
   "description": "WhatsApp webhook server",
-  "main": "ui-server.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node ui-server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
