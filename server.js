@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-42-premium-reply-composer";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-43-reply-composer-upload-visible-fix";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -12069,6 +12069,129 @@ app.get("/inbox", protectInbox, (req, res) => {
 
   .chat-composer-wrap .media-box {
     padding: 10px !important;
+  }
+}
+
+
+
+/* V31.5.8.43 - Reply Composer Upload Visible Fix
+   Fixes V31.5.8.42 where the image upload row could be pushed below the visible composer area.
+   Scope: CSS only. Keeps image upload controls compact and always visible. */
+
+.chat-composer-wrap {
+  overflow: visible !important;
+}
+
+.chat-composer-wrap .composer-block {
+  overflow: visible !important;
+}
+
+.chat-composer-wrap textarea#body {
+  min-height: 66px !important;
+  max-height: 115px !important;
+}
+
+.chat-composer-wrap .media-box {
+  margin-top: 8px !important;
+  padding: 8px 9px !important;
+  min-height: 44px !important;
+  border-radius: 18px !important;
+  display: grid !important;
+  grid-template-columns: minmax(170px, .85fr) minmax(170px, 1fr) auto !important;
+  grid-template-rows: auto !important;
+  gap: 8px !important;
+  align-items: center !important;
+  overflow: visible !important;
+}
+
+.chat-composer-wrap .media-box::before,
+.chat-composer-wrap .media-box::after {
+  content: none !important;
+  display: none !important;
+}
+
+.chat-composer-wrap #imageFile {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 7px 9px !important;
+  border-radius: 14px !important;
+  font-size: 12px !important;
+  max-width: 100% !important;
+}
+
+.chat-composer-wrap #imageFile::file-selector-button {
+  min-height: 25px !important;
+  padding: 5px 10px !important;
+  border-radius: 10px !important;
+  font-size: 11px !important;
+  font-weight: 950 !important;
+}
+
+.chat-composer-wrap #imageCaption {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 8px 11px !important;
+  border-radius: 14px !important;
+  font-size: 12px !important;
+}
+
+.chat-composer-wrap .send-image-btn {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 0 13px !important;
+  border-radius: 14px !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+}
+
+.chat-composer-wrap .send-image-btn::before {
+  font-size: 14px !important;
+}
+
+.chat-composer-wrap .send-btn {
+  width: 52px !important;
+  min-width: 52px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  border-radius: 17px !important;
+}
+
+.chat-composer-wrap .send-btn::before {
+  font-size: 20px !important;
+}
+
+@media (max-width: 1366px) {
+  .chat-composer-wrap textarea#body {
+    min-height: 58px !important;
+    max-height: 95px !important;
+  }
+
+  .chat-composer-wrap .media-box {
+    grid-template-columns: minmax(145px, .9fr) minmax(145px, 1fr) auto !important;
+    gap: 7px !important;
+    padding: 7px !important;
+  }
+
+  .chat-composer-wrap #imageFile,
+  .chat-composer-wrap #imageCaption,
+  .chat-composer-wrap .send-image-btn {
+    min-height: 36px !important;
+    height: 36px !important;
+  }
+}
+
+@media (max-height: 760px) {
+  .chat-composer-wrap {
+    padding: 8px 10px 9px !important;
+  }
+
+  .chat-composer-wrap textarea#body {
+    min-height: 52px !important;
+  }
+
+  .chat-composer-wrap .media-box {
+    margin-top: 6px !important;
+    padding: 6px !important;
   }
 }
 
