@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-39-team-inbox-wide-chat-canvas";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-40-chat-typography-background-fit";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -11493,6 +11493,158 @@ app.get("/inbox", protectInbox, (req, res) => {
       .chat-body .bubble.bot,
       .chat-body .bubble.staff {
         max-width: min(720px, 66%) !important;
+      }
+    }
+
+
+  
+
+    /* V31.5.8.40 - Premium Chat Typography + Full-Width Conversation Background
+       Scope: UI/CSS only.
+       Goal:
+       1) Make chat text cleaner, more readable, and more premium.
+       2) Make the Iconic chat background logo/image fill the conversation window width.
+       3) Keep the wide chat canvas from V31.5.8.39.
+       Do not touch WhatsApp, Webhook, Flow, Reminders, Cron, Google Sheets, Booking, or Bot logic. */
+
+    #chatBody,
+    .chat-body {
+      --iconic-chat-font: "Inter", "Segoe UI", "SF Pro Text", "Tahoma", "Arial", sans-serif !important;
+      --iconic-chat-logo-v2285: url("/assets/iconic-chat-background-logo.png") !important;
+
+      background-image:
+        linear-gradient(rgba(246, 252, 243, .43), rgba(241, 249, 238, .48)),
+        var(--iconic-chat-logo-v2285),
+        radial-gradient(circle at 18px 18px, rgba(120,184,62,.052) 1.4px, transparent 1.8px) !important;
+      background-repeat: no-repeat, no-repeat, repeat !important;
+      background-position: center center, center center, 0 0 !important;
+      background-size: cover, 100% auto, 28px 28px !important;
+      background-attachment: scroll, scroll, scroll !important;
+
+      font-family: var(--iconic-chat-font) !important;
+      text-rendering: optimizeLegibility !important;
+      -webkit-font-smoothing: antialiased !important;
+      -moz-osx-font-smoothing: grayscale !important;
+    }
+
+    #chatBody .chat-watermark,
+    .chat-body .chat-watermark,
+    .chat-watermark {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    #chatBody .bubble,
+    .chat-body .bubble {
+      font-family: var(--iconic-chat-font) !important;
+      font-size: clamp(13.2px, .72vw, 14.8px) !important;
+      line-height: 1.72 !important;
+      letter-spacing: .006em !important;
+      font-weight: 520 !important;
+      color: #14251f !important;
+      padding: 15px 18px 12px !important;
+      border-radius: 22px !important;
+      white-space: pre-wrap !important;
+      overflow-wrap: break-word !important;
+      word-break: normal !important;
+      box-shadow:
+        0 14px 34px rgba(15,23,42,.082),
+        inset 0 1px 0 rgba(255,255,255,.66) !important;
+      backdrop-filter: blur(10px) saturate(1.06) !important;
+      -webkit-backdrop-filter: blur(10px) saturate(1.06) !important;
+    }
+
+    #chatBody .bubble.customer,
+    .chat-body .bubble.customer {
+      background: linear-gradient(135deg, rgba(207,249,190,.97), rgba(187,240,168,.94)) !important;
+      border: 1px solid rgba(67, 151, 43, .30) !important;
+      color: #12331d !important;
+    }
+
+    #chatBody .bubble.bot,
+    .chat-body .bubble.bot {
+      background:
+        linear-gradient(135deg, rgba(248,255,244,.96), rgba(226,250,214,.92)) !important;
+      border: 1px solid rgba(120,184,62,.26) !important;
+      color: #142820 !important;
+    }
+
+    #chatBody .bubble.staff,
+    .chat-body .bubble.staff {
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.97), rgba(248,252,246,.95)) !important;
+      border: 1px solid rgba(190,215,184,.82) !important;
+      color: #17251f !important;
+    }
+
+    #chatBody .bubble-info,
+    .chat-body .bubble-info {
+      margin-top: 10px !important;
+      padding-top: 8px !important;
+      font-family: var(--iconic-chat-font) !important;
+      font-size: 10.7px !important;
+      line-height: 1.25 !important;
+      letter-spacing: .018em !important;
+      font-weight: 700 !important;
+      color: rgba(31, 71, 54, .68) !important;
+      border-top: 1px solid rgba(22,53,43,.075) !important;
+    }
+
+    #chatBody .bubble-info span:first-child,
+    .chat-body .bubble-info span:first-child {
+      border-radius: 999px !important;
+      padding: 4px 8px !important;
+      background: rgba(255,255,255,.48) !important;
+      color: #0f8f4f !important;
+    }
+
+    #chatBody .bubble-row,
+    .chat-body .bubble-row {
+      margin-bottom: 15px !important;
+    }
+
+    @media (min-width: 1500px) {
+      #chatBody,
+      .chat-body {
+        background-size: cover, 100% auto, 30px 30px !important;
+      }
+
+      #chatBody .bubble,
+      .chat-body .bubble {
+        font-size: 14.8px !important;
+        line-height: 1.76 !important;
+      }
+    }
+
+    @media (max-width: 1366px) {
+      #chatBody,
+      .chat-body {
+        background-size: cover, 108% auto, 28px 28px !important;
+      }
+
+      #chatBody .bubble,
+      .chat-body .bubble {
+        font-size: 13.4px !important;
+        line-height: 1.66 !important;
+        padding: 13px 15px 11px !important;
+      }
+    }
+
+    @media (max-height: 760px) {
+      #chatBody .bubble,
+      .chat-body .bubble {
+        font-size: 13px !important;
+        line-height: 1.58 !important;
+        padding-top: 12px !important;
+        padding-bottom: 10px !important;
+      }
+
+      #chatBody .bubble-info,
+      .chat-body .bubble-info {
+        margin-top: 7px !important;
+        padding-top: 6px !important;
       }
     }
 
