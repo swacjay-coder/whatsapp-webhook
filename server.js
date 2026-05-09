@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-49-dynamic-flow-start-action-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-50-rollback-stable-flow-send";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1108,8 +1108,9 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
           flow_id: bookingFlowConfig.flowId,
           flow_token: flowToken,
           flow_cta: ICONIC_BOOKING_FLOW_CTA,
-          flow_action: "data_exchange",
+          flow_action: "navigate",
           flow_action_payload: {
+            screen: "CHOOSE_DAY",
             data: {
               default_branch: options.branch || lineConfig.branch,
               customer_name: options.customerName || ""
@@ -1120,7 +1121,7 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
     }
   };
 
-  console.log(`Sending WhatsApp Flow from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to} using ${bookingFlowConfig.envName}=${bookingFlowConfig.flowId} action=data_exchange`);
+  console.log(`Sending WhatsApp Flow from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to} using ${bookingFlowConfig.envName}=${bookingFlowConfig.flowId}`);
 
   const response = await fetch(url, {
     method: "POST",
@@ -1359,8 +1360,6 @@ function encryptWhatsAppFlowResponse(responsePayload, aesKey, iv) {
 
 function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
   const action = (flowRequest.action || "").toString().trim().toLowerCase();
-  const currentScreen = (flowRequest.screen || "").toString().trim();
-  const data = flowRequest.data || {};
 
   if (action === "ping") {
     return {
@@ -1371,20 +1370,7 @@ function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
     };
   }
 
-  // V31.5.8.49:
-  // When the outbound message starts the Flow with flow_action=data_exchange,
-  // Meta opens the Flow by calling this endpoint first. Return the first screen.
-  if (action === "init" || action === "initialize" || action === "data_exchange" && !data.preferred_day && !data.day && !data.selected_day) {
-    return {
-      version: "3.0",
-      screen: "CHOOSE_DAY",
-      data: {
-        default_branch: normalizeFlowChoiceText(data.default_branch || flowRequest.default_branch || ""),
-        customer_name: cleanCustomerName(data.customer_name || flowRequest.customer_name || "")
-      }
-    };
-  }
-
+  const data = flowRequest.data || {};
   const preferredDay = normalizeFlowChoiceText(
     data.preferred_day ||
     data.day ||
