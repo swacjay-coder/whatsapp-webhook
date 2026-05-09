@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-50-rollback-stable-flow-send";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-51-dubai-smart-abudhabi-stable-flow";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1109,13 +1109,26 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
           flow_token: flowToken,
           flow_cta: ICONIC_BOOKING_FLOW_CTA,
           flow_action: "navigate",
-          flow_action_payload: {
-            screen: "CHOOSE_DAY",
-            data: {
-              default_branch: options.branch || lineConfig.branch,
-              customer_name: options.customerName || ""
-            }
-          }
+          flow_action_payload: isAbuDhabiLine(finalPhoneNumberId)
+            ? {
+                screen: "BOOKING_DETAILS",
+                data: {
+                  default_branch: options.branch || lineConfig.branch,
+                  customer_name: options.customerName || "",
+                  default_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
+                  preferred_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
+                  today_available: false,
+                  today_unavailable_message: "Today is not available for Abu Dhabi online booking. Please choose Tomorrow or This Week.",
+                  today_time_options: []
+                }
+              }
+            : {
+                screen: "CHOOSE_DAY",
+                data: {
+                  default_branch: options.branch || lineConfig.branch,
+                  customer_name: options.customerName || ""
+                }
+              }
         }
       }
     }
@@ -15640,7 +15653,9 @@ app.get("/api/flow-config", (req, res) => {
       },
       routingCheck: {
         dubaiSelectedFlowId: getBookingFlowConfigForLine(DUBAI_PHONE_NUMBER_ID).flowId,
-        abuDhabiSelectedFlowId: getBookingFlowConfigForLine(ABU_DHABI_PHONE_NUMBER_ID).flowId
+        dubaiStartScreen: "CHOOSE_DAY",
+        abuDhabiSelectedFlowId: getBookingFlowConfigForLine(ABU_DHABI_PHONE_NUMBER_ID).flowId,
+        abuDhabiStartScreen: "BOOKING_DETAILS"
       }
     }
   });
