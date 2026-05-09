@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-37-customer-name-welcome";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-38-team-inbox-fullscreen-desktop-fit";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -11151,6 +11151,245 @@ app.get("/inbox", protectInbox, (req, res) => {
       margin: 0 !important;
       max-height: 42px !important;
       overflow: hidden !important;
+    }
+
+
+
+    /* V31.5.8.38 - Team Inbox Fullscreen Desktop Fit
+       Scope: UI layout only.
+       Goal: make the Team Inbox use the full desktop/laptop height and remove the large empty bottom area.
+       Do not touch WhatsApp, Webhook, Flow, Reminders, Cron, Google Sheets, Booking, or Bot logic. */
+
+    @media (min-width: 1181px) {
+      html,
+      body {
+        width: 100% !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+      }
+
+      .workspace-shell {
+        width: 100vw !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        min-height: 0 !important;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        overflow: hidden !important;
+        display: grid !important;
+        grid-template-columns: clamp(214px, 10vw, 250px) minmax(0, 1fr) !important;
+      }
+
+      .main-sidebar {
+        height: 100vh !important;
+        height: 100dvh !important;
+        min-height: 0 !important;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+
+      .page {
+        width: 100% !important;
+        max-width: none !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        min-height: 0 !important;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        padding: clamp(8px, .85vw, 14px) clamp(10px, .95vw, 16px) clamp(8px, .85vw, 14px) !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: clamp(8px, .8vh, 12px) !important;
+      }
+
+      .topbar.v18-topbar,
+      .topbar {
+        flex: 0 0 54px !important;
+        height: 54px !important;
+        min-height: 54px !important;
+        max-height: 54px !important;
+        margin: 0 !important;
+      }
+
+      .page .app,
+      .app {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        align-self: stretch !important;
+        display: grid !important;
+        grid-template-columns:
+          clamp(292px, 16.5vw, 362px)
+          minmax(620px, 1fr)
+          clamp(292px, 17.2vw, 392px) !important;
+        gap: clamp(10px, .9vw, 16px) !important;
+        align-items: stretch !important;
+      }
+
+      .page .app > .panel,
+      .page .app > aside.panel:first-child,
+      .chat-panel,
+      .reply-panel,
+      .right-reference-panel {
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: hidden !important;
+      }
+
+      .page .app > aside.panel:first-child {
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) 46px !important;
+      }
+
+      .page .app > aside.panel:first-child .filters,
+      .reference-conversation-filters {
+        grid-row: 1 !important;
+        flex: 0 0 auto !important;
+        min-height: 0 !important;
+      }
+
+      #conversationList.conversation-list,
+      .reference-conversation-list {
+        grid-row: 2 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+
+      .reference-list-footer {
+        grid-row: 3 !important;
+        flex: 0 0 46px !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        max-height: 46px !important;
+      }
+
+      .chat-panel {
+        display: grid !important;
+        grid-template-rows: 90px minmax(0, 1fr) auto !important;
+      }
+
+      .chat-head {
+        grid-row: 1 !important;
+        height: 90px !important;
+        min-height: 90px !important;
+        max-height: 90px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-body {
+        grid-row: 2 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+
+      .chat-composer-wrap {
+        grid-row: 3 !important;
+        flex: 0 0 auto !important;
+        max-height: 218px !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+      }
+
+      .right-reference-panel {
+        display: block !important;
+      }
+
+      .right-reference-scroll {
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+
+      .reply-panel::after {
+        content: "V31.5.8.38" !important;
+      }
+    }
+
+    @media (min-width: 1500px) {
+      .page .app,
+      .app {
+        grid-template-columns:
+          clamp(315px, 16.2vw, 370px)
+          minmax(760px, 1fr)
+          clamp(330px, 17.4vw, 405px) !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1366px) {
+      .workspace-shell {
+        grid-template-columns: 205px minmax(0, 1fr) !important;
+      }
+
+      .page {
+        padding: 8px 10px !important;
+        gap: 8px !important;
+      }
+
+      .page .app,
+      .app {
+        grid-template-columns:
+          285px
+          minmax(510px, 1fr)
+          298px !important;
+        gap: 10px !important;
+      }
+
+      .chat-head {
+        height: 84px !important;
+        min-height: 84px !important;
+        max-height: 84px !important;
+      }
+
+      .chat-panel {
+        grid-template-rows: 84px minmax(0, 1fr) auto !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-height: 760px) {
+      .topbar.v18-topbar,
+      .topbar {
+        flex-basis: 48px !important;
+        height: 48px !important;
+        min-height: 48px !important;
+        max-height: 48px !important;
+      }
+
+      .chat-head {
+        height: 78px !important;
+        min-height: 78px !important;
+        max-height: 78px !important;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+      }
+
+      .chat-panel {
+        grid-template-rows: 78px minmax(0, 1fr) auto !important;
+      }
+
+      .chat-composer-wrap {
+        max-height: 198px !important;
+        padding-top: 7px !important;
+        padding-bottom: 8px !important;
+      }
     }
 
 
