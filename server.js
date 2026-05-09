@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-45-two-step-smart-flow-day-time";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-46-open-flow-on-day-screen";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1110,17 +1110,10 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
           flow_cta: ICONIC_BOOKING_FLOW_CTA,
           flow_action: "navigate",
           flow_action_payload: {
-            screen: "BOOKING_DETAILS",
+            screen: "CHOOSE_DAY",
             data: {
               default_branch: options.branch || lineConfig.branch,
-              customer_name: options.customerName || "",
-              preferred_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
-              today_available: isTodayAvailableForFlow(),
-              today_unavailable_message: isTodayAvailableForFlow()
-                ? ""
-                : "Today is no longer available, please choose Tomorrow or This Week.",
-              today_time_options: getBookingTimeOptionsForFlow("Today"),
-              default_time_options: getBookingTimeOptionsForFlow("Tomorrow")
+              customer_name: options.customerName || ""
             }
           }
         }
