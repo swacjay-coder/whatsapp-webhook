@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-40-chat-typography-background-fit";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-41-customer-updates-card-polish";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -2498,14 +2498,14 @@ function buildBookingCustomerUpdateBody(status, notes = "") {
   const cleanNotes = (notes || "").toString().trim();
 
   if (!cleanStatus) {
-    return { ok: false, error: "Missing booking status" };
+    return { ok: false, error: "Please choose an update action before sending it to the customer." };
   }
 
   if (statusValue.includes("suggest")) {
     if (!cleanNotes) {
       return {
         ok: false,
-        error: "Please write the suggested time in Notes before sending to customer."
+        error: "Please add the suggested appointment time in the team note first."
       };
     }
 
@@ -2514,8 +2514,8 @@ function buildBookingCustomerUpdateBody(status, notes = "") {
       body: [
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "شكراً لك، بخصوص طلب الحجز الخاص بك.",
-        "الوقت المقترح من فريقنا هو:",
+        "شكراً لك.",
+        "راجع فريقنا طلب الموعد، وهذا الوقت المقترح لك:",
         "",
         cleanNotes,
         "",
@@ -2525,12 +2525,12 @@ function buildBookingCustomerUpdateBody(status, notes = "") {
         "",
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "Thank you, regarding your booking request.",
-        "The suggested time from our team is:",
+        "Thank you.",
+        "Our team reviewed your appointment request, and this is the suggested time:",
         "",
         cleanNotes,
         "",
-        "If this time works for you, please reply to this message to confirm."
+        "If this time works for you, please reply to confirm."
       ].join("\n")
     };
   }
@@ -2541,15 +2541,15 @@ function buildBookingCustomerUpdateBody(status, notes = "") {
       body: [
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "تمت الموافقة على طلب الحجز الخاص بك.",
-        "سيتواصل معك فريقنا لتأكيد التفاصيل النهائية.",
+        "تم تأكيد طلب الموعد من طرف فريقنا ✅",
+        "سيتابع معك الفريق لتثبيت التفاصيل النهائية بسرّية.",
         "",
         "------------------------------",
         "",
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "Your booking request has been approved.",
-        "Our team will contact you to confirm the final details."
+        "Your appointment request has been confirmed by our team ✅",
+        "Our team will follow up privately to finalize the details."
       ].join("\n")
     };
   }
@@ -2560,15 +2560,15 @@ function buildBookingCustomerUpdateBody(status, notes = "") {
       body: [
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "شكراً لك، طلبك قيد المتابعة من فريقنا.",
-        "سنتواصل معك قريباً لتأكيد التفاصيل.",
+        "طلبك قيد المتابعة من فريقنا.",
+        "سنراجع التفاصيل ونعود إليك قريباً بالتحديث المناسب.",
         "",
         "------------------------------",
         "",
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "Thank you, your request is being reviewed by our team.",
-        "We will contact you shortly to confirm the details."
+        "Your request is being followed up by our team.",
+        "We will review the details and get back to you shortly."
       ].join("\n")
     };
   }
@@ -2579,22 +2579,22 @@ function buildBookingCustomerUpdateBody(status, notes = "") {
       body: [
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "تم تحديث حالة طلب الحجز الخاص بك.",
-        "إذا كنت ترغب بالمساعدة، يمكنك التواصل معنا في أي وقت.",
+        "تم تحديث طلب الموعد الحالي.",
+        "إذا رغبت بالمساعدة أو اختيار وقت آخر، يمكنك الرد هنا في أي وقت.",
         "",
         "------------------------------",
         "",
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "Your booking request status has been updated.",
-        "If you need assistance, you can contact us anytime."
+        "Your current appointment request has been updated.",
+        "If you would like help or another time option, you can reply here anytime."
       ].join("\n")
     };
   }
 
   return {
     ok: false,
-    error: "Choose Approved, Suggest another time, Need follow-up, or Cancelled before sending to customer."
+    error: "Choose Confirm booking, Suggest another time, Mark for follow-up, or Cancel request before sending an update."
   };
 }
 
@@ -8940,6 +8940,117 @@ app.get("/inbox", protectInbox, (req, res) => {
       font-weight: 750;
     }
 
+    /* V31.5.8.41 - Customer Updates Card Polish
+       Scope: Booking/Customer Updates card micro-copy and visual hierarchy only. */
+    .booking-request-card {
+      position: relative !important;
+      overflow: hidden !important;
+      padding: 17px 17px 16px !important;
+      border-color: rgba(120,184,62,.42) !important;
+      box-shadow: 0 12px 28px rgba(15,23,42,.06) !important;
+    }
+
+    .booking-request-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, #78b83e, #25d366, rgba(120,184,62,.2));
+      pointer-events: none;
+    }
+
+    .booking-request-card .reference-card-head {
+      margin-bottom: 7px !important;
+    }
+
+    .booking-request-card .reference-card-head h3 {
+      font-size: 15px !important;
+      letter-spacing: -.015em !important;
+    }
+
+    .booking-card-helper {
+      margin: 0 0 12px !important;
+      color: #667085 !important;
+      font-size: 11px !important;
+      font-weight: 760 !important;
+      line-height: 1.45 !important;
+    }
+
+    .booking-request-card .reference-detail-list {
+      gap: 8px !important;
+      padding: 10px 0 4px !important;
+    }
+
+    .booking-request-card .reference-detail-row {
+      grid-template-columns: 96px minmax(0,1fr) !important;
+      align-items: start !important;
+      padding: 7px 0 !important;
+      border-bottom: 1px solid rgba(226,232,240,.72) !important;
+    }
+
+    .booking-request-card .reference-detail-row:last-child {
+      border-bottom: 0 !important;
+    }
+
+    .booking-request-card .reference-detail-row span {
+      color: #6b7280 !important;
+      font-size: 11px !important;
+      font-weight: 850 !important;
+      text-transform: uppercase !important;
+      letter-spacing: .025em !important;
+    }
+
+    .booking-request-card .reference-detail-row strong {
+      color: #1f2937 !important;
+      font-size: 12px !important;
+      font-weight: 850 !important;
+      line-height: 1.45 !important;
+    }
+
+    #bookingRequestMessage {
+      white-space: pre-line !important;
+      display: block !important;
+      max-height: 190px !important;
+      overflow-y: auto !important;
+      padding-right: 2px !important;
+      scrollbar-width: thin !important;
+    }
+
+    .booking-note-input {
+      min-height: 38px !important;
+      margin-top: 12px !important;
+      border-radius: 12px !important;
+      padding: 9px 11px !important;
+      font-size: 12px !important;
+      font-weight: 780 !important;
+      background: rgba(255,255,255,.98) !important;
+    }
+
+    .booking-actions-grid {
+      gap: 9px !important;
+      margin-top: 11px !important;
+    }
+
+    .booking-action-btn {
+      min-height: 36px !important;
+      border-radius: 12px !important;
+      font-size: 11px !important;
+      letter-spacing: -.01em !important;
+    }
+
+    .booking-send-update-btn {
+      min-height: 38px !important;
+      margin-top: 9px !important;
+      font-size: 12px !important;
+    }
+
+    .booking-result-text {
+      margin-top: 9px !important;
+      color: #64748b !important;
+      font-size: 11px !important;
+      font-weight: 780 !important;
+    }
+
     .reference-assignee-control { margin-top: -4px; }
     .right-reference-panel .profile-assignee-select {
       width: 100% !important;
@@ -11973,25 +12084,26 @@ app.get("/inbox", protectInbox, (req, res) => {
 
           <section class="reference-card booking-request-card is-hidden" id="bookingRequestCard">
             <div class="reference-card-head">
-              <h3>Booking Request</h3>
+              <h3>Appointment Request</h3>
               <span class="booking-status-pill" id="bookingRequestStatusPill">—</span>
             </div>
+            <p class="booking-card-helper">Review the client request, add a private team note if needed, then send a clear customer update.</p>
             <div class="reference-detail-list">
-              <div class="reference-detail-row"><span>Customer</span><strong id="bookingRequestCustomer">—</strong></div>
+              <div class="reference-detail-row"><span>Client</span><strong id="bookingRequestCustomer">—</strong></div>
               <div class="reference-detail-row"><span>Phone</span><strong id="bookingRequestPhone">—</strong></div>
               <div class="reference-detail-row"><span>Branch</span><strong id="bookingRequestBranch">—</strong></div>
               <div class="reference-detail-row"><span>Request</span><strong id="bookingRequestMessage">—</strong></div>
-              <div class="reference-detail-row"><span>Last Updated</span><strong id="bookingRequestLastUpdated">—</strong></div>
+              <div class="reference-detail-row"><span>Updated</span><strong id="bookingRequestLastUpdated">—</strong></div>
             </div>
-            <input id="bookingStatusNote" class="booking-note-input" type="text" placeholder="Optional internal note..." />
+            <input id="bookingStatusNote" class="booking-note-input" type="text" placeholder="Internal note for the team..." />
             <div class="booking-actions-grid">
-              <button type="button" class="booking-action-btn approve" data-booking-status-action="Approved">Approve</button>
-              <button type="button" class="booking-action-btn suggest" data-booking-status-action="Suggest another time">Suggest time</button>
-              <button type="button" class="booking-action-btn follow" data-booking-status-action="Need follow-up">Need follow-up</button>
-              <button type="button" class="booking-action-btn cancel" data-booking-status-action="Cancelled">Cancel</button>
+              <button type="button" class="booking-action-btn approve" data-booking-status-action="Approved">Confirm booking</button>
+              <button type="button" class="booking-action-btn suggest" data-booking-status-action="Suggest another time">Suggest another time</button>
+              <button type="button" class="booking-action-btn follow" data-booking-status-action="Need follow-up">Mark follow-up</button>
+              <button type="button" class="booking-action-btn cancel" data-booking-status-action="Cancelled">Cancel request</button>
             </div>
-            <button type="button" class="booking-action-btn booking-send-update-btn" id="bookingSendCustomerUpdateBtn">Send update to customer</button>
-            <div class="booking-result-text" id="bookingRequestResult">Ready.</div>
+            <button type="button" class="booking-action-btn booking-send-update-btn" id="bookingSendCustomerUpdateBtn">Send customer update</button>
+            <div class="booking-result-text" id="bookingRequestResult">Choose an action to prepare an update.</div>
           </section>
 
           <div class="customer-profile-note is-hidden-compat">
@@ -12596,6 +12708,15 @@ function bookingStatusClass(status) {
   return "booking-status-pending";
 }
 
+function bookingStatusLabel(status) {
+  const value = (status || "").toString().toLowerCase();
+  if (value.includes("approved")) return "Confirmed";
+  if (value.includes("suggest")) return "Time suggested";
+  if (value.includes("follow")) return "Follow-up needed";
+  if (value.includes("cancel")) return "Cancelled";
+  return "Awaiting confirmation";
+}
+
 function getLatestBookingRequestForConversation(c) {
   if (!c || !Array.isArray(allBookingRequests)) return null;
 
@@ -12660,7 +12781,7 @@ function updateBookingRequestCard(c) {
   if (!booking) {
     bookingRequestCard.classList.add("is-hidden");
     bookingRequestCard.dataset.rowNumber = "";
-    if (bookingRequestResult) bookingRequestResult.textContent = "No booking request for this customer.";
+    if (bookingRequestResult) bookingRequestResult.textContent = "No active appointment request for this client.";
     return;
   }
 
@@ -12673,13 +12794,13 @@ function updateBookingRequestCard(c) {
 
   if (bookingRequestStatusPill) {
     bookingRequestStatusPill.className = "booking-status-pill " + bookingStatusClass(status);
-    bookingRequestStatusPill.textContent = status;
+    bookingRequestStatusPill.textContent = bookingStatusLabel(status);
   }
 
   setProfileText(bookingRequestCustomer, booking.customerName || (c && (c.customerName || c.phone)) || "—");
   setProfileText(bookingRequestPhone, booking.phone || "—");
   setProfileText(bookingRequestBranch, booking.branch || (c && c.branch) || "—");
-  setProfileText(bookingRequestMessage, booking.message || booking.requestType || "Booking Request");
+  setProfileText(bookingRequestMessage, booking.message || booking.requestType || "Appointment Request");
   setProfileText(bookingRequestLastUpdated, booking.lastUpdated || booking.date || "—");
 
   if (bookingStatusNote) {
@@ -12701,7 +12822,7 @@ function updateBookingRequestCard(c) {
   }
 
   if (bookingRequestResult) {
-    bookingRequestResult.textContent = "Ready.";
+    bookingRequestResult.textContent = "Choose an action to prepare an update."; 
   }
 }
 
@@ -12720,13 +12841,13 @@ async function updateSelectedBookingStatus(status) {
   const booking = getLatestBookingRequestForConversation(c);
 
   if (!booking || !booking.rowNumber) {
-    if (bookingRequestResult) bookingRequestResult.textContent = "No booking request selected.";
+    if (bookingRequestResult) bookingRequestResult.textContent = "No appointment request selected."; 
     return;
   }
 
   const notes = cleanBookingNoteForTeamInbox(getCurrentBookingNoteDraft().trim());
 
-  if (bookingRequestResult) bookingRequestResult.textContent = "Updating booking status...";
+  if (bookingRequestResult) bookingRequestResult.textContent = "Saving appointment update...";
   setBookingButtonsDisabled(true);
 
   try {
@@ -12743,7 +12864,7 @@ async function updateSelectedBookingStatus(status) {
     const result = await response.json();
 
     if (!response.ok || !result.ok) {
-      if (bookingRequestResult) bookingRequestResult.textContent = "Failed: " + (result.error || "Booking update failed");
+      if (bookingRequestResult) bookingRequestResult.textContent = "Failed: " + (result.error || "Appointment update failed");
       return;
     }
 
@@ -12759,11 +12880,11 @@ async function updateSelectedBookingStatus(status) {
       });
     });
 
-    if (bookingRequestResult) bookingRequestResult.textContent = "Updated: " + (result.status || status);
+    if (bookingRequestResult) bookingRequestResult.textContent = "Saved: " + bookingStatusLabel(result.status || status);
     updateBookingRequestCard(c);
     loadMessages();
   } catch (error) {
-    if (bookingRequestResult) bookingRequestResult.textContent = "Failed: booking status update error.";
+    if (bookingRequestResult) bookingRequestResult.textContent = "Failed: appointment update error."; 
   } finally {
     setBookingButtonsDisabled(false);
   }
@@ -12783,7 +12904,7 @@ async function sendSelectedBookingUpdateToCustomer() {
   const booking = getLatestBookingRequestForConversation(c);
 
   if (!booking || !booking.rowNumber) {
-    if (bookingRequestResult) bookingRequestResult.textContent = "No booking request selected.";
+    if (bookingRequestResult) bookingRequestResult.textContent = "No appointment request selected."; 
     return;
   }
 
@@ -12791,17 +12912,17 @@ async function sendSelectedBookingUpdateToCustomer() {
   const notes = cleanBookingNoteForTeamInbox(getCurrentBookingNoteDraft().trim());
 
   if (!bookingStatusCanSendCustomerUpdate(status)) {
-    if (bookingRequestResult) bookingRequestResult.textContent = "Choose booking status before sending to customer.";
+    if (bookingRequestResult) bookingRequestResult.textContent = "Choose a customer update action first."; 
     return;
   }
 
   if (bookingStatusNeedsSuggestedTime(status) && !notes) {
-    if (bookingRequestResult) bookingRequestResult.textContent = "Write the suggested time in Notes first.";
+    if (bookingRequestResult) bookingRequestResult.textContent = "Add the suggested time in the team note first."; 
     if (bookingStatusNote) bookingStatusNote.focus();
     return;
   }
 
-  if (bookingRequestResult) bookingRequestResult.textContent = "Sending update to customer...";
+  if (bookingRequestResult) bookingRequestResult.textContent = "Sending customer update..."; 
   setBookingButtonsDisabled(true);
 
   try {
@@ -12824,10 +12945,10 @@ async function sendSelectedBookingUpdateToCustomer() {
       return;
     }
 
-    if (bookingRequestResult) bookingRequestResult.textContent = "Customer update sent.";
+    if (bookingRequestResult) bookingRequestResult.textContent = "Customer update sent successfully."; 
     loadMessages();
   } catch (error) {
-    if (bookingRequestResult) bookingRequestResult.textContent = "Failed: customer update send error.";
+    if (bookingRequestResult) bookingRequestResult.textContent = "Failed: customer update send error."; 
   } finally {
     setBookingButtonsDisabled(false);
   }
