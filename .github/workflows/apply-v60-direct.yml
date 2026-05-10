@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Report V60 missing blocks
+      - name: Write V60 bash-only report
         run: |
           set +e
           OUT="V60_MISSING_BLOCK.md"
@@ -25,63 +25,29 @@ jobs:
           echo "## Version" >> "$OUT"
           grep -n "BOT_VERSION" server.js >> "$OUT" 2>&1
           echo "" >> "$OUT"
-          echo "## Required markers" >> "$OUT"
-          grep -Fq "function getStaffNotificationNumbers" server.js; echo "staff multi helper exists exit=$?" >> "$OUT"
-          grep -Fq "const customerNameValue = findFlowResponseValue" server.js; echo "customerName extraction exists exit=$?" >> "$OUT"
-          grep -Fq "Customer name:" server.js; echo "booking request customer name exists exit=$?" >> "$OUT"
-          grep -Fq "function isResumeBotText" server.js; echo "resume helper exists exit=$?" >> "$OUT"
-          grep -Fq "notifyStaffAboutFlowBooking" server.js; echo "staff booking notify exists exit=$?" >> "$OUT"
-          grep -Fq "customerName: flowData.customerName || profileName" server.js; echo "sheet customerName flowData exists exit=$?" >> "$OUT"
+          echo "## Marker checks" >> "$OUT"
+          grep -Fq "function getStaffNotificationNumbers" server.js
+          echo "staff_multi_helper_exit=$?" >> "$OUT"
+          grep -Fq "const customerNameValue = findFlowResponseValue" server.js
+          echo "customer_name_extraction_exit=$?" >> "$OUT"
+          grep -Fq "Customer name:" server.js
+          echo "booking_customer_line_exit=$?" >> "$OUT"
+          grep -Fq "function isResumeBotText" server.js
+          echo "resume_helper_exit=$?" >> "$OUT"
+          grep -Fq "notifyStaffAboutFlowBooking" server.js
+          echo "staff_notify_call_exit=$?" >> "$OUT"
+          grep -Fq "customerName: flowData.customerName || profileName" server.js
+          echo "sheet_flow_customer_name_exit=$?" >> "$OUT"
+          grep -Fq "getWhatsAppFlowBookingData(message, { ...lineConfig, customerName: profileName, phone: from })" server.js
+          echo "flow_profile_fallback_exit=$?" >> "$OUT"
           echo "" >> "$OUT"
-          echo "## Exact old blocks check" >> "$OUT"
-          python3 <<'PY' >> "$OUT" 2>&1
-from pathlib import Path
-s = Path('server.js').read_text()
-checks = {
-  'staff helper old': '''function getStaffNotificationNumber(phoneNumberId, displayPhoneNumber = "") {
-  return getStaffNotificationRouting(phoneNumberId, displayPhoneNumber).number;
-}
-
-async function sendStaffNotificationTextMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID, routing = {}) {''',
-  'customer extraction old': '''  const teamMemberValue = findFlowResponseValue(payload, ["team_member", "team member", "staff", "employee", "موظف", "فريق"]);
-  const notesValue = findFlowResponseValue(payload, ["notes", "note", "preferred_exact_time", "ملاحظ"]);
-
-  const branch = normalizeFlowBranch(branchValue, lineConfig.branch || "Dubai");''',
-  'flow return old': '''  return {
-    rawPayload: payload,
-    branch,''',
-  'booking message old': '''    "Source: WhatsApp Flow",
-    `Branch: ${flowData.branch || ""}`,
-    `Preferred day: ${flowData.preferredDay || ""}`,''',
-  'resume helper old': '''function isBookingMenuText(text) {
-  const value = compactText(text);''',
-  'flow data old': '''  const flowData = getWhatsAppFlowBookingData(message, lineConfig);''',
-  'booking save old': '''  await saveBookingRequestToGoogleSheetFromServer({
-    phone: from,
-    phoneNumberId: incomingPhoneNumberId,
-    customerName: profileName,
-    branch: selectedBranch,
-    message: requestMessage,
-    requestType: "WhatsApp Flow",
-    bookingStatus: "Pending"
-  });
-
-  const confirmationBody = buildWhatsAppFlowConfirmationBody(flowData);''',
-  'pause gate old': '''    if (!isOptInMessage && !isOptOutMessage && !isReminderDeclineMessage) {
-      const pausedStatus = await getBotPausedStatusForConversation(from, incomingPhoneNumberId);''',
-}
-for label, needle in checks.items():
-    print(f'{label}: {needle in s}')
-PY
-          echo "" >> "$OUT"
-          echo "## Relevant snippets" >> "$OUT"
-          echo "### getWhatsAppFlowBookingData" >> "$OUT"
+          echo "## getWhatsAppFlowBookingData snippet" >> "$OUT"
           line=$(grep -n "function getWhatsAppFlowBookingData" server.js | head -1 | cut -d: -f1)
-          if [ -n "$line" ]; then sed -n "$((line)),$((line+60))p" server.js >> "$OUT"; fi
+          if [ -n "$line" ]; then sed -n "$((line)),$((line+70))p" server.js >> "$OUT"; fi
           echo "" >> "$OUT"
-          echo "### handleWhatsAppFlowBookingSubmit" >> "$OUT"
+          echo "## handleWhatsAppFlowBookingSubmit snippet" >> "$OUT"
           line=$(grep -n "async function handleWhatsAppFlowBookingSubmit" server.js | head -1 | cut -d: -f1)
-          if [ -n "$line" ]; then sed -n "$((line)),$((line+90))p" server.js >> "$OUT"; fi
+          if [ -n "$line" ]; then sed -n "$((line)),$((line+95))p" server.js >> "$OUT"; fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "$OUT"
