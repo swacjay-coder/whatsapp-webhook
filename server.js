@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-57-smart-customer-action-labels";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-58-consultation-flow-dubai-routing";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -146,6 +146,23 @@ const ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI = (
   process.env.ABU_DHABI_BOOKING_FLOW_TOKEN_PREFIX ||
   "iconic_booking_flow_abudhabi"
 ).toString().trim();
+
+// V31.5.8.58 - Dedicated Dubai Consultation Booking Flow:
+// Opens the new consultation Flow for Dubai when customers choose Consult | استشارة.
+const ICONIC_CONSULTATION_FLOW_ID_DUBAI = (
+  process.env.ICONIC_CONSULTATION_FLOW_ID_DUBAI ||
+  process.env.DUBAI_CONSULTATION_FLOW_ID ||
+  "1607726336999909"
+).toString().trim();
+const ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_DUBAI = (
+  process.env.ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_DUBAI ||
+  process.env.DUBAI_CONSULTATION_FLOW_TOKEN_PREFIX ||
+  "iconic_consultation_flow_dubai"
+).toString().trim();
+const ICONIC_CONSULTATION_FLOW_CTA = (
+  process.env.ICONIC_CONSULTATION_FLOW_CTA ||
+  "Book Consultation"
+).toString().slice(0, 30);
 
 // V31.5.8.52 - Dedicated Service Booking Flow:
 // Safe independent Flow ID for existing clients who need Service / Fitting / Follow-up / Adjustment appointments.
@@ -274,9 +291,9 @@ function getBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
   return {
     branch: lineConfig.branch,
     phoneNumberId: finalPhoneNumberId || DUBAI_PHONE_NUMBER_ID,
-    flowId: ICONIC_BOOKING_FLOW_ID_DUBAI,
-    tokenPrefix: ICONIC_BOOKING_FLOW_TOKEN_PREFIX_DUBAI,
-    envName: "ICONIC_BOOKING_FLOW_ID_DUBAI",
+    flowId: ICONIC_CONSULTATION_FLOW_ID_DUBAI || ICONIC_BOOKING_FLOW_ID_DUBAI,
+    tokenPrefix: ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_DUBAI || ICONIC_BOOKING_FLOW_TOKEN_PREFIX_DUBAI,
+    envName: ICONIC_CONSULTATION_FLOW_ID_DUBAI ? "ICONIC_CONSULTATION_FLOW_ID_DUBAI" : "ICONIC_BOOKING_FLOW_ID_DUBAI",
     requestType: "Consultation Booking"
   };
 }
@@ -1233,8 +1250,8 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
   const bookingFlowConfig = isServiceBookingFlow
     ? getServiceBookingFlowConfigForLine(finalPhoneNumberId)
     : getBookingFlowConfigForLine(finalPhoneNumberId);
-  const selectedFlowCta = isServiceBookingFlow ? ICONIC_SERVICE_BOOKING_FLOW_CTA : ICONIC_BOOKING_FLOW_CTA;
-  const selectedFlowHeader = isServiceBookingFlow ? "Service Booking" : "Book Appointment";
+  const selectedFlowCta = isServiceBookingFlow ? ICONIC_SERVICE_BOOKING_FLOW_CTA : ICONIC_CONSULTATION_FLOW_CTA;
+  const selectedFlowHeader = isServiceBookingFlow ? "Service Booking" : "Consultation Booking";
 
   if (!ICONIC_BOOKING_FLOW_ENABLED) {
     return {
@@ -1278,17 +1295,17 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
     : [
         `${BUSINESS_NAME_SPACED} ✨`,
         "",
-        "احجز طلبك خلال ثواني من داخل واتساب.",
+        "احجز استشارتك خلال ثواني من داخل واتساب.",
         "",
-        "اختر الفرع، اليوم، والوقت المفضل. الفريق سيؤكد الموعد النهائي بعد مراجعة التوفر.",
+        "اختر اليوم والوقت المناسب، وفريقنا سيؤكد الموعد النهائي بعد مراجعة التوفر.",
         "",
         "------------------------------",
         "",
         `${BUSINESS_NAME_SPACED} ✨`,
         "",
-        "Book your request in seconds inside WhatsApp.",
+        "Book your consultation in seconds inside WhatsApp.",
         "",
-        "Choose the branch, preferred day, and preferred time. Our team will confirm the final appointment after checking availability."
+        "Choose your preferred day and time. Our team will confirm the final appointment after checking availability."
       ]
   ).join(String.fromCharCode(10));
 
@@ -1344,10 +1361,13 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
                     }
                   }
                 : {
-                    screen: "CHOOSE_DAY",
+                    screen: "CONSULTATION_BOOKING",
                     data: {
+                      ...getConsultationBookingFlowData(options.branch || lineConfig.branch, "Today"),
                       default_branch: options.branch || lineConfig.branch,
-                      customer_name: options.customerName || ""
+                      customer_name: options.customerName || "",
+                      request_type: bookingFlowConfig.requestType,
+                      flow_type: "consultation_booking"
                     }
                   })
         }
@@ -1582,6 +1602,29 @@ function getServiceTypeOptionsForFlow() {
   ];
 }
 
+function getConsultationBookingFlowData(branch = "Dubai", preferredDay = "Today") {
+  const normalizedBranch = normalizeFlowBranch(branch, "Dubai");
+  const normalizedPreferredDay = normalizeFlowDay(preferredDay || "Today");
+
+  const preferredTimeOptions = getBookingTimeOptionsForFlow(normalizedPreferredDay);
+  const todayTimeOptions = getBookingTimeOptionsForFlow("Today");
+
+  return {
+    default_branch: normalizedBranch,
+    selected_branch: normalizedBranch,
+    selected_day: normalizedPreferredDay,
+    preferred_day: normalizedPreferredDay,
+    preferred_time_options: preferredTimeOptions,
+    today_time_options: todayTimeOptions,
+    request_type: "Consultation Booking",
+    flow_type: "consultation_booking",
+    today_available: todayTimeOptions.length > 0,
+    today_unavailable_message: todayTimeOptions.length > 0
+      ? ""
+      : "Today is no longer available, please choose Tomorrow or Day After Tomorrow."
+  };
+}
+
 function getServiceBookingFlowData(branch = "Dubai", preferredDay = "Tomorrow") {
   const normalizedBranch = normalizeFlowBranch(branch, "Dubai");
   const normalizedPreferredDay = normalizeFlowDay(preferredDay || "Tomorrow");
@@ -1686,6 +1729,8 @@ function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
   const flowToken = (flowRequest.flow_token || data.flow_token || "").toString();
   const isServiceFlow = flowToken.includes(ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX) ||
     compactText(data.request_type || data.flow_type || "").includes("service");
+  const isConsultationFlow = flowToken.includes(ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_DUBAI) ||
+    compactText(data.request_type || data.flow_type || "").includes("consultation");
   const preferredDay = normalizeFlowChoiceText(
     data.preferred_day ||
     data.day ||
@@ -1701,6 +1746,16 @@ function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
       version: "3.0",
       screen: "SERVICE_BOOKING",
       data: getServiceBookingFlowData(selectedBranch, preferredDay || "Today")
+    };
+  }
+
+  if (isConsultationFlow) {
+    const selectedBranch = normalizeFlowChoiceText(data.branch || data.default_branch || data.selected_branch || "Dubai");
+
+    return {
+      version: "3.0",
+      screen: "CONSULTATION_BOOKING",
+      data: getConsultationBookingFlowData(selectedBranch, preferredDay || "Today")
     };
   }
 
@@ -1838,7 +1893,8 @@ function getWhatsAppFlowBookingData(message, lineConfig = {}) {
   const dayValue = findFlowResponseValue(payload, ["preferred_day", "day", "اليوم"]);
   const timeValue = findFlowResponseValue(payload, ["preferred_time", "time", "وقت"]);
   const serviceValue = findFlowResponseValue(payload, ["service_interest", "request_type", "نوع"]);
-  const serviceTypeValue = findFlowResponseValue(payload, ["service_type", "service", "service appointment", "sيرفس"]);
+  const serviceTypeValue = findFlowResponseValue(payload, ["service_type", "service", "service appointment", "سيرفس"]);
+  const consultationTypeValue = findFlowResponseValue(payload, ["consultation_type", "consultation", "consult type", "استشارة"]);
   const teamMemberValue = findFlowResponseValue(payload, ["team_member", "team member", "staff", "employee", "موظف", "فريق"]);
   const notesValue = findFlowResponseValue(payload, ["notes", "note", "preferred_exact_time", "ملاحظ"]);
 
@@ -1847,13 +1903,16 @@ function getWhatsAppFlowBookingData(message, lineConfig = {}) {
   const normalizedTeamMember = normalizeFlowChoiceText(teamMemberValue);
   const isServiceAppointment = Boolean(normalizedServiceType || normalizedTeamMember);
 
+  const normalizedConsultationType = normalizeFlowChoiceText(consultationTypeValue);
+
   return {
     rawPayload: payload,
     branch,
     preferredDay: normalizeFlowDay(dayValue),
     preferredTime: normalizeFlowTime(timeValue),
-    serviceInterest: isServiceAppointment ? "Service Appointment" : normalizeFlowServiceInterest(serviceValue),
+    serviceInterest: isServiceAppointment ? "Service Appointment" : (normalizedConsultationType || normalizeFlowServiceInterest(serviceValue)),
     serviceType: normalizedServiceType,
+    consultationType: normalizedConsultationType,
     teamMember: normalizedTeamMember,
     notes: notesValue || ""
   };
@@ -1867,6 +1926,7 @@ function buildWhatsAppFlowBookingRequestMessage(flowData = {}) {
     `Preferred time: ${flowData.preferredTime || ""}`,
     `Service interest: ${flowData.serviceInterest || ""}`,
     flowData.serviceType ? `Service type: ${flowData.serviceType}` : "Service type: ",
+    flowData.consultationType ? `Consultation type: ${flowData.consultationType}` : "Consultation type: ",
     flowData.teamMember ? `Team member: ${flowData.teamMember}` : "Team member: ",
     flowData.notes ? `Notes: ${flowData.notes}` : "Notes: ",
     "Flyksoft Status: Not added",
@@ -2029,6 +2089,19 @@ function isBookServiceFlowText(text) {
     value === "service booking" ||
     value.includes("book service") ||
     value.includes("حجز سيرفس");
+}
+
+function isConsultationFlowText(text) {
+  const value = compactText(text);
+
+  return value === "consult_menu" ||
+    value === "consult | استشارة" ||
+    value === "consult" ||
+    value === "consultation" ||
+    value === "استشارة" ||
+    value.includes("consult |") ||
+    value.includes("book consult") ||
+    value.includes("حجز استشارة");
 }
 
 function isBookingMenuText(text) {
@@ -15570,6 +15643,69 @@ app.post("/webhook", async (req, res) => {
 
         await sendWhatsAppMessage(from, fallbackServiceText, incomingPhoneNumberId);
         addInboxMessage(from, "bot", fallbackServiceText, "Service Flow Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Service Booking Flow Fallback" });
+      }
+
+      return res.sendStatus(200);
+    }
+
+    if (isConsultationFlowText(originalText || text)) {
+      const consultationActionText = getSmartCustomerActionText(message, originalText || text) || "Consult | استشارة";
+      const consultationCustomerBody = buildCustomerActionBody(profileName, consultationActionText);
+
+      addInboxMessage(
+        from,
+        "customer",
+        consultationCustomerBody,
+        "Consultation Booking",
+        incomingPhoneNumberId,
+        {
+          customerName: profileName,
+          messageType: "Customer Consultation Flow Request"
+        }
+      );
+
+      setConversationStatus(from, "Consultation Flow - Opened");
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: "Consultation Flow - Opened",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
+        tags: ["Booking", "Consultation", "WhatsApp Flow"],
+        updatedBy: "Consultation Booking Flow"
+      });
+
+      const flowSendResult = await sendWhatsAppFlowMessage(from, incomingPhoneNumberId, {
+        branch: lineConfig.branch,
+        customerName: profileName,
+        flowType: "consultation",
+        requestType: "Consultation Booking"
+      });
+
+      if (flowSendResult.ok) {
+        const selectedConsultationConfig = getBookingFlowConfigForLine(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
+
+        addInboxMessage(
+          from,
+          "bot",
+          `Consultation Booking Flow sent: ${selectedConsultationConfig.flowId}`,
+          "Consultation Flow - Opened",
+          incomingPhoneNumberId,
+          {
+            customerName: profileName,
+            messageType: "Consultation Booking Flow Sent"
+          }
+        );
+      } else {
+        const fallbackConsultationText =
+          `${BUSINESS_NAME_SPACED} ✨\n\n` +
+          "تعذر فتح نموذج حجز الاستشارة حالياً. فريقنا سيتابع معك داخل المحادثة.\n\n" +
+          "------------------------------\n\n" +
+          `${BUSINESS_NAME_SPACED} ✨\n\n` +
+          "The consultation booking form could not be opened right now. Our team will assist you inside this chat.";
+
+        await sendWhatsAppMessage(from, fallbackConsultationText, incomingPhoneNumberId);
+        addInboxMessage(from, "bot", fallbackConsultationText, "Consultation Flow Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Consultation Booking Flow Fallback" });
       }
 
       return res.sendStatus(200);
