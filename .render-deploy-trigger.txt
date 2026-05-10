@@ -1,4 +1,4 @@
 Render deploy trigger
-Timestamp: 2026-05-10T18:05:00Z
-Reason: Dubai staff number changed in Render ENV
-Expected DUBAI_STAFF_NUMBER=971503424811
+Timestamp: 2026-05-10T18:20:00Z
+Reason: User requested deploy while away from laptop
+Current base: V60.1 staff notify routing fix
