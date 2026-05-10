@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V60.2.3
+      - name: Apply V60.2.4
         run: |
           set -e
-          python3 v6023_smart_names_new_header.py
+          python3 v6024_services_results_how_it_works.py
           node --check server.js
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js package.json
-          git commit -m "Apply V60.2.3 smart names and new header" || echo "No changes"
+          git add server.js package.json v6024_services_results_how_it_works.py
+          git commit -m "Apply V60.2.4 services results how-it-works video" || echo "No changes"
           git push
