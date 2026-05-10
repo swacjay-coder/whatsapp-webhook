@@ -4,7 +4,7 @@
   "description": "WhatsApp webhook server",
   "main": "server.js",
   "scripts": {
-    "start": "grep -q v31-5-8-59 server.js || git apply v59.patch && node --check server.js && node server.js"
+    "start": "sh -c 'grep -q v31-5-8-59 server.js || git apply v59.patch; grep -q v31-5-8-60 server.js || git apply v60.patch; node --check server.js && node server.js'"
   },
   "dependencies": {
     "express": "^4.18.2",
