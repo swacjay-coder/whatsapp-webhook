@@ -12,18 +12,28 @@ def replace_once(label, old, new):
     global s
     if new in s:
         print(f'[V60.2.3] {label}: already applied')
-        return
+        return True
     if old not in s:
-        raise SystemExit(f'[V60.2.3] missing block: {label}')
+        print(f'[V60.2.3] missing block: {label}')
+        return False
     s = s.replace(old, new, 1)
     print(f'[V60.2.3] {label}: applied')
+    return True
 
 # Version + header URL
-replace_once(
-    'version',
+version_applied = False
+for old_version in [
     'const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-2-clean-customer-name-and-new-header-all-replies";',
-    'const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-3-smart-customer-name-and-new-header-all-replies";'
-)
+    'const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-1-bilingual-flow-confirmation-header-all-button-replies";',
+    'const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-english-flow-confirmation-reminder-optin";'
+]:
+    if old_version in s:
+        s = s.replace(old_version, 'const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-3-smart-customer-name-and-new-header-all-replies";', 1)
+        print('[V60.2.3] version applied')
+        version_applied = True
+        break
+if not version_applied and 'iconic-team-inbox-v31-5-8-60-2-3-smart-customer-name-and-new-header-all-replies' not in s:
+    raise SystemExit('[V60.2.3] version block not found')
 
 if OLD_HEADER_URL in s:
     s = s.replace(OLD_HEADER_URL, NEW_HEADER_URL)
@@ -33,7 +43,7 @@ elif NEW_HEADER_URL in s:
 else:
     raise SystemExit('[V60.2.3] no header URL found')
 
-# Add helper for contextual one-time name phrases
+# Helper
 helper_anchor = '''function buildPersonalGreeting(customerName = "") {
   const cleanName = cleanCustomerName(customerName);
 
@@ -44,16 +54,16 @@ helper_anchor = '''function buildPersonalGreeting(customerName = "") {
   return `Hello ${cleanName} 👋`;
 }
 '''
-helper_block = helper_anchor + '''
+if 'function namePhrase(customerName = "", fallback = "")' not in s:
+    replace_once('namePhrase helper', helper_anchor, helper_anchor + '''
 function namePhrase(customerName = "", fallback = "") {
   const cleanName = cleanCustomerName(customerName);
   return cleanName || fallback || "";
 }
-'''
-replace_once('namePhrase helper', helper_anchor, helper_block)
+''')
 
-# Direct booking: contextual name once, no duplicate Hello/Arabic name
-old_direct = '''function buildDirectBookingChoiceBody(customerName = "") {
+# Direct booking current V60.2.2 block
+old_direct_current = '''function buildDirectBookingChoiceBody(customerName = "") {
   const cleanName = cleanCustomerName(customerName);
   const greeting = cleanName ? `Hello ${cleanName} 👋` : "Hello 👋";
 
@@ -80,9 +90,9 @@ new_direct = '''function buildDirectBookingChoiceBody(customerName = "") {
     "If you are a new client and want to know the best solution, choose Consultation.";
 }
 '''
-replace_once('direct booking smart name', old_direct, new_direct)
+replace_once('direct booking smart name current', old_direct_current, new_direct)
 
-# Team handoff: name once only
+# Team handoff original block may still exist
 old_team = '''function buildTeamHandoffBody(customerName = "") {
   const cleanName = cleanCustomerName(customerName);
   const arabicName = cleanName ? ` ${cleanName}` : "";
@@ -107,11 +117,14 @@ new_team = '''function buildTeamHandoffBody(customerName = "") {
 '''
 replace_once('team handoff smart name', old_team, new_team)
 
-# Flow confirmation: keep contextual Thank you once
-# ensure no emoji/check beside name
-s = s.replace('`Thank you ${customerName}`', '`Thank you ${customerName}`')
+# Flow confirmation should use Thank you only, no Hello.
+replace_once(
+    'flow confirmation Thank you',
+    '    `Hello ${customerName} 👋`,\n    "",\n    "تم استلام طلب الحجز ✅",',
+    '    `Thank you ${customerName}`,\n    "",\n    "تم استلام طلب الحجز ✅",'
+)
 
-# Reminder opt-in replies: contextual name once, not Hello every time
+# Reminder opt-in replies current blocks
 old_yes = '''      const reminderYesBody = `Hello ${cleanCustomerName(profileName) || "there"} 👋\n\nتم تسجيل طلب التذكير ✅\nسنرسل لك تذكير قبل موعدك بساعة.\n\nDone ✅\nWe will remind you 1 hour before your appointment.`;'''
 new_yes = '''      const reminderName = cleanCustomerName(profileName);
       const reminderYesBody = `${reminderName ? `تمام ${reminderName}، تم تسجيل طلب التذكير ✅` : "تم تسجيل طلب التذكير ✅"}\n\nسنرسل لك تذكير قبل موعدك بساعة.\n\nDone ✅\nWe will remind you 1 hour before your appointment.`;'''
