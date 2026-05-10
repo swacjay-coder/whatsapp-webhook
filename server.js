@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-9-restore-original-results-video-route";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-1-details-label-and-body-safe";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 
@@ -823,10 +823,10 @@ function buildHowItWorksBody(customerName = "") {
   const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
 
   return `${intro}\n\n` +
-    "الفكرة بسيطة:\n" +
-    "نختار لك الشكل المناسب، اللون المناسب، والكثافة المناسبة لشعرك، ثم يتم التركيب بطريقة طبيعية بدون جراحة.\n\n" +
-    "The process is simple:\n" +
-    "We choose the right style, color, and density for you, then apply it naturally with no surgery.\n\n" +
+    "الخطوات بسيطة ومريحة:\n" +
+    "نبدأ بفهم الشكل الذي يناسبك، ثم نختار اللوك الأقرب لطبيعة شعرك، وبعدها يتم التطبيق بمظهر طبيعي بدون جراحة.\n\n" +
+    "The process is simple and comfortable:\n" +
+    "We start by understanding the look that suits you, choose the closest natural style for your hair, then apply it with a natural, non-surgical result.\n\n" +
     "شو تحب تعمل الآن؟\n" +
     "What would you like to do now?";
 }
@@ -15863,6 +15863,8 @@ app.post("/webhook", async (req, res) => {
       );
       const iconicIsHowItWorksRoute = (
         iconicServicesText === "how_it_works" ||
+        iconicServicesText.includes("details") ||
+        iconicServicesText.includes("تفاصيل") ||
         iconicServicesText === "how | كيف يعمل" ||
         iconicServicesText === "howitworks" ||
         (iconicServicesText.includes("how") && iconicServicesText.includes("work")) ||
@@ -15873,7 +15875,7 @@ app.post("/webhook", async (req, res) => {
         await sendWhatsAppButtonMessage(from, buildServicesMenuBody(profileName), [
           { id: "results", title: "Results | نتائج" },
           { id: "location", title: "Location | موقعنا" },
-          { id: "how_it_works", title: "How | كيف يعمل" }
+          { id: "how_it_works", title: "Details | التفاصيل" }
         ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
         addInboxMessage(from, "bot", buildServicesMenuBody(profileName), "Services Menu", incomingPhoneNumberId, { customerName: profileName, messageType: "Services Menu" });
         return res.sendStatus(200);
