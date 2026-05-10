@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-56-empty-customer-message-filter";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-57-smart-customer-action-labels";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -398,6 +398,28 @@ function getDefaultMessageType(sender, status) {
   return status || "Message";
 }
 
+function fixLoadedEmptyCustomerBody(message = {}) {
+  const sender = (message.sender || "").toString().trim();
+  const body = (message.body || "").toString();
+  const customerName = (message.customerName || "").toString().trim();
+
+  if (sender !== "customer") {
+    return body;
+  }
+
+  const cleanBody = body.trim();
+
+  if (!cleanBody) {
+    return "Customer interaction received (details not saved)";
+  }
+
+  if (customerName && cleanBody === `${customerName}:`) {
+    return `${customerName}: Customer interaction received (details not saved)`;
+  }
+
+  return body;
+}
+
 function addInboxMessage(phone, sender, body, status = "Bot", phoneNumberId = null, options = {}) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || conversationPhoneNumberId[phone] || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
@@ -492,7 +514,7 @@ async function loadMessagesFromGoogleSheet() {
       customerName: message.customerName || "",
       branch: message.branch || "",
       sender: message.sender || "",
-      body: message.body || "",
+      body: fixLoadedEmptyCustomerBody(message),
       status: message.status || "",
       messageType: message.messageType || "",
       phoneNumberId: message.phoneNumberId || "",
@@ -749,6 +771,117 @@ function getIncomingMessageText(message) {
   }
 
   return "";
+}
+
+function humanizeActionId(value) {
+  const text = (value || "").toString().trim();
+
+  if (!text) return "";
+
+  const knownLabels = {
+    booking_menu: "Booking | حجز",
+    services_menu: "Services | خدماتنا",
+    service_menu: "Service | سيرفس",
+    consult_menu: "Consult | استشارة",
+    book_service_flow: "Book Service | سيرفس",
+    talk_to_team: "Team | فريقنا",
+    help_team: "Help | ساعدني",
+    location_branch: "Location | موقعنا",
+    results_media: "Results | نتائج",
+    fast_book_dubai: "Dubai",
+    fast_book_abudhabi: "Abu Dhabi",
+    fast_time_today: "Today",
+    fast_time_tomorrow: "Tomorrow",
+    fast_time_week: "This Week"
+  };
+
+  const compact = text.toLowerCase().trim();
+
+  if (knownLabels[compact]) {
+    return knownLabels[compact];
+  }
+
+  return text
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, function(letter) { return letter.toUpperCase(); });
+}
+
+function getSmartCustomerActionText(message, originalText = "") {
+  const directText = (originalText || "").toString().trim();
+
+  if (directText) {
+    return humanizeActionId(directText);
+  }
+
+  if (!message) return "";
+
+  if (message.type === "button") {
+    return humanizeActionId(message.button?.text || message.button?.payload || "");
+  }
+
+  if (message.type === "interactive") {
+    const interactive = message.interactive || {};
+
+    if (interactive.button_reply) {
+      return humanizeActionId(interactive.button_reply.title || interactive.button_reply.id || "");
+    }
+
+    if (interactive.list_reply) {
+      return humanizeActionId(interactive.list_reply.title || interactive.list_reply.id || "");
+    }
+
+    if (interactive.nfm_reply) {
+      const rawResponse = interactive.nfm_reply.response_json;
+      let parsed = null;
+
+      if (rawResponse && typeof rawResponse === "object") {
+        parsed = rawResponse;
+      } else if (rawResponse) {
+        try {
+          parsed = JSON.parse(rawResponse);
+        } catch (error) {
+          parsed = null;
+        }
+      }
+
+      if (parsed && typeof parsed === "object") {
+        const parts = [];
+        const requestType = parsed.request_type || parsed.requestType || parsed.flow_type || "WhatsApp Flow";
+        const branch = parsed.branch || "";
+        const preferredDay = parsed.preferred_day || parsed.preferredDay || "";
+        const preferredTime = parsed.preferred_time || parsed.preferredTime || "";
+        const teamMember = parsed.team_member || parsed.teamMember || parsed.team_member_dubai || parsed.team_member_abudhabi || "";
+        const serviceType = parsed.service_type || parsed.serviceType || "";
+        const notes = parsed.notes || "";
+
+        parts.push(`${humanizeActionId(requestType)} submitted`);
+        if (branch) parts.push(`Branch: ${humanizeActionId(branch)}`);
+        if (preferredDay) parts.push(`Preferred day: ${humanizeActionId(preferredDay)}`);
+        if (preferredTime) parts.push(`Preferred time: ${humanizeActionId(preferredTime)}`);
+        if (teamMember) parts.push(`Team member: ${humanizeActionId(teamMember)}`);
+        if (serviceType) parts.push(`Service type: ${humanizeActionId(serviceType)}`);
+        if (notes) parts.push(`Notes: ${notes}`);
+
+        return parts.join("\n");
+      }
+
+      return "WhatsApp Flow response received";
+    }
+  }
+
+  return "";
+}
+
+function buildCustomerActionBody(profileName = "", actionText = "") {
+  const cleanAction = (actionText || "").toString().trim();
+  const cleanName = cleanCustomerName(profileName || "");
+
+  if (!cleanAction) {
+    return "";
+  }
+
+  return cleanName ? `${cleanName}: ${cleanAction}` : cleanAction;
 }
 
 function getCustomerChatLink(customerNumber) {
@@ -2008,6 +2141,7 @@ function buildFastBookingRequestMessage(branch, preferredTime, originalText = ""
 
 async function handleFastBookingButtons({
   from,
+  message,
   originalText,
   text,
   incomingPhoneNumberId,
@@ -2022,19 +2156,22 @@ async function handleFastBookingButtons({
     return false;
   }
 
-  const customerBody = profileName ? `${profileName}: ${originalText}` : originalText;
+  const customerActionText = getSmartCustomerActionText(message, originalText || text) || "Fast booking button";
+  const customerBody = buildCustomerActionBody(profileName, customerActionText);
 
-  addInboxMessage(
-    from,
-    "customer",
-    customerBody,
+  if (customerBody) {
+    addInboxMessage(
+      from,
+      "customer",
+      customerBody,
     "Fast Booking",
     incomingPhoneNumberId,
     {
       customerName: profileName,
       messageType: "Customer Fast Booking Step"
-    }
-  );
+      }
+    );
+  }
 
   if (startedFastBooking) {
     fastBookingDrafts[from] = {
@@ -15378,10 +15515,13 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (isBookServiceFlowText(originalText || text)) {
+      const serviceActionText = getSmartCustomerActionText(message, originalText || text) || "Book Service | سيرفس";
+      const serviceCustomerBody = buildCustomerActionBody(profileName, serviceActionText);
+
       addInboxMessage(
         from,
         "customer",
-        profileName ? `${profileName}: ${originalText}` : originalText,
+        serviceCustomerBody,
         "Service Appointment",
         incomingPhoneNumberId,
         {
@@ -15437,6 +15577,7 @@ app.post("/webhook", async (req, res) => {
 
     const fastBookingHandled = await handleFastBookingButtons({
       from,
+      message,
       originalText,
       text,
       incomingPhoneNumberId,
@@ -15449,16 +15590,16 @@ app.post("/webhook", async (req, res) => {
     }
 
     const incomingCustomerImageBody = message.type === "image" ? buildIncomingCustomerImageBody(message) : "";
-    const cleanOriginalText = (originalText || "").toString().trim();
-    const customerMessageBody = incomingCustomerImageBody || (cleanOriginalText ? (profileName ? `${profileName}: ${cleanOriginalText}` : cleanOriginalText) : "");
+    const smartActionText = getSmartCustomerActionText(message, originalText || text);
+    const customerMessageBody = incomingCustomerImageBody || buildCustomerActionBody(profileName, smartActionText);
     const customerMessageStatus = autoIntentWorkflow?.status || "Bot";
     const customerMessageType = incomingCustomerImageBody
       ? "Customer Image Message"
       : (autoIntentWorkflow?.status ? `Customer Intent - ${autoIntentWorkflow.status}` : "Customer Message");
 
-    // V31.5.8.56:
-    // Do not show empty customer bubbles like "088:" in Team Inbox.
-    // Some WhatsApp interactive / flow events can arrive with no readable text.
+    // V31.5.8.57:
+    // Show the real customer action for buttons/lists/Flow replies when possible.
+    // If WhatsApp sends an event with no readable text or payload, do not show an empty bubble like "088:".
     if (customerMessageBody && customerMessageBody.toString().trim()) {
       addInboxMessage(
         from,
