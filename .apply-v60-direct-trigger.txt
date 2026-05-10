@@ -1,1 +1,1 @@
-inspect flow confirmation v602
+apply v60.2 flow confirmation reminder opt-in
