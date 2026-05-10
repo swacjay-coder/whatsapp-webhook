@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V60.3.0
+      - name: Apply V60.3.0.1
         run: |
           set -e
-          python3 v6030_details_label_and_body.py
+          python3 v60301_details_label_and_body_safe.py
           node --check server.js
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js v6030_details_label_and_body.py
-          git commit -m "Apply V60.3.0 Details label and body" || echo "No changes"
+          git add server.js v60301_details_label_and_body_safe.py
+          git commit -m "Apply V60.3.0.1 safe Details label and body" || echo "No changes"
           git push
