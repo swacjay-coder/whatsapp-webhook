@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V60.2.6.1
+      - name: Apply V60.2.7
         run: |
           set -e
-          python3 v60261_fix_services_id_team_note_robust.py
+          python3 v6027_fix_services_normalized_matching.py
           node --check server.js
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js v60261_fix_services_id_team_note_robust.py
-          git commit -m "Apply V60.2.6.1 robust services id and team pause note" || echo "No changes"
+          git add server.js v6027_fix_services_normalized_matching.py
+          git commit -m "Apply V60.2.7 fix services normalized matching" || echo "No changes"
           git push
