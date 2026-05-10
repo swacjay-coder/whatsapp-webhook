@@ -66,8 +66,8 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-2-clean-customer-name-and-new-header-all-replies";
-const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/ChatGPT-Image-May-8-2026-12_12_30-AM.jpg").toString().trim();
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-3-smart-customer-name-and-new-header-all-replies";
+const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -702,23 +702,20 @@ async function getBotPausedStatusForConversation(phone, phoneNumberId = "") {
 }
 
 function buildTeamHandoffBody(customerName = "") {
-  const cleanName = cleanCustomerName(customerName);
-  const arabicName = cleanName ? ` ${cleanName}` : "";
-  const englishName = cleanName ? ` ${cleanName}` : "";
+  const cleanName = namePhrase(customerName);
+  const intro = cleanName ? `تمام ${cleanName} 👌` : "تمام 👌";
 
-  return `تمام${arabicName} 👌\n\n` +
+  return `${intro}\n\n` +
     "تم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.\n\n" +
     "------------------------------\n\n" +
-    `Sure${englishName} 👌\n\n` +
     "Your conversation has been forwarded to our team, and one of our specialists will assist you shortly.";
 }
 
 function buildDirectBookingChoiceBody(customerName = "") {
-  const cleanName = cleanCustomerName(customerName);
-  const greeting = cleanName ? `Hello ${cleanName} 👋` : "Hello 👋";
+  const cleanName = namePhrase(customerName);
+  const intro = cleanName ? `أكيد ${cleanName}، اختر نوع الحجز المناسب لك:` : "أكيد، اختر نوع الحجز المناسب لك:";
 
-  return `${greeting}\n\n` +
-    "أكيد، اختر نوع الحجز المناسب لك:\n\n" +
+  return `${intro}\n\n` +
     "إذا كنت عميل حالي وتريد خدمة / متابعة / تركيب / تعديل، اختر سيرفس.\n\n" +
     "إذا كنت عميل جديد وتريد معرفة الحل الأنسب، اختر استشارة.\n\n" +
     "------------------------------\n\n" +
@@ -785,6 +782,11 @@ function buildPersonalGreeting(customerName = "") {
   }
 
   return `Hello ${cleanName} 👋`;
+}
+
+function namePhrase(customerName = "", fallback = "") {
+  const cleanName = cleanCustomerName(customerName);
+  return cleanName || fallback || "";
 }
 
 function getArabicBranchName(branch) {
@@ -15793,9 +15795,9 @@ app.post("/webhook", async (req, res) => {
         updatedBy: "Appointment Reminder Button"
       });
 
-      const reminderYesBody = `Hello ${cleanCustomerName(profileName) || "there"} 👋
+      const reminderName = cleanCustomerName(profileName);
+      const reminderYesBody = `${reminderName ? `تمام ${reminderName}، تم تسجيل طلب التذكير ✅` : "تم تسجيل طلب التذكير ✅"}
 
-تم تسجيل طلب التذكير ✅
 سنرسل لك تذكير قبل موعدك بساعة.
 
 Done ✅
@@ -15816,9 +15818,8 @@ We will remind you 1 hour before your appointment.`;
         updatedBy: "Appointment Reminder Button"
       });
 
-      const reminderNoBody = `Hello ${cleanCustomerName(profileName) || "there"} 👋
-
-تمام، لن نرسل تذكير لهذا الموعد.
+      const reminderName = cleanCustomerName(profileName);
+      const reminderNoBody = `${reminderName ? `تمام ${reminderName}، لن نرسل تذكير لهذا الموعد.` : "تمام، لن نرسل تذكير لهذا الموعد."}
 
 No problem. We will not send a reminder for this appointment.`;
       await sendWhatsAppMessage(from, reminderNoBody, incomingPhoneNumberId);
