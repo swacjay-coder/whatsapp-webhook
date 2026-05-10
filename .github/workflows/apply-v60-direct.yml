@@ -14,13 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V60.2.1
+      - name: Inspect V60.2.2 replies
         run: |
           set -e
-          python3 v6021_fix_bilingual_header_all_replies.py
-          node --check server.js
+          python3 v6022_inspect_reply_bodies.py
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js package.json
-          git commit -m "Apply V60.2.1 bilingual header fix" || echo "No changes"
+          git add V6022_REPLY_BODIES.md
+          git commit -m "Inspect V60.2.2 reply bodies" || echo "No changes"
           git push
