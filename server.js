@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-6-1-services-button-id-team-pause-note";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-7-fix-services-normalized-matching";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 
@@ -15849,8 +15849,26 @@ app.post("/webhook", async (req, res) => {
         ""
       ).toString().trim();
       const iconicServicesText = normalizeText(iconicServicesRawText);
+      const iconicIsServicesRoute = (
+        iconicServicesText === "services_menu" ||
+        iconicServicesText === "servicesmenu" ||
+        iconicServicesText === "services" ||
+        iconicServicesText.includes("services") ||
+        iconicServicesText.includes("خدمات")
+      );
+      const iconicIsResultsRoute = (
+        iconicServicesText === "results" ||
+        iconicServicesText.includes("result") ||
+        iconicServicesText.includes("نتائج")
+      );
+      const iconicIsHowItWorksRoute = (
+        iconicServicesText === "how_it_works" ||
+        iconicServicesText === "howitworks" ||
+        (iconicServicesText.includes("how") && iconicServicesText.includes("work")) ||
+        iconicServicesText.includes("كيف")
+      );
 
-      if (["services_menu", "services | خدماتنا", "services", "خدماتنا"].includes(iconicServicesText)) {
+      if (iconicIsServicesRoute) {
         await sendWhatsAppButtonMessage(from, buildServicesMenuBody(profileName), [
           { id: "results", title: "Results | نتائج" },
           { id: "location", title: "Location | موقعنا" },
@@ -15860,7 +15878,7 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      if (["results", "results | نتائج", "results", "نتائج"].includes(iconicServicesText)) {
+      if (iconicIsResultsRoute) {
         await sendWhatsAppButtonMessage(from, buildResultsFollowupBody(profileName), [
           { id: "how_it_works", title: "How it works | كيف يعمل" },
           { id: "booking_menu", title: "Booking | حجز" },
@@ -15870,7 +15888,7 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      if (["how_it_works", "how it works | كيف يعمل", "how it works", "كيف يعمل"].includes(iconicServicesText)) {
+      if (iconicIsHowItWorksRoute) {
         await sendWhatsAppVideoByLink(from, HOW_IT_WORKS_VIDEO_URL, "", incomingPhoneNumberId);
         await sendWhatsAppButtonMessage(from, buildHowItWorksBody(profileName), [
           { id: "booking_menu", title: "Booking | حجز" },
