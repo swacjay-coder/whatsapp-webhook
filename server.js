@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-52-service-booking-flow-routing";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-53-service-flow-screen-fix";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1162,30 +1162,38 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
           flow_token: flowToken,
           flow_cta: selectedFlowCta,
           flow_action: "navigate",
-          flow_action_payload: isAbuDhabiLine(finalPhoneNumberId)
+          flow_action_payload: isServiceBookingFlow
             ? {
-                screen: "BOOKING_DETAILS",
+                screen: "SERVICE_BOOKING",
                 data: {
                   default_branch: options.branch || lineConfig.branch,
                   customer_name: options.customerName || "",
-                  request_type: bookingFlowConfig.requestType,
-                  flow_type: isServiceBookingFlow ? "service_booking" : "consultation_booking",
-                  request_type: bookingFlowConfig.requestType,
-                  flow_type: isServiceBookingFlow ? "service_booking" : "consultation_booking",
-                  default_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
-                  preferred_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
-                  today_available: false,
-                  today_unavailable_message: "Today is not available for Abu Dhabi online booking. Please choose Tomorrow or This Week.",
-                  today_time_options: []
+                  request_type: "Service Appointment",
+                  flow_type: "service_booking"
                 }
               }
-            : {
-                screen: "CHOOSE_DAY",
-                data: {
-                  default_branch: options.branch || lineConfig.branch,
-                  customer_name: options.customerName || ""
-                }
-              }
+            : (isAbuDhabiLine(finalPhoneNumberId)
+                ? {
+                    screen: "BOOKING_DETAILS",
+                    data: {
+                      default_branch: options.branch || lineConfig.branch,
+                      customer_name: options.customerName || "",
+                      request_type: bookingFlowConfig.requestType,
+                      flow_type: "consultation_booking",
+                      default_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
+                      preferred_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
+                      today_available: false,
+                      today_unavailable_message: "Today is not available for Abu Dhabi online booking. Please choose Tomorrow or This Week.",
+                      today_time_options: []
+                    }
+                  }
+                : {
+                    screen: "CHOOSE_DAY",
+                    data: {
+                      default_branch: options.branch || lineConfig.branch,
+                      customer_name: options.customerName || ""
+                    }
+                  })
         }
       }
     }
