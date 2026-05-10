@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-55-inbox-history-safety-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-56-empty-customer-message-filter";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -15449,23 +15449,29 @@ app.post("/webhook", async (req, res) => {
     }
 
     const incomingCustomerImageBody = message.type === "image" ? buildIncomingCustomerImageBody(message) : "";
-    const customerMessageBody = incomingCustomerImageBody || (profileName ? `${profileName}: ${originalText}` : originalText);
+    const cleanOriginalText = (originalText || "").toString().trim();
+    const customerMessageBody = incomingCustomerImageBody || (cleanOriginalText ? (profileName ? `${profileName}: ${cleanOriginalText}` : cleanOriginalText) : "");
     const customerMessageStatus = autoIntentWorkflow?.status || "Bot";
     const customerMessageType = incomingCustomerImageBody
       ? "Customer Image Message"
       : (autoIntentWorkflow?.status ? `Customer Intent - ${autoIntentWorkflow.status}` : "Customer Message");
 
-    addInboxMessage(
-      from,
-      "customer",
-      customerMessageBody,
-      customerMessageStatus,
-      incomingPhoneNumberId,
-      {
-        customerName: profileName,
-        messageType: customerMessageType
-      }
-    );
+    // V31.5.8.56:
+    // Do not show empty customer bubbles like "088:" in Team Inbox.
+    // Some WhatsApp interactive / flow events can arrive with no readable text.
+    if (customerMessageBody && customerMessageBody.toString().trim()) {
+      addInboxMessage(
+        from,
+        "customer",
+        customerMessageBody,
+        customerMessageStatus,
+        incomingPhoneNumberId,
+        {
+          customerName: profileName,
+          messageType: customerMessageType
+        }
+      );
+    }
 
     if (autoIntentWorkflow?.status === "Booking Request") {
       await saveBookingRequestToGoogleSheetFromServer({
