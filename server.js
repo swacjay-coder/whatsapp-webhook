@@ -66,7 +66,8 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-1-fix-flow-staff-notification-routing";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-english-flow-confirmation-reminder-optin";
+const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/ChatGPT-Image-May-8-2026-12_12_30-AM.jpg").toString().trim();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -2099,28 +2100,53 @@ function buildWhatsAppFlowBookingRequestMessage(flowData = {}) {
 }
 
 function buildWhatsAppFlowConfirmationBody(flowData = {}) {
-  const branchAr = getFastBookingBranchArabic(flowData.branch || "Dubai");
+  const customerName = cleanCustomerName(flowData.customerName || "") || "there";
+  const branch = flowData.branch || "Dubai";
+  const preferredTime = flowData.preferredTime || "Flexible / Any available time";
+  const requestType = flowData.serviceInterest || flowData.requestType || "Booking Request";
 
   return [
     `${BUSINESS_NAME_SPACED} ✨`,
     "",
-    "شكراً لك.",
-    "تم استلام طلب الحجز.",
-    "سيقوم فريقنا بمراجعة التوفر وتأكيد الموعد النهائي قريباً.",
-    "",
-    `الفرع: ${branchAr}`,
-    `الوقت المفضل: ${flowData.preferredTime || "Flexible / Any available time"}`,
-    "",
-    "------------------------------",
-    "",
-    `${BUSINESS_NAME_SPACED} ✨`,
+    `Hello ${customerName} 👋`,
     "",
     "Your booking request has been received.",
     "Our team will check availability and confirm the exact appointment shortly.",
     "",
-    `Branch: ${flowData.branch || "Dubai"}`,
-    `Preferred time: ${flowData.preferredTime || "Flexible / Any available time"}`
-  ].join(String.fromCharCode(10));
+    `Request type: ${requestType}`,
+    `Branch: ${branch}`,
+    `Preferred time: ${preferredTime}`,
+    flowData.consultationType ? `Consultation type: ${flowData.consultationType}` : "",
+    flowData.serviceType ? `Service type: ${flowData.serviceType}` : "",
+    flowData.teamMember ? `Team member: ${flowData.teamMember}` : "",
+    "",
+    "Would you like us to remind you 1 hour before your appointment?"
+  ].filter((line) => line !== "").join(String.fromCharCode(10));
+}
+
+function getAppointmentReminderOptInButtons() {
+  return [
+    { id: "appointment_reminder_yes", title: "Yes | نعم" },
+    { id: "appointment_reminder_no", title: "No | لا" }
+  ];
+}
+
+function isAppointmentReminderYesText(text) {
+  const value = compactText(text);
+  if (!value) return false;
+  return value === "appointment_reminder_yes" ||
+    value === "yes | نعم" ||
+    value === "yes" ||
+    value === "نعم";
+}
+
+function isAppointmentReminderNoText(text) {
+  const value = compactText(text);
+  if (!value) return false;
+  return value === "appointment_reminder_no" ||
+    value === "no | لا" ||
+    value === "no" ||
+    value === "لا";
 }
 
 
@@ -2192,9 +2218,9 @@ async function handleWhatsAppFlowBookingSubmit({
   });
 
   const confirmationBody = buildWhatsAppFlowConfirmationBody(flowData);
-  const confirmationButtons = getConsultActionButtons();
+  const confirmationButtons = getAppointmentReminderOptInButtons();
 
-  await sendWhatsAppButtonMessage(from, confirmationBody, confirmationButtons, incomingPhoneNumberId);
+  await sendWhatsAppButtonMessage(from, confirmationBody, confirmationButtons, incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
   addInboxMessage(
     from,
     "bot",
@@ -15750,6 +15776,44 @@ app.post("/webhook", async (req, res) => {
       const resumeBody = "تم تشغيل البوت مرة أخرى ✅\n\n------------------------------\n\nBot has been resumed ✅";
       await sendWhatsAppMessage(from, resumeBody, incomingPhoneNumberId);
       addInboxMessage(from, "bot", resumeBody, "Bot Active", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Resumed" });
+      return res.sendStatus(200);
+    }
+
+    if (isAppointmentReminderYesText(originalText || text)) {
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: "Appointment Reminder Opt-in",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
+        tags: ["Appointment Reminder", "Opt-in", "1 Hour Before"],
+        updatedBy: "Appointment Reminder Button"
+      });
+
+      const reminderYesBody = `Hello ${cleanCustomerName(profileName) || "there"} 👋
+
+Done. We will remind you 1 hour before your appointment.`;
+      await sendWhatsAppMessage(from, reminderYesBody, incomingPhoneNumberId);
+      addInboxMessage(from, "bot", reminderYesBody, "Appointment Reminder Opt-in", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Opt-in" });
+      return res.sendStatus(200);
+    }
+
+    if (isAppointmentReminderNoText(originalText || text)) {
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: "Appointment Reminder Declined",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
+        tags: ["Appointment Reminder", "Declined"],
+        updatedBy: "Appointment Reminder Button"
+      });
+
+      const reminderNoBody = `Hello ${cleanCustomerName(profileName) || "there"} 👋
+
+No problem. We will not send a reminder for this appointment.`;
+      await sendWhatsAppMessage(from, reminderNoBody, incomingPhoneNumberId);
+      addInboxMessage(from, "bot", reminderNoBody, "Appointment Reminder Declined", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Declined" });
       return res.sendStatus(200);
     }
 
