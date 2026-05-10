@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-54-service-flow-dynamic-time-abu-routing";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-55-inbox-history-safety-fix";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -3248,28 +3248,72 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
   }
 });
 
+function getMessageMergeKey(message = {}) {
+  return [
+    message.phone || "",
+    message.phoneNumberId || "",
+    message.time || "",
+    message.sender || "",
+    (message.body || "").toString().slice(0, 300),
+    message.messageType || ""
+  ].join("|");
+}
+
+function sortMessagesNewestFirst(messages = []) {
+  return messages.slice().sort((a, b) => {
+    const aTime = new Date(a?.time || 0).getTime() || 0;
+    const bTime = new Date(b?.time || 0).getTime() || 0;
+    return bTime - aTime;
+  });
+}
+
+function mergeInboxHistory(sheetMessages = [], memoryMessages = []) {
+  const mergedMap = new Map();
+
+  // Keep Google Sheet as the primary persisted source.
+  for (const message of sheetMessages || []) {
+    const key = getMessageMergeKey(message);
+    if (key.trim() && !mergedMap.has(key)) {
+      mergedMap.set(key, message);
+    }
+  }
+
+  // Add current in-memory messages so a partial Sheet response cannot hide live conversations.
+  for (const message of memoryMessages || []) {
+    const key = getMessageMergeKey(message);
+    if (key.trim() && !mergedMap.has(key)) {
+      mergedMap.set(key, message);
+    }
+  }
+
+  return sortMessagesNewestFirst(Array.from(mergedMap.values()));
+}
+
   app.get("/api/messages", async (req, res) => {
   const sheetData = await loadMessagesFromGoogleSheet();
   const sheetMessages = sheetData.messages || [];
+  const memoryMessages = inboxMessages || [];
   const conversationStates = sheetData.conversationStates || [];
   const bookingRequests = sheetData.bookingRequests || [];
-
-  if (sheetMessages.length > 0) {
-    return res.json({
-      ok: true,
-      source: "google_sheet",
-      messages: sheetMessages,
-      conversationStates,
-      bookingRequests
-    });
-  }
+  const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
+  const source = sheetMessages.length > 0 && memoryMessages.length > 0
+    ? "google_sheet_plus_memory"
+    : (sheetMessages.length > 0 ? "google_sheet" : "memory");
 
   return res.json({
     ok: true,
-    source: "memory",
-    messages: inboxMessages,
+    source,
+    messages: mergedMessages,
     conversationStates,
-    bookingRequests
+    bookingRequests,
+    debug: {
+      botVersion: BOT_VERSION,
+      sheetMessagesCount: sheetMessages.length,
+      memoryMessagesCount: memoryMessages.length,
+      returnedMessagesCount: mergedMessages.length,
+      conversationStatesCount: conversationStates.length,
+      bookingRequestsCount: bookingRequests.length
+    }
   });
 });
 
@@ -14730,13 +14774,49 @@ function renderAll() {
   renderChat();
 }
 
+function browserMessageMergeKey(message) {
+  return [
+    message.phone || "",
+    message.phoneNumberId || "",
+    message.time || "",
+    message.sender || "",
+    (message.body || "").toString().slice(0, 300),
+    message.messageType || ""
+  ].join("|");
+}
+
+function mergeBrowserMessages(primaryMessages, fallbackMessages) {
+  const merged = new Map();
+
+  (primaryMessages || []).forEach(function(message) {
+    const key = browserMessageMergeKey(message);
+    if (key.trim() && !merged.has(key)) merged.set(key, message);
+  });
+
+  (fallbackMessages || []).forEach(function(message) {
+    const key = browserMessageMergeKey(message);
+    if (key.trim() && !merged.has(key)) merged.set(key, message);
+  });
+
+  return Array.from(merged.values()).sort(function(a, b) {
+    return getMessageTimeValue(b) - getMessageTimeValue(a);
+  });
+}
+
 async function loadMessages() {
   try {
     const res = await fetch("/api/messages");
     const data = await res.json();
     const nextMessages = data.messages || [];
-    processLiveInboxNotifications(nextMessages);
-    allMessages = nextMessages;
+    const nextMessageCount = nextMessages.length;
+    const currentMessageCount = (allMessages || []).length;
+    const shouldPreserveBrowserHistory = nextMessageCount > 0 && currentMessageCount > nextMessageCount;
+    const safeMessages = shouldPreserveBrowserHistory
+      ? mergeBrowserMessages(nextMessages, allMessages)
+      : nextMessages;
+
+    processLiveInboxNotifications(safeMessages);
+    allMessages = safeMessages;
     allBookingRequests = data.bookingRequests || [];
     applyConversationStates(data.conversationStates || []);
     renderAll();
