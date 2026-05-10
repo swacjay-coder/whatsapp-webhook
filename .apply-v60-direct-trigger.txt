@@ -1,1 +1,1 @@
-run v6028 fix button title lengths
+run v60281 fix how button title only
