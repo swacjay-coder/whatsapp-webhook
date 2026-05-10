@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-flow-customer-name-staff-notifications-and-resume-bot";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-1-fix-flow-staff-notification-routing";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -2129,7 +2129,8 @@ async function handleWhatsAppFlowBookingSubmit({
   message,
   incomingPhoneNumberId,
   lineConfig,
-  profileName
+  profileName,
+  displayPhoneNumber = ""
 }) {
   if (!isWhatsAppFlowReply(message)) {
     return false;
@@ -2177,7 +2178,15 @@ async function handleWhatsAppFlowBookingSubmit({
     bookingStatus: "Pending"
   });
 
-  notifyStaffAboutFlowBooking(flowData, from, incomingPhoneNumberId, "").catch((error) => {
+  console.log("[Staff Booking Notify] preparing", {
+    branch: selectedBranch,
+    phoneNumberId: incomingPhoneNumberId,
+    displayPhoneNumber,
+    customerPhone: from,
+    customerName: flowData.customerName || profileName || ""
+  });
+
+  notifyStaffAboutFlowBooking(flowData, from, incomingPhoneNumberId, displayPhoneNumber || "").catch((error) => {
     console.log("Staff booking notification failed:");
     console.log(error);
   });
@@ -15905,7 +15914,8 @@ app.post("/webhook", async (req, res) => {
       message,
       incomingPhoneNumberId,
       lineConfig,
-      profileName
+      profileName,
+      displayPhoneNumber: value?.metadata?.display_phone_number || ""
     });
 
     if (whatsappFlowHandled) {
