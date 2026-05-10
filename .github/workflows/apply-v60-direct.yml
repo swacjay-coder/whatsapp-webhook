@@ -14,12 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect V60.2.2 replies
+      - name: Apply V60.2.2
         run: |
           set -e
-          python3 v6022_inspect_reply_bodies.py
+          python3 v6022_clean_names_headers.py
+          node --check server.js
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add V6022_REPLY_BODIES.md
-          git commit -m "Inspect V60.2.2 reply bodies" || echo "No changes"
+          git add server.js package.json
+          git commit -m "Apply V60.2.2 clean names and headers" || echo "No changes"
           git push
