@@ -14,18 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Run V60.1 staff notify fix script
+      - name: Inspect send functions
         run: |
           set -e
-          python3 v601_fix_flow_staff_notify.py
-          node --check server.js
-
-      - name: Commit V60.1 server update
-        run: |
-          set -e
+          python3 v602_inspect_send_functions.py
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js package.json
-          git commit -m "Apply V60.1 staff notify routing fix" || echo "No changes to commit"
+          git add V602_SEND_FUNCTIONS.md
+          git commit -m "Inspect send functions" || echo "No changes"
           git push
