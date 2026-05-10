@@ -15,42 +15,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write V60 bash-only report
+      - name: Run V60 direct apply script
         run: |
-          set +e
-          OUT="V60_MISSING_BLOCK.md"
-          echo "# V60 Missing Block Report" > "$OUT"
-          echo "Started: $(date -u)" >> "$OUT"
-          echo "" >> "$OUT"
-          echo "## Version" >> "$OUT"
-          grep -n "BOT_VERSION" server.js >> "$OUT" 2>&1
-          echo "" >> "$OUT"
-          echo "## Marker checks" >> "$OUT"
-          grep -Fq "function getStaffNotificationNumbers" server.js
-          echo "staff_multi_helper_exit=$?" >> "$OUT"
-          grep -Fq "const customerNameValue = findFlowResponseValue" server.js
-          echo "customer_name_extraction_exit=$?" >> "$OUT"
-          grep -Fq "Customer name:" server.js
-          echo "booking_customer_line_exit=$?" >> "$OUT"
-          grep -Fq "function isResumeBotText" server.js
-          echo "resume_helper_exit=$?" >> "$OUT"
-          grep -Fq "notifyStaffAboutFlowBooking" server.js
-          echo "staff_notify_call_exit=$?" >> "$OUT"
-          grep -Fq "customerName: flowData.customerName || profileName" server.js
-          echo "sheet_flow_customer_name_exit=$?" >> "$OUT"
-          grep -Fq "getWhatsAppFlowBookingData(message, { ...lineConfig, customerName: profileName, phone: from })" server.js
-          echo "flow_profile_fallback_exit=$?" >> "$OUT"
-          echo "" >> "$OUT"
-          echo "## getWhatsAppFlowBookingData snippet" >> "$OUT"
-          line=$(grep -n "function getWhatsAppFlowBookingData" server.js | head -1 | cut -d: -f1)
-          if [ -n "$line" ]; then sed -n "$((line)),$((line+70))p" server.js >> "$OUT"; fi
-          echo "" >> "$OUT"
-          echo "## handleWhatsAppFlowBookingSubmit snippet" >> "$OUT"
-          line=$(grep -n "async function handleWhatsAppFlowBookingSubmit" server.js | head -1 | cut -d: -f1)
-          if [ -n "$line" ]; then sed -n "$((line)),$((line+95))p" server.js >> "$OUT"; fi
+          set -e
+          python3 v60_direct_apply.py
+          node --check server.js
+
+      - name: Commit V60 direct server update
+        run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$OUT"
-          git commit -m "Write V60 missing block report" || echo "No report changes"
+          git add server.js package.json
+          git commit -m "Apply V60 direct server update" || echo "No changes to commit"
           git push
-          exit 0
