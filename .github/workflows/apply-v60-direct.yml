@@ -14,229 +14,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V60 edits directly
+
+      - name: Apply V59 base if needed
         run: |
           set -e
           if ! grep -q v31-5-8-59 server.js && ! grep -q v31-5-8-60 server.js; then
             git apply v59.patch
           fi
-          python3 <<'PY'
-          from pathlib import Path
-          p = Path('server.js')
-          s = p.read_text()
-
-          if 'v31-5-8-60-flow-customer-name-staff-notifications-and-resume-bot' in s:
-              print('[V60 direct] already applied')
-          else:
-              def rep(label, old, new):
-                  global s
-                  if old not in s:
-                      raise SystemExit(f'[V60 direct] missing block: {label}')
-                  s = s.replace(old, new, 1)
-                  print(f'[V60 direct] applied: {label}')
-
-              rep('BOT_VERSION',
-                  'const BOT_VERSION = "iconic-team-inbox-v31-5-8-59-direct-booking-intent-abu-dhabi-consultation-and-bot-pause";',
-                  'const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-flow-customer-name-staff-notifications-and-resume-bot";')
-
-              rep('staff notification helpers',
-                  '''function getStaffNotificationNumber(phoneNumberId, displayPhoneNumber = "") {
-  return getStaffNotificationRouting(phoneNumberId, displayPhoneNumber).number;
-}
-
-async function sendStaffNotificationTextMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID, routing = {}) {
-''',
-                  '''function getStaffNotificationNumber(phoneNumberId, displayPhoneNumber = "") {
-  return getStaffNotificationRouting(phoneNumberId, displayPhoneNumber).number;
-}
-
-function getStaffNotificationNumbers(phoneNumberId, displayPhoneNumber = "") {
-  const routing = getStaffNotificationRouting(phoneNumberId, displayPhoneNumber);
-  const numbers = (routing.number || "")
-    .toString()
-    .split(",")
-    .map((item) => normalizePhoneDigits(item))
-    .filter(Boolean);
-
-  return { routing, numbers: [...new Set(numbers)] };
-}
-
-function buildStaffBookingNotificationBody(flowData = {}, customerPhone = "") {
-  return [
-    "New booking request received ✅",
-    "",
-    `Branch: ${flowData.branch || ""}`,
-    `Customer: ${flowData.customerName || ""}`,
-    `Phone: ${customerPhone || flowData.phone || ""}`,
-    `Type: ${flowData.serviceInterest || flowData.requestType || ""}`,
-    `Day: ${flowData.preferredDay || ""}`,
-    `Time: ${flowData.preferredTime || ""}`,
-    flowData.consultationType ? `Consultation: ${flowData.consultationType}` : "",
-    flowData.serviceType ? `Service: ${flowData.serviceType}` : "",
-    flowData.teamMember ? `Team member: ${flowData.teamMember}` : "",
-    flowData.notes ? `Notes: ${flowData.notes}` : "Notes: ",
-    "",
-    "Please check Team Inbox."
-  ].filter((line) => line !== "").join("\\n");
-}
-
-async function notifyStaffAboutFlowBooking(flowData = {}, customerPhone = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, displayPhoneNumber = "") {
-  const { routing, numbers } = getStaffNotificationNumbers(phoneNumberId, displayPhoneNumber);
-
-  if (!numbers.length) {
-    console.log("[Staff Booking Notify] skipped: no staff number configured", routing.envName);
-    return { ok: false, skipped: true, reason: "no_staff_number" };
-  }
-
-  const body = buildStaffBookingNotificationBody(flowData, customerPhone);
-  const results = [];
-
-  for (const staffNumber of numbers) {
-    const result = await sendStaffNotificationTextMessage(staffNumber, body, phoneNumberId, routing);
-    results.push({ staffNumber, ...result });
-  }
-
-  return { ok: results.every((item) => item.ok), results };
-}
-
-async function sendStaffNotificationTextMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID, routing = {}) {
-''')
-
-              rep('customer name extraction',
-                  '''  const teamMemberValue = findFlowResponseValue(payload, ["team_member", "team member", "staff", "employee", "موظف", "فريق"]);
-  const notesValue = findFlowResponseValue(payload, ["notes", "note", "preferred_exact_time", "ملاحظ"]);
-
-  const branch = normalizeFlowBranch(branchValue, lineConfig.branch || "Dubai");
-''',
-                  '''  const teamMemberValue = findFlowResponseValue(payload, ["team_member", "team member", "staff", "employee", "موظف", "فريق"]);
-  const notesValue = findFlowResponseValue(payload, ["notes", "note", "preferred_exact_time", "ملاحظ"]);
-  const customerNameValue = findFlowResponseValue(payload, ["customer_name", "customerName", "name", "customer", "اسم العميل", "الاسم"]);
-
-  const branch = normalizeFlowBranch(branchValue, lineConfig.branch || "Dubai");
-''')
-
-              rep('flow return customer fields',
-                  '''  return {
-    rawPayload: payload,
-    branch,
-''',
-                  '''  return {
-    rawPayload: payload,
-    customerName: cleanCustomerName(customerNameValue || lineConfig.customerName || ""),
-    phone: normalizePhoneDigits(message?.from || lineConfig.phone || ""),
-    branch,
-''')
-
-              rep('booking request message fields',
-                  '''    "Source: WhatsApp Flow",
-    `Branch: ${flowData.branch || ""}`,
-    `Preferred day: ${flowData.preferredDay || ""}`,
-''',
-                  '''    "Source: WhatsApp Flow",
-    `Branch: ${flowData.branch || ""}`,
-    `Customer name: ${flowData.customerName || ""}`,
-    `Phone: ${flowData.phone || ""}`,
-    `Preferred day: ${flowData.preferredDay || ""}`,
-''')
-
-              rep('resume bot helper',
-                  '''function isBookingMenuText(text) {
-  const value = compactText(text);
-''',
-                  '''function isResumeBotText(text) {
-  const value = compactText(text);
-
-  if (!value) return false;
-
-  return value === "resume bot" ||
-    value === "bot resume" ||
-    value === "restart bot" ||
-    value === "start bot" ||
-    value === "تشغيل البوت" ||
-    value === "شغل البوت" ||
-    value === "رجع البوت" ||
-    value.includes("resume bot") ||
-    value.includes("تشغيل البوت") ||
-    value.includes("رجع البوت");
-}
-
-function isBookingMenuText(text) {
-  const value = compactText(text);
-''')
-
-              rep('flow data profile fallback',
-                  '  const flowData = getWhatsAppFlowBookingData(message, lineConfig);',
-                  '  const flowData = getWhatsAppFlowBookingData(message, { ...lineConfig, customerName: profileName, phone: from });')
-
-              rep('staff notify after booking save',
-                  '''  await saveBookingRequestToGoogleSheetFromServer({
-    phone: from,
-    phoneNumberId: incomingPhoneNumberId,
-    customerName: profileName,
-    branch: selectedBranch,
-    message: requestMessage,
-    requestType: flowData.serviceInterest || "WhatsApp Flow Booking",
-    bookingStatus: "Pending"
-  });
-
-  const confirmationBody = buildWhatsAppFlowConfirmationBody(flowData);
-''',
-                  '''  await saveBookingRequestToGoogleSheetFromServer({
-    phone: from,
-    phoneNumberId: incomingPhoneNumberId,
-    customerName: flowData.customerName || profileName,
-    branch: selectedBranch,
-    message: requestMessage,
-    requestType: flowData.serviceInterest || "WhatsApp Flow Booking",
-    bookingStatus: "Pending"
-  });
-
-  notifyStaffAboutFlowBooking(flowData, from, incomingPhoneNumberId, "").catch((error) => {
-    console.log("Staff booking notification failed:");
-    console.log(error);
-  });
-
-  const confirmationBody = buildWhatsAppFlowConfirmationBody(flowData);
-''')
-
-              rep('resume before pause gate',
-                  '''    if (!isOptInMessage && !isOptOutMessage && !isReminderDeclineMessage) {
-      const pausedStatus = await getBotPausedStatusForConversation(from, incomingPhoneNumberId);
-''',
-                  '''    if (isResumeBotText(originalText || text)) {
-      setConversationStatus(from, "Bot Active");
-      await saveConversationStateToGoogleSheetFromServer({
-        phone: from,
-        phoneNumberId: incomingPhoneNumberId,
-        branch: lineConfig.branch,
-        status: "Bot Active",
-        assignee: getBranchTeamAssignee(lineConfig.branch),
-        tags: ["Bot Active"],
-        updatedBy: "Resume Bot Command"
-      });
-
-      const resumeBody = "تم تشغيل البوت مرة أخرى ✅\\n\\n------------------------------\\n\\nBot has been resumed ✅";
-      await sendWhatsAppMessage(from, resumeBody, incomingPhoneNumberId);
-      addInboxMessage(from, "bot", resumeBody, "Bot Active", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Resumed" });
-      return res.sendStatus(200);
-    }
-
-    if (!isOptInMessage && !isOptOutMessage && !isReminderDeclineMessage) {
-      const pausedStatus = await getBotPausedStatusForConversation(from, incomingPhoneNumberId);
-''')
-
-              p.write_text(s)
-          PY
           node --check server.js
+
+      - name: Apply minimal V60 version marker
+        run: |
+          set -e
           python3 - <<'PY'
-          import json
-          p='package.json'
-          data=json.load(open(p))
-          data['scripts']['start']='node --check server.js && node server.js'
-          open(p,'w').write(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
-          PY
+from pathlib import Path
+p = Path('server.js')
+s = p.read_text()
+old = 'const BOT_VERSION = "iconic-team-inbox-v31-5-8-59-direct-booking-intent-abu-dhabi-consultation-and-bot-pause";'
+new = 'const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-flow-customer-name-staff-notifications-and-resume-bot";'
+if new in s:
+    print('V60 marker already exists')
+elif old in s:
+    s = s.replace(old, new, 1)
+    p.write_text(s)
+    print('V60 marker applied')
+else:
+    raise SystemExit('BOT_VERSION marker not found')
+PY
+          node --check server.js
+
+      - name: Commit direct V60 marker
+        run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js package.json
-          git commit -m "Apply V60 directly to server.js" || echo "No V60 direct changes"
+          git add server.js
+          git commit -m "Apply V60 marker directly" || echo "No changes to commit"
           git push
