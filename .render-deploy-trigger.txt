@@ -1,4 +1,4 @@
 Render deploy trigger
-Timestamp: 2026-05-10T17:18:00Z
-Version: V60 direct server update
-Commit: bad5209c6f28678b9da92b0f5c8a1b2e8126bec9
+Timestamp: 2026-05-10T17:48:00Z
+Version: V60.1 staff notify routing fix
+Commit: 8dcb58a93794d736d22f1ab6557555fe1198061b
