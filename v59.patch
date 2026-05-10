@@ -1,0 +1,546 @@
+--- server.js
++++ server.js
+@@ -66,7 +66,7 @@
+   }
+ });
+ 
+-const BOT_VERSION = "iconic-team-inbox-v31-5-8-58-consultation-flow-dubai-routing";
++const BOT_VERSION = "iconic-team-inbox-v31-5-8-59-direct-booking-intent-abu-dhabi-consultation-and-bot-pause";
+ 
+ const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+ const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+@@ -163,6 +163,16 @@
+   process.env.ICONIC_CONSULTATION_FLOW_CTA ||
+   "Book Consultation"
+ ).toString().slice(0, 30);
++const ICONIC_CONSULTATION_FLOW_ID_ABU_DHABI = (
++  process.env.ICONIC_CONSULTATION_FLOW_ID_ABU_DHABI ||
++  process.env.ABU_DHABI_CONSULTATION_FLOW_ID ||
++  "1648749433033956"
++).toString().trim();
++const ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_ABU_DHABI = (
++  process.env.ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_ABU_DHABI ||
++  process.env.ABU_DHABI_CONSULTATION_FLOW_TOKEN_PREFIX ||
++  "iconic_consultation_flow_abudhabi"
++).toString().trim();
+ 
+ // V31.5.8.52 - Dedicated Service Booking Flow:
+ // Safe independent Flow ID for existing clients who need Service / Fitting / Follow-up / Adjustment appointments.
+@@ -281,9 +291,9 @@
+     return {
+       branch: lineConfig.branch,
+       phoneNumberId: ABU_DHABI_PHONE_NUMBER_ID,
+-      flowId: ICONIC_BOOKING_FLOW_ID_ABU_DHABI,
+-      tokenPrefix: ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI,
+-      envName: "ICONIC_BOOKING_FLOW_ID_ABU_DHABI",
++      flowId: ICONIC_CONSULTATION_FLOW_ID_ABU_DHABI || ICONIC_BOOKING_FLOW_ID_ABU_DHABI,
++      tokenPrefix: ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_ABU_DHABI || ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI,
++      envName: ICONIC_CONSULTATION_FLOW_ID_ABU_DHABI ? "ICONIC_CONSULTATION_FLOW_ID_ABU_DHABI" : "ICONIC_BOOKING_FLOW_ID_ABU_DHABI",
+       requestType: "Consultation Booking"
+     };
+   }
+@@ -586,6 +596,111 @@
+       item.status = status;
+     }
+   }
++}
++
++function isBotPausedStatus(status = "") {
++  const value = compactText(status);
++
++  return value === "human reply" ||
++    value === "talk to team" ||
++    value === "bot paused" ||
++    value === "human mode" ||
++    value.includes("bot paused") ||
++    value.includes("human mode");
++}
++
++async function getSavedConversationStatusForPhone(phone, phoneNumberId = "") {
++  try {
++    const cleanPhone = (phone || "").toString().trim();
++    const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
++
++    if (!cleanPhone) {
++      return "";
++    }
++
++    const loaded = await loadMessagesFromGoogleSheet();
++    const states = Array.isArray(loaded.conversationStates) ? loaded.conversationStates : [];
++
++    const exactState = states.find((state) =>
++      (state.phone || "").toString().trim() === cleanPhone &&
++      (!cleanPhoneNumberId || normalizePhoneNumberId(state.phoneNumberId || "") === cleanPhoneNumberId)
++    );
++
++    const fallbackState = exactState || states.find((state) =>
++      (state.phone || "").toString().trim() === cleanPhone
++    );
++
++    return (fallbackState?.conversation_status || "").toString().trim();
++  } catch (error) {
++    console.log("Saved conversation status lookup failed:");
++    console.log(error);
++    return "";
++  }
++}
++
++async function getBotPausedStatusForConversation(phone, phoneNumberId = "") {
++  const memoryStatus = conversationStatus[phone] || "";
++
++  if (isBotPausedStatus(memoryStatus)) {
++    return memoryStatus;
++  }
++
++  const savedStatus = await getSavedConversationStatusForPhone(phone, phoneNumberId);
++
++  if (isBotPausedStatus(savedStatus)) {
++    conversationStatus[phone] = savedStatus;
++    return savedStatus;
++  }
++
++  return "";
++}
++
++function buildTeamHandoffBody(customerName = "") {
++  const cleanName = cleanCustomerName(customerName);
++  const arabicName = cleanName ? ` ${cleanName}` : "";
++  const englishName = cleanName ? ` ${cleanName}` : "";
++
++  return `تمام${arabicName} 👌\n\n` +
++    "تم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.\n\n" +
++    "------------------------------\n\n" +
++    `Sure${englishName} 👌\n\n` +
++    "Your conversation has been forwarded to our team, and one of our specialists will assist you shortly.";
++}
++
++function buildDirectBookingChoiceBody(customerName = "") {
++  const cleanName = cleanCustomerName(customerName);
++  const arabicName = cleanName ? ` ${cleanName}` : "";
++  const englishName = cleanName ? ` ${cleanName}` : "";
++
++  return `مرحبا${arabicName} 👋\n\n` +
++    "أكيد، اختر نوع الحجز المناسب لك:\n\n" +
++    "إذا كنت عميل حالي وتريد خدمة / متابعة / تركيب / تعديل، اختر سيرفس.\n\n" +
++    "إذا كنت عميل جديد وتريد معرفة الحل الأنسب، اختر استشارة.\n\n" +
++    "------------------------------\n\n" +
++    `Hello${englishName} 👋\n\n` +
++    "Sure, please choose the right booking type:\n\n" +
++    "If you are an existing client and need service / follow-up / fitting / adjustment, choose Service.\n\n" +
++    "If you are a new client and want to know the best solution, choose Consultation.";
++}
++
++function getDirectBookingChoiceButtons() {
++  return [
++    { id: "book_service_flow", title: "Book Service | سيرفس" },
++    { id: "consult_menu", title: "Consult | استشارة" }
++  ];
++}
++
++function buildPausedCustomerMessageBody(message, profileName = "", originalText = "") {
++  if (message?.type === "image") {
++    return buildIncomingCustomerImageBody(message);
++  }
++
++  const actionText = getSmartCustomerActionText(message, originalText || "");
++
++  return buildCustomerActionBody(
++    profileName,
++    actionText || originalText || "Customer message received while bot is paused"
++  );
+ }
+ 
+ function getDubaiHour() {
+@@ -1347,17 +1462,15 @@
+               }
+             : (isAbuDhabiLine(finalPhoneNumberId)
+                 ? {
+-                    screen: "BOOKING_DETAILS",
++                    screen: "CONSULTATION_BOOKING",
+                     data: {
+-                      default_branch: options.branch || lineConfig.branch,
++                      default_branch: "Abu Dhabi",
++                      selected_branch: "Abu Dhabi",
+                       customer_name: options.customerName || "",
+                       request_type: bookingFlowConfig.requestType,
+                       flow_type: "consultation_booking",
+-                      default_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
+-                      preferred_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
+                       today_available: false,
+-                      today_unavailable_message: "Today is not available for Abu Dhabi online booking. Please choose Tomorrow or This Week.",
+-                      today_time_options: []
++                      today_unavailable_message: "Today is not available for Abu Dhabi consultation booking. Please choose Tomorrow or Day After Tomorrow."
+                     }
+                   }
+                 : {
+@@ -1730,6 +1843,7 @@
+   const isServiceFlow = flowToken.includes(ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX) ||
+     compactText(data.request_type || data.flow_type || "").includes("service");
+   const isConsultationFlow = flowToken.includes(ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_DUBAI) ||
++    flowToken.includes(ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_ABU_DHABI) ||
+     compactText(data.request_type || data.flow_type || "").includes("consultation");
+   const preferredDay = normalizeFlowChoiceText(
+     data.preferred_day ||
+@@ -2083,25 +2197,102 @@
+ function isBookServiceFlowText(text) {
+   const value = compactText(text);
+ 
++  if (!value) return false;
++
+   return value === "book_service_flow" ||
+     value === "book service | سيرفس" ||
+     value === "book service" ||
+     value === "service booking" ||
++    value === "service" ||
++    value === "سيرفس" ||
++    value === "خدمة" ||
++    value === "خدمه" ||
+     value.includes("book service") ||
+-    value.includes("حجز سيرفس");
++    value.includes("service appointment") ||
++    value.includes("حجز سيرفس") ||
++    value.includes("موعد سيرفس") ||
++    value.includes("موعد خدمة") ||
++    value.includes("موعد خدمه") ||
++    value.includes("متابعة") ||
++    value.includes("تركيب") ||
++    value.includes("تعديل") ||
++    value.includes("follow up") ||
++    value.includes("follow-up") ||
++    value.includes("fitting") ||
++    value.includes("adjustment");
+ }
+ 
+ function isConsultationFlowText(text) {
+   const value = compactText(text);
++
++  if (!value) return false;
+ 
+   return value === "consult_menu" ||
+     value === "consult | استشارة" ||
+     value === "consult" ||
+     value === "consultation" ||
+     value === "استشارة" ||
++    value === "استشاره" ||
+     value.includes("consult |") ||
+     value.includes("book consult") ||
+-    value.includes("حجز استشارة");
++    value.includes("book consultation") ||
++    value.includes("i want consultation") ||
++    value.includes("حجز استشارة") ||
++    value.includes("حجز استشاره") ||
++    value.includes("بدي استشارة") ||
++    value.includes("بدي استشاره") ||
++    value.includes("اريد استشارة") ||
++    value.includes("أريد استشارة");
++}
++
++function isDirectBookingChoiceText(text) {
++  const value = compactText(text);
++
++  if (!value) return false;
++
++  if (isBookServiceFlowText(value) || isConsultationFlowText(value) || isTalkToTeamText(value)) {
++    return false;
++  }
++
++  return value === "booking_menu" ||
++    value === "booking | حجز" ||
++    value === "booking" ||
++    value === "book" ||
++    value === "appointment" ||
++    value === "حجز" ||
++    value === "موعد" ||
++    value.includes("حجز موعد") ||
++    value.includes("بدي احجز") ||
++    value.includes("اريد حجز") ||
++    value.includes("أريد حجز") ||
++    value.includes("احجز موعد") ||
++    value.includes("book appointment") ||
++    value.includes("i want to book");
++}
++
++function isTalkToTeamText(text) {
++  const value = compactText(text);
++
++  if (!value) return false;
++
++  return value === "talk_to_team" ||
++    value === "team | فريقنا" ||
++    value === "help | ساعدني" ||
++    value === "help_team" ||
++    value === "team" ||
++    value === "help" ||
++    value === "human" ||
++    value === "support" ||
++    value === "فريقنا" ||
++    value === "ساعدني" ||
++    value === "موظف" ||
++    value.includes("talk to team") ||
++    value.includes("تكلم مع الفريق") ||
++    value.includes("تواصل مع الفريق") ||
++    value.includes("احكي مع الفريق") ||
++    value.includes("فريق") ||
++    value.includes("موظف") ||
++    value.includes("human support");
+ }
+ 
+ function isBookingMenuText(text) {
+@@ -3682,6 +3873,15 @@
+     await sendWhatsAppMessage(to, body, phoneNumberId);
+     setConversationStatus(to, "Human Reply");
+     addInboxMessage(to, "staff", body, "Human Reply", phoneNumberId, { messageType: "Human Reply" });
++    await saveConversationStateToGoogleSheetFromServer({
++      phone: to,
++      phoneNumberId,
++      branch: getLineConfig(phoneNumberId).branch,
++      status: "Human Reply",
++      assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
++      tags: ["Human Support", "Bot Paused"],
++      updatedBy: "Team Inbox Human Reply"
++    });
+ 
+     return res.json({ ok: true });
+   } catch (error) {
+@@ -3769,6 +3969,15 @@
+       phoneNumberId,
+       { messageType: "Human Image Reply" }
+     );
++    await saveConversationStateToGoogleSheetFromServer({
++      phone: to,
++      phoneNumberId,
++      branch: getLineConfig(phoneNumberId).branch,
++      status: "Human Reply",
++      assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
++      tags: ["Human Support", "Bot Paused"],
++      updatedBy: "Team Inbox Human Image Reply"
++    });
+ 
+     return res.json({ ok: true, mediaId: sendResult.mediaId, result: sendResult.result });
+   } catch (error) {
+@@ -15444,10 +15653,39 @@
+     const originalText = getIncomingMessageText(message);
+     const text = normalizeText(originalText);
+     const optEventDate = getDubaiTimestamp();
++    const isOptInMessage = isOptInText(text);
++    const isOptOutMessage = isOptOutText(text);
++    const isReminderDeclineMessage = isReminderOptInDeclineText(text);
++
++    if (!isOptInMessage && !isOptOutMessage && !isReminderDeclineMessage) {
++      const pausedStatus = await getBotPausedStatusForConversation(from, incomingPhoneNumberId);
++
++      if (pausedStatus) {
++        const pausedCustomerBody = buildPausedCustomerMessageBody(message, profileName, originalText || text);
++
++        if (pausedCustomerBody && pausedCustomerBody.toString().trim()) {
++          addInboxMessage(
++            from,
++            "customer",
++            pausedCustomerBody,
++            pausedStatus,
++            incomingPhoneNumberId,
++            {
++              customerName: profileName,
++              messageType: "Customer Message - Bot Paused"
++            }
++          );
++        }
++
++        console.log("Bot paused for customer:", from, pausedStatus);
++        return res.sendStatus(200);
++      }
++    }
++
+     const autoIntentWorkflow = (
+-      isOptInText(text) ||
+-      isOptOutText(text) ||
+-      isReminderOptInDeclineText(text)
++      isOptInMessage ||
++      isOptOutMessage ||
++      isReminderDeclineMessage
+     ) ? null : getAutoIntentWorkflow(originalText || text);
+ 
+     if (autoIntentWorkflow && autoIntentWorkflow.status) {
+@@ -15463,7 +15701,7 @@
+       });
+     }
+ 
+-    if (isOptInText(text)) {
++    if (isOptInMessage) {
+       setConversationStatus(from, "Opted In");
+ 
+       addInboxMessage(
+@@ -15502,7 +15740,7 @@
+       return res.sendStatus(200);
+     }
+ 
+-    if (isOptOutText(text)) {
++    if (isOptOutMessage) {
+       setConversationStatus(from, "Opted Out");
+ 
+       addInboxMessage(
+@@ -15538,7 +15776,7 @@
+     }
+ 
+ 
+-    if (isReminderOptInDeclineText(text)) {
++    if (isReminderDeclineMessage) {
+       setConversationStatus(from, "Reminder Declined");
+ 
+       addInboxMessage(
+@@ -15584,6 +15822,50 @@
+     });
+ 
+     if (whatsappFlowHandled) {
++      return res.sendStatus(200);
++    }
++
++    if (isTalkToTeamText(originalText || text)) {
++      const teamActionText = getSmartCustomerActionText(message, originalText || text) || "Team | فريقنا";
++      const teamCustomerBody = buildCustomerActionBody(profileName, teamActionText);
++
++      addInboxMessage(
++        from,
++        "customer",
++        teamCustomerBody,
++        "Talk to Team",
++        incomingPhoneNumberId,
++        {
++          customerName: profileName,
++          messageType: "Customer Team Handoff Request"
++        }
++      );
++
++      setConversationStatus(from, "Talk to Team");
++      await saveConversationStateToGoogleSheetFromServer({
++        phone: from,
++        phoneNumberId: incomingPhoneNumberId,
++        branch: lineConfig.branch,
++        status: "Talk to Team",
++        assignee: getBranchTeamAssignee(lineConfig.branch),
++        tags: ["Human Support", "Bot Paused"],
++        updatedBy: "Customer Requested Team"
++      });
++
++      const teamHandoffBody = buildTeamHandoffBody(profileName);
++      await sendWhatsAppMessage(from, teamHandoffBody, incomingPhoneNumberId);
++      addInboxMessage(
++        from,
++        "bot",
++        teamHandoffBody,
++        "Talk to Team",
++        incomingPhoneNumberId,
++        {
++          customerName: profileName,
++          messageType: "Team Handoff Final Bot Reply"
++        }
++      );
++
+       return res.sendStatus(200);
+     }
+ 
+@@ -15707,6 +15989,52 @@
+         await sendWhatsAppMessage(from, fallbackConsultationText, incomingPhoneNumberId);
+         addInboxMessage(from, "bot", fallbackConsultationText, "Consultation Flow Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Consultation Booking Flow Fallback" });
+       }
++
++      return res.sendStatus(200);
++    }
++
++    if (isDirectBookingChoiceText(originalText || text)) {
++      const bookingActionText = getSmartCustomerActionText(message, originalText || text) || "Booking | حجز";
++      const bookingCustomerBody = buildCustomerActionBody(profileName, bookingActionText);
++
++      addInboxMessage(
++        from,
++        "customer",
++        bookingCustomerBody,
++        "Booking Menu",
++        incomingPhoneNumberId,
++        {
++          customerName: profileName,
++          messageType: "Customer Direct Booking Choice Request"
++        }
++      );
++
++      setConversationStatus(from, "Booking Menu");
++      await saveConversationStateToGoogleSheetFromServer({
++        phone: from,
++        phoneNumberId: incomingPhoneNumberId,
++        branch: lineConfig.branch,
++        status: "Booking Menu",
++        assignee: getBranchTeamAssignee(lineConfig.branch),
++        tags: ["Booking", "Need Booking Type"],
++        updatedBy: "Direct Booking Intent"
++      });
++
++      const directBookingBody = buildDirectBookingChoiceBody(profileName);
++      const directBookingButtons = getDirectBookingChoiceButtons();
++
++      await sendWhatsAppButtonMessage(from, directBookingBody, directBookingButtons, incomingPhoneNumberId);
++      addInboxMessage(
++        from,
++        "bot",
++        formatButtonLog(directBookingBody, directBookingButtons),
++        "Booking Menu",
++        incomingPhoneNumberId,
++        {
++          customerName: profileName,
++          messageType: "Direct Booking Choice Reply"
++        }
++      );
+ 
+       return res.sendStatus(200);
+     }
+@@ -16002,7 +16330,7 @@
+         `${BUSINESS_NAME_SPACED} ✨\n\n` +
+         "Please choose the booking type:";
+ 
+-      replyButtons = getBookingSubMenuButtons();
++      replyButtons = getDirectBookingChoiceButtons();
+     }
+ 
+     /* V31.5.8.52 — Service booking submenu */
+@@ -16156,29 +16484,20 @@
+     }
+ 
+     /* 6 — التحدث مع موظف */
+-    else if (
+-      text === "6" ||
+-      text === "٦" ||
+-      text.includes("موظف") ||
+-      text.includes("فريق") ||
+-      text.includes("support") ||
+-      text.includes("team") ||
+-      text.includes("human")
+-    ) {
++    else if (isTalkToTeamText(originalText || text)) {
+       setConversationStatus(from, "Talk to Team");
+-
+-      replyText =
+-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
+-        `تم تحويل محادثتك إلى فريق فرع ${branchNameAr} ✅\n\n` +
+-        "سيتم الرد عليك في أقرب وقت ممكن.\n\n" +
+-        "يمكنك إرسال أي ملاحظة إضافية هنا.\n\n" +
+-        "------------------------------\n\n" +
+-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
+-        `Your conversation has been forwarded to our ${lineConfig.branch} team ✅\n\n` +
+-        "They will reply as soon as possible.\n\n" +
+-        "You may send any additional note here.";
+-
+-      replyButtons = getAfterCallButtons();
++      await saveConversationStateToGoogleSheetFromServer({
++        phone: from,
++        phoneNumberId: incomingPhoneNumberId,
++        branch: lineConfig.branch,
++        status: "Talk to Team",
++        assignee: getBranchTeamAssignee(lineConfig.branch),
++        tags: ["Human Support", "Bot Paused"],
++        updatedBy: "Customer Requested Team"
++      });
++
++      replyText = buildTeamHandoffBody(profileName);
++      replyButtons = null;
+     }
+ 
+     /* القائمة الرئيسية */
