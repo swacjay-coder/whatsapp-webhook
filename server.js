@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-1-bilingual-flow-confirmation-header-all-button-replies";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-2-clean-customer-name-and-new-header-all-replies";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/ChatGPT-Image-May-8-2026-12_12_30-AM.jpg").toString().trim();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -715,15 +715,13 @@ function buildTeamHandoffBody(customerName = "") {
 
 function buildDirectBookingChoiceBody(customerName = "") {
   const cleanName = cleanCustomerName(customerName);
-  const arabicName = cleanName ? ` ${cleanName}` : "";
-  const englishName = cleanName ? ` ${cleanName}` : "";
+  const greeting = cleanName ? `Hello ${cleanName} 👋` : "Hello 👋";
 
-  return `مرحبا${arabicName} 👋\n\n` +
+  return `${greeting}\n\n` +
     "أكيد، اختر نوع الحجز المناسب لك:\n\n" +
     "إذا كنت عميل حالي وتريد خدمة / متابعة / تركيب / تعديل، اختر سيرفس.\n\n" +
     "إذا كنت عميل جديد وتريد معرفة الحل الأنسب، اختر استشارة.\n\n" +
     "------------------------------\n\n" +
-    `Hello${englishName} 👋\n\n` +
     "Sure, please choose the right booking type:\n\n" +
     "If you are an existing client and need service / follow-up / fitting / adjustment, choose Service.\n\n" +
     "If you are a new client and want to know the best solution, choose Consultation.";
@@ -783,10 +781,10 @@ function buildPersonalGreeting(customerName = "") {
   const cleanName = cleanCustomerName(customerName);
 
   if (!cleanName) {
-    return "مرحبا 👋\nHello 👋";
+    return "Hello 👋";
   }
 
-  return `مرحبا ${cleanName} 👋\nHello ${cleanName} 👋`;
+  return `Hello ${cleanName} 👋`;
 }
 
 function getArabicBranchName(branch) {
@@ -1437,35 +1435,30 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
     Date.now().toString()
   ].filter(Boolean).join("_");
 
+  const customerNameForFlow = cleanCustomerName(options.customerName || "");
+  const flowGreeting = customerNameForFlow ? `Hello ${customerNameForFlow} 👋` : "Hello 👋";
+
   const flowBody = (isServiceBookingFlow
     ? [
-        `${BUSINESS_NAME_SPACED} ✨`,
+        flowGreeting,
         "",
         "احجز موعد السيرفس خلال ثواني من داخل واتساب.",
-        "",
         "اختر الفرع، اليوم، الوقت، واسم الموظف المفضل إن وجد. الفريق سيؤكد الموعد النهائي بعد مراجعة التوفر.",
         "",
         "------------------------------",
         "",
-        `${BUSINESS_NAME_SPACED} ✨`,
-        "",
         "Book your service appointment in seconds inside WhatsApp.",
-        "",
         "Choose the branch, preferred day, preferred time, and preferred team member if any. Our team will confirm the final appointment after checking availability."
       ]
     : [
-        `${BUSINESS_NAME_SPACED} ✨`,
+        flowGreeting,
         "",
         "احجز استشارتك خلال ثواني من داخل واتساب.",
-        "",
         "اختر اليوم والوقت المناسب، وفريقنا سيؤكد الموعد النهائي بعد مراجعة التوفر.",
         "",
         "------------------------------",
         "",
-        `${BUSINESS_NAME_SPACED} ✨`,
-        "",
         "Book your consultation in seconds inside WhatsApp.",
-        "",
         "Choose your preferred day and time. Our team will confirm the final appointment after checking availability."
       ]
   ).join(String.fromCharCode(10));
@@ -1477,10 +1470,15 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
     type: "interactive",
     interactive: {
       type: "flow",
-      header: {
-        type: "text",
-        text: selectedFlowHeader
-      },
+      header: BOT_HEADER_IMAGE_URL
+        ? {
+            type: "image",
+            image: { link: BOT_HEADER_IMAGE_URL }
+          }
+        : {
+            type: "text",
+            text: selectedFlowHeader
+          },
       body: {
         text: flowBody
       },
@@ -2109,7 +2107,7 @@ function buildWhatsAppFlowConfirmationBody(flowData = {}) {
   return [
     `${BUSINESS_NAME_SPACED} ✨`,
     "",
-    `Hello ${customerName} 👋`,
+    `Thank you ${customerName}`,
     "",
     "تم استلام طلب الحجز ✅",
     "سيقوم فريقنا بمراجعة التوفر وتأكيد الموعد النهائي قريباً.",
@@ -16678,20 +16676,18 @@ No problem. We will not send a reminder for this appointment.`;
 
       replyText =
         `${personalGreeting}\n\n` +
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "أهلًا بك في Iconic Hair Care.\n\n" +
         "النتيجة الطبيعية تبدأ من اختيار صحيح.\n" +
         "يمكنك الآن حجز استشارة، معرفة خدماتنا، أو فتح موقع الفرع مباشرة.\n\n" +
         "اختر ما يناسبك:\n\n" +
         "------------------------------\n\n" +
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Welcome to Iconic Hair Care.\n\n" +
         "A natural result starts with the right choice.\n" +
         "You can book a consultation, explore our services, or open the branch location directly.\n\n" +
         "Please choose:";
 
       replyButtons = getMainMenuButtons();
-      replyOptions = { headerImageUrl: MAIN_MENU_HEADER_IMAGE_URL };
+      replyOptions = { headerImageUrl: BOT_HEADER_IMAGE_URL };
     }
 
     /* إرسال الرد للعميل */
