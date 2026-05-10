@@ -1,4 +1,2 @@
-Render deploy trigger
-Timestamp: 2026-05-10T19:46:00Z
-Version: V60.2.1 bilingual flow confirmation and header on all button replies
-Commit: 55dfad16bbb787486bff73c6245f525bbbbdbeb1
+deploy v60.2.2
+commit 9f4cb00ba642606ecc1a24aca75144da5b1407b2
