@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-53-service-flow-screen-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-54-service-flow-dynamic-time-abu-routing";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -154,10 +154,20 @@ const ICONIC_SERVICE_BOOKING_FLOW_ID = (
   process.env.SERVICE_BOOKING_FLOW_ID ||
   "1707428933768266"
 ).toString().trim();
+const ICONIC_SERVICE_BOOKING_FLOW_ID_ABU_DHABI = (
+  process.env.ICONIC_SERVICE_BOOKING_FLOW_ID_ABU_DHABI ||
+  process.env.ABU_DHABI_SERVICE_BOOKING_FLOW_ID ||
+  ""
+).toString().trim();
 const ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX = (
   process.env.ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX ||
   process.env.SERVICE_BOOKING_FLOW_TOKEN_PREFIX ||
   "iconic_service_booking_flow"
+).toString().trim();
+const ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI = (
+  process.env.ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI ||
+  process.env.ABU_DHABI_SERVICE_BOOKING_FLOW_TOKEN_PREFIX ||
+  "iconic_service_booking_flow_abudhabi"
 ).toString().trim();
 const ICONIC_SERVICE_BOOKING_FLOW_CTA = (process.env.ICONIC_SERVICE_BOOKING_FLOW_CTA || "Book Service").toString().slice(0, 30);
 
@@ -273,7 +283,19 @@ function getBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
 
 function getServiceBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const isAbuDhabi = isAbuDhabiLine(finalPhoneNumberId, displayPhoneNumber);
   const lineConfig = getLineConfig(finalPhoneNumberId, displayPhoneNumber);
+
+  if (isAbuDhabi) {
+    return {
+      branch: lineConfig.branch,
+      phoneNumberId: ABU_DHABI_PHONE_NUMBER_ID,
+      flowId: ICONIC_SERVICE_BOOKING_FLOW_ID_ABU_DHABI || ICONIC_SERVICE_BOOKING_FLOW_ID,
+      tokenPrefix: ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI,
+      envName: ICONIC_SERVICE_BOOKING_FLOW_ID_ABU_DHABI ? "ICONIC_SERVICE_BOOKING_FLOW_ID_ABU_DHABI" : "ICONIC_SERVICE_BOOKING_FLOW_ID",
+      requestType: "Service Appointment"
+    };
+  }
 
   return {
     branch: lineConfig.branch,
@@ -1166,6 +1188,7 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
             ? {
                 screen: "SERVICE_BOOKING",
                 data: {
+                  ...getServiceBookingFlowData(options.branch || lineConfig.branch, "Today"),
                   default_branch: options.branch || lineConfig.branch,
                   customer_name: options.customerName || "",
                   request_type: "Service Appointment",
@@ -1398,6 +1421,8 @@ function getServiceBookingTeamMemberOptionsForFlow(branch = "Dubai") {
     "Omar",
     "Emad",
     "Ani",
+    "Hamouda",
+    "Hudhaifa",
     "Any Available"
   ];
   const abuDhabiTeam = [
@@ -1428,19 +1453,23 @@ function getServiceBookingFlowData(branch = "Dubai", preferredDay = "Tomorrow") 
   const normalizedBranch = normalizeFlowBranch(branch, "Dubai");
   const normalizedPreferredDay = normalizeFlowDay(preferredDay || "Tomorrow");
 
+  const preferredTimeOptions = getBookingTimeOptionsForFlow(normalizedPreferredDay);
+  const todayTimeOptions = getBookingTimeOptionsForFlow("Today");
+
   return {
     default_branch: normalizedBranch,
     selected_branch: normalizedBranch,
     selected_day: normalizedPreferredDay,
     preferred_day: normalizedPreferredDay,
-    preferred_time_options: getBookingTimeOptionsForFlow(normalizedPreferredDay),
+    preferred_time_options: preferredTimeOptions,
+    today_time_options: todayTimeOptions,
     team_member_options: getServiceBookingTeamMemberOptionsForFlow(normalizedBranch),
     service_type_options: getServiceTypeOptionsForFlow(),
     request_type: "Service Appointment",
-    today_available: isTodayAvailableForFlow(),
-    today_unavailable_message: getBookingTimeOptionsForFlow("Today").length > 0
+    today_available: todayTimeOptions.length > 0,
+    today_unavailable_message: todayTimeOptions.length > 0
       ? ""
-      : "Today is no longer available, please choose Tomorrow or This Week."
+      : "Today is no longer available, please choose Tomorrow or Day After Tomorrow."
   };
 }
 
@@ -1537,8 +1566,8 @@ function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
 
     return {
       version: "3.0",
-      screen: "BOOKING_DETAILS",
-      data: getServiceBookingFlowData(selectedBranch, preferredDay || "Tomorrow")
+      screen: "SERVICE_BOOKING",
+      data: getServiceBookingFlowData(selectedBranch, preferredDay || "Today")
     };
   }
 
@@ -1607,6 +1636,17 @@ function normalizeFlowBranch(value, fallbackBranch = "Dubai") {
 
 function normalizeFlowDay(value) {
   const cleanValue = compactText(value);
+
+  if (
+    cleanValue.includes("day_after_tomorrow") ||
+    cleanValue.includes("day after tomorrow") ||
+    cleanValue.includes("بعد غد") ||
+    cleanValue.includes("بعد غداً") ||
+    cleanValue.includes("بعد غدا") ||
+    cleanValue.includes("بعد بكرا")
+  ) {
+    return "Day After Tomorrow";
+  }
 
   if (cleanValue.includes("next")) return "Next Week";
   if (cleanValue.includes("week") || cleanValue.includes("أسبوع") || cleanValue.includes("اسبوع")) return "This Week";
