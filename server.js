@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-5-fix-booking-consult-scope-services-how-it-works";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-6-fix-services-button-id-and-team-pause-note";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 
@@ -708,8 +708,12 @@ function buildTeamHandoffBody(customerName = "") {
 
   return `${intro}\n\n` +
     "تم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.\n\n" +
+    "ملاحظة: تم إيقاف الردود التلقائية مؤقتاً بناءً على طلبك للتحدث مع الفريق.\n" +
+    "لإعادة تفعيل الردود التلقائية لاحقاً، اكتب: تشغيل البوت\n\n" +
     "------------------------------\n\n" +
-    "Your conversation has been forwarded to our team, and one of our specialists will assist you shortly.";
+    "Your conversation has been forwarded to our team, and one of our specialists will assist you shortly.\n\n" +
+    "Note: Automatic replies have been paused because you asked to speak with our team.\n" +
+    "To reactivate the automatic replies later, type: resume bot";
 }
 
 function buildDirectBookingChoiceBody(customerName = "") {
@@ -15835,15 +15839,18 @@ app.post("/webhook", async (req, res) => {
 
       // V60.2.4 Services / Results / How it works premium route
       const iconicServicesRawText = (
+        message?.interactive?.button_reply?.id ||
         message?.interactive?.button_reply?.title ||
+        message?.interactive?.list_reply?.id ||
         message?.interactive?.list_reply?.title ||
+        message?.button?.payload ||
         message?.button?.text ||
         message?.text?.body ||
         ""
       ).toString().trim();
       const iconicServicesText = normalizeText(iconicServicesRawText);
 
-      if (["services | خدماتنا", "services", "خدماتنا"].includes(iconicServicesText)) {
+      if (["services_menu", "services | خدماتنا", "services", "خدماتنا"].includes(iconicServicesText)) {
         await sendWhatsAppButtonMessage(from, buildServicesMenuBody(profileName), [
           { id: "results", title: "Results | نتائج" },
           { id: "location", title: "Location | موقعنا" },
@@ -15853,7 +15860,17 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      if (["how it works | كيف يعمل", "how it works", "كيف يعمل"].includes(iconicServicesText)) {
+      if (["results", "results | نتائج", "results", "نتائج"].includes(iconicServicesText)) {
+        await sendWhatsAppButtonMessage(from, buildResultsFollowupBody(profileName), [
+          { id: "how_it_works", title: "How it works | كيف يعمل" },
+          { id: "booking_menu", title: "Booking | حجز" },
+          { id: "talk_to_team", title: "Team | فريقنا" }
+        ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
+        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Follow-up", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Follow-up" });
+        return res.sendStatus(200);
+      }
+
+      if (["how_it_works", "how it works | كيف يعمل", "how it works", "كيف يعمل"].includes(iconicServicesText)) {
         await sendWhatsAppVideoByLink(from, HOW_IT_WORKS_VIDEO_URL, "", incomingPhoneNumberId);
         await sendWhatsAppButtonMessage(from, buildHowItWorksBody(profileName), [
           { id: "booking_menu", title: "Booking | حجز" },
