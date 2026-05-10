@@ -1,1 +1,1 @@
-inspect v60 targets
+inspect v60 targets again
