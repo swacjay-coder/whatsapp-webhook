@@ -366,6 +366,51 @@ function getStaffNotificationNumber(phoneNumberId, displayPhoneNumber = "") {
   return getStaffNotificationRouting(phoneNumberId, displayPhoneNumber).number;
 }
 
+function getStaffNotificationNumbers(phoneNumberId, displayPhoneNumber = "") {
+  const routing = getStaffNotificationRouting(phoneNumberId, displayPhoneNumber);
+  const numbers = (routing.number || "")
+    .toString()
+    .split(",")
+    .map((item) => normalizePhoneDigits(item))
+    .filter(Boolean);
+  return { routing, numbers: [...new Set(numbers)] };
+}
+
+function buildStaffBookingNotificationBody(flowData = {}, customerPhone = "") {
+  return [
+    "New booking request received ✅",
+    "",
+    `Branch: ${flowData.branch || ""}`,
+    `Customer: ${flowData.customerName || ""}`,
+    `Phone: ${customerPhone || flowData.phone || ""}`,
+    `Type: ${flowData.serviceInterest || flowData.requestType || "WhatsApp Flow"}`,
+    `Day: ${flowData.preferredDay || ""}`,
+    `Time: ${flowData.preferredTime || ""}`,
+    flowData.consultationType ? `Consultation: ${flowData.consultationType}` : "",
+    flowData.serviceType ? `Service: ${flowData.serviceType}` : "",
+    flowData.teamMember ? `Team member: ${flowData.teamMember}` : "",
+    flowData.notes ? `Notes: ${flowData.notes}` : "Notes: ",
+    "",
+    "Please check Team Inbox."
+  ].filter((line) => line !== "").join("\n");
+}
+
+async function notifyStaffAboutFlowBooking(flowData = {}, customerPhone = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, displayPhoneNumber = "") {
+  const { routing, numbers } = getStaffNotificationNumbers(phoneNumberId, displayPhoneNumber);
+  if (!numbers.length) {
+    console.log("[Staff Booking Notify] skipped: no staff number configured", routing.envName);
+    return { ok: false, skipped: true, reason: "no_staff_number" };
+  }
+
+  const body = buildStaffBookingNotificationBody(flowData, customerPhone);
+  const results = [];
+  for (const staffNumber of numbers) {
+    const result = await sendStaffNotificationTextMessage(staffNumber, body, phoneNumberId, routing);
+    results.push({ staffNumber, ...result });
+  }
+  return { ok: results.every((item) => item.ok), results };
+}
+
 async function sendStaffNotificationTextMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID, routing = {}) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
@@ -2011,6 +2056,7 @@ function getWhatsAppFlowBookingData(message, lineConfig = {}) {
   const consultationTypeValue = findFlowResponseValue(payload, ["consultation_type", "consultation", "consult type", "استشارة"]);
   const teamMemberValue = findFlowResponseValue(payload, ["team_member", "team member", "staff", "employee", "موظف", "فريق"]);
   const notesValue = findFlowResponseValue(payload, ["notes", "note", "preferred_exact_time", "ملاحظ"]);
+  const customerNameValue = findFlowResponseValue(payload, ["customer_name", "customerName", "name", "customer", "اسم العميل", "الاسم"]);
 
   const branch = normalizeFlowBranch(branchValue, lineConfig.branch || "Dubai");
   const normalizedServiceType = normalizeFlowChoiceText(serviceTypeValue);
@@ -2021,6 +2067,8 @@ function getWhatsAppFlowBookingData(message, lineConfig = {}) {
 
   return {
     rawPayload: payload,
+    customerName: cleanCustomerName(customerNameValue || lineConfig.customerName || ""),
+    phone: normalizePhoneDigits(message?.from || lineConfig.phone || ""),
     branch,
     preferredDay: normalizeFlowDay(dayValue),
     preferredTime: normalizeFlowTime(timeValue),
@@ -2036,6 +2084,8 @@ function buildWhatsAppFlowBookingRequestMessage(flowData = {}) {
   return [
     "Source: WhatsApp Flow",
     `Branch: ${flowData.branch || ""}`,
+    `Customer name: ${flowData.customerName || ""}`,
+    `Phone: ${flowData.phone || ""}`,
     `Preferred day: ${flowData.preferredDay || ""}`,
     `Preferred time: ${flowData.preferredTime || ""}`,
     `Service interest: ${flowData.serviceInterest || ""}`,
@@ -2085,7 +2135,7 @@ async function handleWhatsAppFlowBookingSubmit({
     return false;
   }
 
-  const flowData = getWhatsAppFlowBookingData(message, lineConfig);
+  const flowData = getWhatsAppFlowBookingData(message, { ...lineConfig, customerName: profileName, phone: from });
 
   if (!flowData) {
     return false;
@@ -2120,11 +2170,16 @@ async function handleWhatsAppFlowBookingSubmit({
   await saveBookingRequestToGoogleSheetFromServer({
     phone: from,
     phoneNumberId: incomingPhoneNumberId,
-    customerName: profileName,
+    customerName: flowData.customerName || profileName,
     branch: selectedBranch,
     message: requestMessage,
-    requestType: "WhatsApp Flow",
+    requestType: flowData.serviceInterest || "WhatsApp Flow",
     bookingStatus: "Pending"
+  });
+
+  notifyStaffAboutFlowBooking(flowData, from, incomingPhoneNumberId, "").catch((error) => {
+    console.log("Staff booking notification failed:");
+    console.log(error);
   });
 
   const confirmationBody = buildWhatsAppFlowConfirmationBody(flowData);
@@ -2293,6 +2348,21 @@ function isTalkToTeamText(text) {
     value.includes("فريق") ||
     value.includes("موظف") ||
     value.includes("human support");
+}
+
+function isResumeBotText(text) {
+  const value = compactText(text);
+  if (!value) return false;
+  return value === "resume bot" ||
+    value === "bot resume" ||
+    value === "restart bot" ||
+    value === "start bot" ||
+    value === "تشغيل البوت" ||
+    value === "شغل البوت" ||
+    value === "رجع البوت" ||
+    value.includes("resume bot") ||
+    value.includes("تشغيل البوت") ||
+    value.includes("رجع البوت");
 }
 
 function isBookingMenuText(text) {
@@ -15656,6 +15726,23 @@ app.post("/webhook", async (req, res) => {
     const isOptInMessage = isOptInText(text);
     const isOptOutMessage = isOptOutText(text);
     const isReminderDeclineMessage = isReminderOptInDeclineText(text);
+
+    if (isResumeBotText(originalText || text)) {
+      setConversationStatus(from, "Bot Active");
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: "Bot Active",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
+        tags: ["Bot Active"],
+        updatedBy: "Resume Bot Command"
+      });
+      const resumeBody = "تم تشغيل البوت مرة أخرى ✅\n\n------------------------------\n\nBot has been resumed ✅";
+      await sendWhatsAppMessage(from, resumeBody, incomingPhoneNumberId);
+      addInboxMessage(from, "bot", resumeBody, "Bot Active", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Resumed" });
+      return res.sendStatus(200);
+    }
 
     if (!isOptInMessage && !isOptOutMessage && !isReminderDeclineMessage) {
       const pausedStatus = await getBotPausedStatusForConversation(from, incomingPhoneNumberId);
