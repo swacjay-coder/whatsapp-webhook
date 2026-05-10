@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-8-1-fix-how-button-title-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-9-restore-original-results-video-route";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 
@@ -15876,16 +15876,6 @@ app.post("/webhook", async (req, res) => {
           { id: "how_it_works", title: "How | كيف يعمل" }
         ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
         addInboxMessage(from, "bot", buildServicesMenuBody(profileName), "Services Menu", incomingPhoneNumberId, { customerName: profileName, messageType: "Services Menu" });
-        return res.sendStatus(200);
-      }
-
-      if (iconicIsResultsRoute) {
-        await sendWhatsAppButtonMessage(from, buildResultsFollowupBody(profileName), [
-          { id: "how_it_works", title: "How | كيف يعمل" },
-          { id: "booking_menu", title: "Booking | حجز" },
-          { id: "talk_to_team", title: "Team | فريقنا" }
-        ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
-        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Follow-up", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Follow-up" });
         return res.sendStatus(200);
       }
 
