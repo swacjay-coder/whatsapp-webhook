@@ -1,1 +1,2 @@
-run v60301 safe details label and body
+probe v60302 snippets only
+commit safe read-only workflow
