@@ -7,20 +7,15 @@ on:
       - ".apply-v60-direct-trigger.txt"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V60.3.0.1
+      - name: Probe V60.3.0.2 snippets
         run: |
           set -e
-          python3 v60301_details_label_and_body_safe.py
+          python3 v60302_probe_snippets.py
           node --check server.js
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js v60301_details_label_and_body_safe.py
-          git commit -m "Apply V60.3.0.1 safe Details label and body" || echo "No changes"
-          git push
