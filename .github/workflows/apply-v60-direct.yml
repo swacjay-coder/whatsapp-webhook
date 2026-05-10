@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V60.2.7.2
+      - name: Apply V60.2.8
         run: |
           set -e
-          python3 v60272_force_services_matching.py
+          python3 v6028_fix_button_title_lengths.py
           node --check server.js
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js v60272_force_services_matching.py
-          git commit -m "Apply V60.2.7.2 force services matching" || echo "No changes"
+          git add server.js v6028_fix_button_title_lengths.py
+          git commit -m "Apply V60.2.8 fix button title lengths" || echo "No changes"
           git push
