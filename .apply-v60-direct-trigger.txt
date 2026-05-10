@@ -1,1 +1,1 @@
-report v60 missing block bash only
+run v60 direct apply script
