@@ -1,14 +1,14 @@
-# Iconic Hair Care Team Inbox - Project Memory V60.1
+# Iconic Hair Care Team Inbox - Project Memory V60.2.3
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
-## Current active live base
+## Current stable live version
 
-Current active base after today's work:
+Current confirmed working live version:
 
 ```txt
-V31.5.8.60.1
-iconic-team-inbox-v31-5-8-60-1-fix-flow-staff-notification-routing
+V31.5.8.60.2.3
+iconic-team-inbox-v31-5-8-60-2-3-smart-customer-name-and-new-header-all-replies
 ```
 
 Version check URL:
@@ -35,9 +35,202 @@ GitHub repo:
 https://github.com/iconichaircare7-dot/whatsapp-webhook
 ```
 
-## Critical do-not-touch note
+## Stable result confirmed by Osama
 
-These settings and variables are now confirmed working. Do not change them unless Osama explicitly asks:
+Osama confirmed after deploy/test:
+
+```txt
+ممتاز كلو تمام
+```
+
+Meaning: V60.2.3 is the current stable base. Do not revert to V60.2.2, V60.2.1, V60.2, V60.1, V59, or older unless explicitly rolling back.
+
+## V60.2.3 final behavior
+
+### Header image
+
+The new header image is now the active bot header:
+
+```txt
+https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg
+```
+
+Rule:
+
+```txt
+Use this new header image on all bot button replies where WhatsApp supports interactive image headers.
+Remove/avoid old text header repetition inside message bodies:
+I C O N I C   H A I R   C A R E ✨
+```
+
+The previous old header URL was replaced and should not be used unless Osama asks:
+
+```txt
+https://iconichaircare.com/wp-content/uploads/2026/05/ChatGPT-Image-May-8-2026-12_12_30-AM.jpg
+```
+
+### Customer name rule
+
+Customer name should appear only once per bot message.
+
+Main menu only:
+
+```txt
+Hello Osama 👋
+```
+
+Other replies should use contextual wording, not a generic repeated greeting. Examples:
+
+```txt
+أكيد Osama، ...
+تمام Osama، ...
+Thank you Osama
+وصلنا طلبك Osama
+```
+
+Do not repeat the name in both Arabic and English in the same message:
+
+```txt
+Wrong:
+مرحبا Osama 👋
+Hello Osama 👋
+```
+
+### Flow confirmation behavior
+
+After Service Flow or Consultation Flow submit, the confirmation message remains bilingual Arabic + English and includes reminder opt-in in the same message.
+
+Name rule in Flow confirmation:
+
+```txt
+Thank you Osama
+```
+
+Do not use:
+
+```txt
+Hello Osama 👋
+```
+
+inside Flow confirmation.
+
+The Flow confirmation includes:
+
+```txt
+تم استلام طلب الحجز ✅
+سيقوم فريقنا بمراجعة التوفر وتأكيد الموعد النهائي قريباً.
+
+Your booking request has been received ✅
+Our team will check availability and confirm the exact appointment shortly.
+
+نوع الطلب / Request type: ...
+الفرع / Branch: ...
+الوقت المفضل / Preferred time: ...
+
+هل تحب نذكّرك قبل موعدك بساعة؟
+Would you like us to remind you 1 hour before your appointment?
+```
+
+Buttons:
+
+```txt
+Yes | نعم
+No | لا
+```
+
+### Appointment reminder opt-in
+
+If customer presses:
+
+```txt
+Yes | نعم
+```
+
+Save state:
+
+```txt
+Appointment Reminder Opt-in
+Tags: Appointment Reminder, Opt-in, 1 Hour Before
+```
+
+Reply style:
+
+```txt
+تمام Osama، تم تسجيل طلب التذكير ✅
+سنرسل لك تذكير قبل موعدك بساعة.
+
+Done ✅
+We will remind you 1 hour before your appointment.
+```
+
+If customer presses:
+
+```txt
+No | لا
+```
+
+Save state:
+
+```txt
+Appointment Reminder Declined
+Tags: Appointment Reminder, Declined
+```
+
+Reply style:
+
+```txt
+تمام Osama، لن نرسل تذكير لهذا الموعد.
+
+No problem. We will not send a reminder for this appointment.
+```
+
+## Important confirmed commits
+
+V60.1 staff notification fix:
+
+```txt
+8dcb58a93794d736d22f1ab6557555fe1198061b
+Apply V60.1 staff notify routing fix
+```
+
+V60.2 reminder opt-in first implementation:
+
+```txt
+e6d364f4f9f9cffc7077a1d66e4e574bb9c2d717
+Apply V60.2 flow confirmation reminder opt-in
+```
+
+V60.2.1 bilingual/header fix:
+
+```txt
+55dfad16bbb787486bff73c6245f525bbbbdbeb1
+Apply V60.2.1 bilingual header fix
+```
+
+V60.2.2 clean names and headers:
+
+```txt
+9f4cb00ba642606ecc1a24aca75144da5b1407b2
+Apply V60.2.2 clean names and headers
+```
+
+V60.2.3 final smart names and new header:
+
+```txt
+7997b8a837a9d6517b86b919e7184f64facaf165
+Apply V60.2.3 smart names and new header
+```
+
+V60.2.3 deploy trigger:
+
+```txt
+a83c3daf05022407ea08bdc248241092d9ac8570
+Deploy V6023
+```
+
+## Do-not-touch working settings
+
+These settings and variables are confirmed working. Do not change them unless Osama explicitly asks:
 
 ```txt
 DUBAI_STAFF_NUMBER=971503424811
@@ -46,6 +239,7 @@ ICONIC_CONSULTATION_FLOW_ID_DUBAI=1607726336999909
 ICONIC_CONSULTATION_FLOW_ID_ABU_DHABI=1648749433033956
 ICONIC_SERVICE_BOOKING_FLOW_ID_DUBAI=1707428933768266
 ICONIC_SERVICE_BOOKING_FLOW_ID_ABU_DHABI=986634320965936
+BOT_HEADER_IMAGE_URL=https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg
 ```
 
 Important:
@@ -60,83 +254,10 @@ Old Dubai staff number issue:
 
 ```txt
 971569979163 received outbound failures from WhatsApp Cloud API with error code 131000 / Something went wrong.
-This number should not be used as the active Dubai staff notification recipient for now.
+This number should not be used alone as the active Dubai staff notification recipient for now.
+If Osama insists, use it only alongside the working number:
+DUBAI_STAFF_NUMBER=971503424811,971569979163
 ```
-
-## V60.1 final status
-
-V60.1 fixed Flow staff notification routing by passing the real display phone number from the webhook metadata into the Flow submit handler and then into `notifyStaffAboutFlowBooking`.
-
-Confirmed V60.1 commit:
-
-```txt
-8dcb58a93794d736d22f1ab6557555fe1198061b
-Apply V60.1 staff notify routing fix
-```
-
-Confirmed deploy trigger:
-
-```txt
-dcaef4c7f161eff68061532ef3267fe0786b5a6c
-Trigger Render deploy for V60.1 staff notify fix
-```
-
-After changing Dubai staff ENV to 971503424811, Render deploy was triggered:
-
-```txt
-e08fa0436c604074b2130ababfa705c4cf5f7f16
-Trigger Render deploy after Dubai staff number change
-```
-
-## V60 purpose and behavior
-
-V60/V60.1 includes:
-
-```txt
-1. Direct consultation intent opens Consultation Flow immediately.
-2. Direct service intent opens Service Booking Flow immediately.
-3. General booking intent sends only two buttons:
-   Book Service | سيرفس
-   Consult | استشارة
-4. Customer name and phone are added to WhatsApp Flow booking request messages.
-5. Flow submissions save to Team Inbox and Google Sheet.
-6. Flow submissions send staff notifications by branch.
-7. Dubai staff notification routes to DUBAI_STAFF_NUMBER.
-8. Abu Dhabi staff notification routes to ABU_DHABI_STAFF_NUMBER.
-9. Multiple staff numbers are supported if comma-separated.
-10. Resume bot command exists:
-    تشغيل البوت
-    resume bot
-```
-
-## Working staff notification variables
-
-Dubai:
-
-```txt
-DUBAI_STAFF_NUMBER=971503424811
-```
-
-Abu Dhabi:
-
-```txt
-ABU_DHABI_STAFF_NUMBER=<keep current Render ENV value; tested and working>
-```
-
-If more than one staff recipient is needed later, use comma-separated numbers without spaces:
-
-```txt
-DUBAI_STAFF_NUMBER=971503424811,9715XXXXXXX
-ABU_DHABI_STAFF_NUMBER=9715YYYYYYY,9715ZZZZZZZ
-```
-
-Number format must be:
-
-```txt
-9715XXXXXXXX
-```
-
-No plus sign and no spaces.
 
 ## Flow IDs and branch mapping
 
@@ -213,7 +334,7 @@ consultation_type: same as Dubai
 no branch dropdown shown to customer
 ```
 
-The accepted final Abu Dhabi Flow direction:
+Accepted Abu Dhabi Flow direction:
 
 ```txt
 Use the same structure as Dubai Consultation Flow.
@@ -239,10 +360,11 @@ GitHub workflow:
 .github/workflows/render-deploy.yml
 ```
 
-Trigger file:
+Trigger files:
 
 ```txt
 .render-deploy-trigger.txt
+.apply-v60-direct-trigger.txt
 ```
 
 To deploy without entering Render:
@@ -262,7 +384,7 @@ Current start command in package.json:
 node --check server.js && node server.js
 ```
 
-Do not revert this to old v59/v60 patch command unless intentionally rolling back.
+Do not revert this to old patch start commands unless intentionally rolling back.
 
 ## Future edit rule
 
@@ -288,12 +410,14 @@ FOLLOW_UP_DELAY_DAYS
 FOLLOW_UP_TEMPLATE_NAME_DUBAI
 FOLLOW_UP_TEMPLATE_NAME_ABU_DHABI
 cron-job
-opt-in / opt-out
+old opt-in / opt-out logic
 Google Sheets reminder logic
 Flyksoft
 Service Flow structure
 Dubai Consultation Flow dynamic behavior
 staff notification ENV variables
+Flow IDs
+BOT_HEADER_IMAGE_URL
 ```
 
 ## Testing checklist after deploy
@@ -307,34 +431,35 @@ https://whatsapp-webhook-g0c5.onrender.com/api/version
 Expected currently:
 
 ```txt
-iconic-team-inbox-v31-5-8-60-1-fix-flow-staff-notification-routing
+iconic-team-inbox-v31-5-8-60-2-3-smart-customer-name-and-new-header-all-replies
 ```
 
 WhatsApp tests:
 
 ```txt
-1. Send: استشارة
+1. Send main menu/general message
+Expected: new image header + only one greeting: Hello Osama 👋
+
+2. Send: حجز موعد
+Expected: new image header + contextual name once: أكيد Osama، اختر نوع الحجز المناسب لك
+
+3. Send: استشارة
 Expected: Consultation Flow opens directly.
 
-2. Send: سيرفس
+4. Send: سيرفس
 Expected: Service Flow opens directly.
 
-3. Send: حجز موعد
-Expected: bot sends two buttons only:
-Book Service | سيرفس
-Consult | استشارة
+5. Submit Dubai Flow
+Expected: Team Inbox + Google Sheet + notification to 971503424811 + bilingual confirmation with Thank you Osama + Yes/No reminder buttons.
 
-4. Press Team | فريقنا
-Expected: final handoff message is sent, then bot pauses.
+6. Submit Abu Dhabi Flow
+Expected: Team Inbox + Google Sheet + notification to Abu Dhabi staff + bilingual confirmation with Thank you Osama + Yes/No reminder buttons.
 
-5. Send: تشغيل البوت or resume bot
+7. Press Team | فريقنا
+Expected: final handoff message uses contextual name once, then bot pauses.
+
+8. Send: تشغيل البوت or resume bot
 Expected: Bot Active confirmation.
-
-6. Submit Dubai Flow from a customer number
-Expected: Team Inbox + Google Sheet + notification to 971503424811.
-
-7. Submit Abu Dhabi Flow from a customer number
-Expected: Team Inbox + Google Sheet + notification to Abu Dhabi staff.
 ```
 
 ## Important operational note
