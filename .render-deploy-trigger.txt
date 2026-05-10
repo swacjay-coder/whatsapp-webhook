@@ -1,4 +1,4 @@
 Render deploy trigger
-Timestamp: 2026-05-10T19:32:00Z
-Version: V60.2 flow confirmation reminder opt-in
-Commit: e6d364f4f9f9cffc7077a1d66e4e574bb9c2d717
+Timestamp: 2026-05-10T19:46:00Z
+Version: V60.2.1 bilingual flow confirmation and header on all button replies
+Commit: 55dfad16bbb787486bff73c6245f525bbbbdbeb1
