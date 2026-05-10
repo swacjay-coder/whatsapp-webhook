@@ -1,1 +1,1 @@
-run v6025 fix booking consult scope
+run v6026 fix services button id and team pause note
