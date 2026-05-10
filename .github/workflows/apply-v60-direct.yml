@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V60.2.8.1
+      - name: Apply V60.2.9
         run: |
           set -e
-          python3 v60281_fix_how_button_title_only.py
+          python3 v6029_restore_original_results_video_route.py
           node --check server.js
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js v60281_fix_how_button_title_only.py
-          git commit -m "Apply V60.2.8.1 fix How button title only" || echo "No changes"
+          git add server.js v6029_restore_original_results_video_route.py
+          git commit -m "Apply V60.2.9 restore original results video route" || echo "No changes"
           git push
