@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-english-flow-confirmation-reminder-optin";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-1-bilingual-flow-confirmation-header-all-button-replies";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/ChatGPT-Image-May-8-2026-12_12_30-AM.jpg").toString().trim();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -1299,7 +1299,7 @@ async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DUBA
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
 
-  const headerImageUrl = (options.headerImageUrl || "").toString().trim();
+  const headerImageUrl = (options.headerImageUrl || BOT_HEADER_IMAGE_URL || "").toString().trim();
 
   const payload = {
     messaging_product: "whatsapp",
@@ -2102,6 +2102,7 @@ function buildWhatsAppFlowBookingRequestMessage(flowData = {}) {
 function buildWhatsAppFlowConfirmationBody(flowData = {}) {
   const customerName = cleanCustomerName(flowData.customerName || "") || "there";
   const branch = flowData.branch || "Dubai";
+  const branchAr = getFastBookingBranchArabic(branch);
   const preferredTime = flowData.preferredTime || "Flexible / Any available time";
   const requestType = flowData.serviceInterest || flowData.requestType || "Booking Request";
 
@@ -2110,16 +2111,20 @@ function buildWhatsAppFlowConfirmationBody(flowData = {}) {
     "",
     `Hello ${customerName} 👋`,
     "",
-    "Your booking request has been received.",
+    "تم استلام طلب الحجز ✅",
+    "سيقوم فريقنا بمراجعة التوفر وتأكيد الموعد النهائي قريباً.",
+    "",
+    "Your booking request has been received ✅",
     "Our team will check availability and confirm the exact appointment shortly.",
     "",
-    `Request type: ${requestType}`,
-    `Branch: ${branch}`,
-    `Preferred time: ${preferredTime}`,
-    flowData.consultationType ? `Consultation type: ${flowData.consultationType}` : "",
-    flowData.serviceType ? `Service type: ${flowData.serviceType}` : "",
-    flowData.teamMember ? `Team member: ${flowData.teamMember}` : "",
+    `نوع الطلب / Request type: ${requestType}`,
+    `الفرع / Branch: ${branchAr} - ${branch}`,
+    `الوقت المفضل / Preferred time: ${preferredTime}`,
+    flowData.consultationType ? `نوع الاستشارة / Consultation type: ${flowData.consultationType}` : "",
+    flowData.serviceType ? `نوع الخدمة / Service type: ${flowData.serviceType}` : "",
+    flowData.teamMember ? `الموظف / Team member: ${flowData.teamMember}` : "",
     "",
+    "هل تحب نذكّرك قبل موعدك بساعة؟",
     "Would you like us to remind you 1 hour before your appointment?"
   ].filter((line) => line !== "").join(String.fromCharCode(10));
 }
@@ -15792,7 +15797,11 @@ app.post("/webhook", async (req, res) => {
 
       const reminderYesBody = `Hello ${cleanCustomerName(profileName) || "there"} 👋
 
-Done. We will remind you 1 hour before your appointment.`;
+تم تسجيل طلب التذكير ✅
+سنرسل لك تذكير قبل موعدك بساعة.
+
+Done ✅
+We will remind you 1 hour before your appointment.`;
       await sendWhatsAppMessage(from, reminderYesBody, incomingPhoneNumberId);
       addInboxMessage(from, "bot", reminderYesBody, "Appointment Reminder Opt-in", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Opt-in" });
       return res.sendStatus(200);
@@ -15810,6 +15819,8 @@ Done. We will remind you 1 hour before your appointment.`;
       });
 
       const reminderNoBody = `Hello ${cleanCustomerName(profileName) || "there"} 👋
+
+تمام، لن نرسل تذكير لهذا الموعد.
 
 No problem. We will not send a reminder for this appointment.`;
       await sendWhatsAppMessage(from, reminderNoBody, incomingPhoneNumberId);
