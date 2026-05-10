@@ -1,1 +1,1 @@
-apply v60 direct debug
+apply v60 direct fixed
