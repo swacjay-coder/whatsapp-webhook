@@ -15,23 +15,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Apply V59 base if needed
+      - name: Apply minimal V60 marker and write debug output
         run: |
-          set -e
-          if ! grep -q v31-5-8-59 server.js && ! grep -q v31-5-8-60 server.js; then
-            git apply v59.patch
-          fi
-          node --check server.js
+          set +e
+          OUT="V60_DIRECT_DEBUG.md"
+          {
+            echo "# V60 Direct Debug"
+            echo
+            echo "Started at: $(date -u)"
+            echo
+            echo "## Git status before"
+            git status --short
+            echo
+            echo "## Apply V59 base if needed"
+          } > "$OUT"
 
-      - name: Apply minimal V60 version marker
-        run: |
-          set -e
-          python3 - <<'PY'
+          if ! grep -q v31-5-8-59 server.js && ! grep -q v31-5-8-60 server.js; then
+            git apply v59.patch >> "$OUT" 2>&1
+            echo "v59 patch exit=$?" >> "$OUT"
+          else
+            echo "V59/V60 marker already found" >> "$OUT"
+          fi
+
+          node --check server.js >> "$OUT" 2>&1
+          echo "node check before exit=$?" >> "$OUT"
+
+          python3 - <<'PY' >> "$OUT" 2>&1
 from pathlib import Path
 p = Path('server.js')
 s = p.read_text()
 old = 'const BOT_VERSION = "iconic-team-inbox-v31-5-8-59-direct-booking-intent-abu-dhabi-consultation-and-bot-pause";'
 new = 'const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-flow-customer-name-staff-notifications-and-resume-bot";'
+print('old exists=', old in s)
+print('new exists=', new in s)
 if new in s:
     print('V60 marker already exists')
 elif old in s:
@@ -39,15 +55,30 @@ elif old in s:
     p.write_text(s)
     print('V60 marker applied')
 else:
-    raise SystemExit('BOT_VERSION marker not found')
+    print('BOT_VERSION marker not found')
 PY
-          node --check server.js
 
-      - name: Commit direct V60 marker
-        run: |
-          set -e
+          node --check server.js >> "$OUT" 2>&1
+          echo "node check after exit=$?" >> "$OUT"
+
+          {
+            echo
+            echo "## Git diff summary"
+            git diff -- server.js | head -120
+            echo
+            echo "## Git status after"
+            git status --short
+          } >> "$OUT"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js
-          git commit -m "Apply V60 marker directly" || echo "No changes to commit"
-          git push
+          git add server.js "$OUT"
+          git commit -m "Write V60 direct debug output" >> "$OUT" 2>&1
+          COMMIT_EXIT=$?
+          echo "commit exit=$COMMIT_EXIT" >> "$OUT"
+          git add "$OUT"
+          git commit -m "Update V60 direct debug output" >/dev/null 2>&1 || true
+          git push >> "$OUT" 2>&1
+          echo "push exit=$?" >> "$OUT"
+
+          exit 0
