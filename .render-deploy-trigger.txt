@@ -1,4 +1,4 @@
 Render deploy trigger
-Timestamp: 2026-05-10T18:20:00Z
-Reason: User requested deploy while away from laptop
-Current base: V60.1 staff notify routing fix
+Timestamp: 2026-05-10T19:32:00Z
+Version: V60.2 flow confirmation reminder opt-in
+Commit: e6d364f4f9f9cffc7077a1d66e4e574bb9c2d717
