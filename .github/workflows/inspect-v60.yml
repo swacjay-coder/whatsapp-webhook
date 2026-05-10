@@ -1,0 +1,38 @@
+name: Inspect V60 Targets
+
+on:
+  push:
+    paths:
+      - ".inspect-v60-trigger.txt"
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply V59 patch and inspect targets
+        run: |
+          set -e
+          if ! grep -q v31-5-8-59 server.js; then
+            git apply v59.patch
+          fi
+          node --check server.js
+          echo "--- BOT VERSION ---"
+          grep -n "BOT_VERSION" server.js || true
+          echo "--- FLOW BOOKING DATA ---"
+          grep -n "function getWhatsAppFlowBookingData" server.js || true
+          line=$(grep -n "function getWhatsAppFlowBookingData" server.js | head -1 | cut -d: -f1 || true)
+          if [ -n "$line" ]; then sed -n "$((line-20)),$((line+120))p" server.js; fi
+          echo "--- BOOKING REQUEST MESSAGE ---"
+          grep -n "function buildWhatsAppFlowBookingRequestMessage" server.js || true
+          line=$(grep -n "function buildWhatsAppFlowBookingRequestMessage" server.js | head -1 | cut -d: -f1 || true)
+          if [ -n "$line" ]; then sed -n "$((line-20)),$((line+90))p" server.js; fi
+          echo "--- SAVE BOOKING REQUEST ---"
+          grep -n "saveBooking" server.js || true
+          echo "--- FLOW HANDLED / BOOKING DATA CALLS ---"
+          grep -n "getWhatsAppFlowBookingData\|buildWhatsAppFlowBookingRequestMessage\|WhatsApp Flow Booking" server.js || true
+          echo "--- STAFF NOTIFICATION USAGE ---"
+          grep -n "sendStaffNotification\|Staff Notify\|staff notification" server.js || true
+          echo "--- TEAM INBOX SEND ROUTES ---"
+          grep -n "Human Reply\|send-message\|send-image" server.js | head -80 || true
