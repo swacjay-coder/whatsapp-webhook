@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-7-fix-services-normalized-matching";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-8-fix-button-title-lengths";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 
@@ -15863,6 +15863,7 @@ app.post("/webhook", async (req, res) => {
       );
       const iconicIsHowItWorksRoute = (
         iconicServicesText === "how_it_works" ||
+        iconicServicesText === "how | كيف يعمل" ||
         iconicServicesText === "howitworks" ||
         (iconicServicesText.includes("how") && iconicServicesText.includes("work")) ||
         iconicServicesText.includes("كيف")
@@ -15872,7 +15873,7 @@ app.post("/webhook", async (req, res) => {
         await sendWhatsAppButtonMessage(from, buildServicesMenuBody(profileName), [
           { id: "results", title: "Results | نتائج" },
           { id: "location", title: "Location | موقعنا" },
-          { id: "how_it_works", title: "How it works | كيف يعمل" }
+          { id: "how_it_works", title: "How | كيف يعمل" }
         ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
         addInboxMessage(from, "bot", buildServicesMenuBody(profileName), "Services Menu", incomingPhoneNumberId, { customerName: profileName, messageType: "Services Menu" });
         return res.sendStatus(200);
@@ -15880,7 +15881,7 @@ app.post("/webhook", async (req, res) => {
 
       if (iconicIsResultsRoute) {
         await sendWhatsAppButtonMessage(from, buildResultsFollowupBody(profileName), [
-          { id: "how_it_works", title: "How it works | كيف يعمل" },
+          { id: "how_it_works", title: "How | كيف يعمل" },
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "talk_to_team", title: "Team | فريقنا" }
         ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
