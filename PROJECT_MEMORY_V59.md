@@ -58,6 +58,38 @@ This means:
 2. Then it runs `node --check server.js`.
 3. Then it starts `node server.js`.
 
+## Critical future-edit rule
+
+For any future code change, do not tell the user to manually upload a full `server.js` file unless there is absolutely no other option.
+
+The preferred workflow is:
+
+```txt
+1. Treat V31.5.8.59 as the current active base.
+2. Inspect the current GitHub files.
+3. Create a small incremental patch file for the next version, for example:
+   v60.patch
+   v61.patch
+4. Update package.json start script if needed so Render applies the new patch safely.
+5. Run / include node --check server.js before starting.
+6. Trigger Render deploy through GitHub Action / Deploy Hook.
+7. Verify using /api/version.
+```
+
+Important:
+
+```txt
+Do not make the user download server.js and upload it manually.
+Do not say the task is impossible just because server.js is large.
+Use the patch approach used in V59.
+```
+
+If another assistant/personality opens this project later, they must understand:
+
+```txt
+The working solution for large server.js edits is patch-based deployment, not manual full-file upload.
+```
+
 ## Important deployment improvement
 
 A Render Deploy Hook was created in Render and saved as a GitHub Actions secret:
@@ -449,6 +481,7 @@ Expected: conversation becomes Human Reply and bot pauses.
 - If future assistant says the file is too big to edit, use patch approach again.
 - The working approach is: create a small patch file, update `package.json` or apply patch safely, then deploy through GitHub Action.
 - Always verify with `/api/version` after deployment.
+- For future edits, do not ask Osama to upload `server.js` manually. Use GitHub patch workflow and Render Deploy Hook.
 
 ## Current known stable base
 
