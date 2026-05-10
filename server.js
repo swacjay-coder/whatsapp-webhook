@@ -66,8 +66,9 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-3-smart-customer-name-and-new-header-all-replies";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-4-services-results-how-it-works-video";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
+const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -149,7 +150,7 @@ const ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI = (
 ).toString().trim();
 
 // V31.5.8.58 - Dedicated Dubai Consultation Booking Flow:
-// Opens the new consultation Flow for Dubai when customers choose Consult | استشارة.
+// Opens the new consultation Flow for Dubai when customers choose How it works | كيف يعمل.
 const ICONIC_CONSULTATION_FLOW_ID_DUBAI = (
   process.env.ICONIC_CONSULTATION_FLOW_ID_DUBAI ||
   process.env.DUBAI_CONSULTATION_FLOW_ID ||
@@ -727,7 +728,7 @@ function buildDirectBookingChoiceBody(customerName = "") {
 function getDirectBookingChoiceButtons() {
   return [
     { id: "book_service_flow", title: "Book Service | سيرفس" },
-    { id: "consult_menu", title: "Consult | استشارة" }
+    { id: "consult_menu", title: "How it works | كيف يعمل" }
   ];
 }
 
@@ -787,6 +788,43 @@ function buildPersonalGreeting(customerName = "") {
 function namePhrase(customerName = "", fallback = "") {
   const cleanName = cleanCustomerName(customerName);
   return cleanName || fallback || "";
+}
+
+function buildServicesMenuBody(customerName = "") {
+  const cleanName = namePhrase(customerName);
+  const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
+
+  return `${intro}\n\n` +
+    "في Iconic Hair Care نقدم حلول Hair Replacement بمظهر طبيعي 100%، بدون جراحة.\n\n" +
+    "You can explore our services, see real results, or learn how the process works with our team.\n\n" +
+    "شو تحب تشوف أولاً؟\n" +
+    "What would you like to check first?";
+}
+
+function buildResultsFollowupBody(customerName = "") {
+  const cleanName = namePhrase(customerName);
+  const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
+
+  return `${intro}\n\n` +
+    "هذه بعض النتائج الحقيقية من Iconic Hair Care.\n" +
+    "مظهر طبيعي، بدون جراحة، وبشكل يناسبك تماماً.\n\n" +
+    "Here are some real results from Iconic Hair Care.\n" +
+    "Natural look, non-surgical, and designed to suit you.\n\n" +
+    "شو تحب تعمل بعد ما شفت النتائج؟\n" +
+    "What would you like to do next?";
+}
+
+function buildHowItWorksBody(customerName = "") {
+  const cleanName = namePhrase(customerName);
+  const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
+
+  return `${intro}\n\n` +
+    "الفكرة بسيطة:\n" +
+    "نختار لك الشكل المناسب، اللون المناسب، والكثافة المناسبة لشعرك، ثم يتم التركيب بطريقة طبيعية بدون جراحة.\n\n" +
+    "The process is simple:\n" +
+    "We choose the right style, color, and density for you, then apply it naturally with no surgery.\n\n" +
+    "شو تحب تعمل الآن؟\n" +
+    "What would you like to do now?";
 }
 
 function getArabicBranchName(branch) {
@@ -960,7 +998,7 @@ function humanizeActionId(value) {
     booking_menu: "Booking | حجز",
     services_menu: "Services | خدماتنا",
     service_menu: "Service | سيرفس",
-    consult_menu: "Consult | استشارة",
+    consult_menu: "How it works | كيف يعمل",
     book_service_flow: "Book Service | سيرفس",
     talk_to_team: "Team | فريقنا",
     help_team: "Help | ساعدني",
@@ -1352,6 +1390,45 @@ async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DUBA
   return result;
 }
 
+async function sendWhatsAppVideoByLink(to, videoUrl, caption = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
+  const cleanVideoUrl = (videoUrl || "").toString().trim();
+
+  if (!cleanVideoUrl) {
+    throw new Error("sendWhatsAppVideoByLink missing video URL");
+  }
+
+  const videoPayload = { link: cleanVideoUrl };
+  const cleanCaption = (caption || "").toString().trim();
+  if (cleanCaption) {
+    videoPayload.caption = cleanCaption;
+  }
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "video",
+    video: videoPayload
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error("[Iconic] sendWhatsAppVideoByLink failed", JSON.stringify(data));
+    throw new Error("sendWhatsAppVideoByLink failed");
+  }
+  return data;
+}
+
 async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
@@ -1599,7 +1676,7 @@ function getMainMenuButtons() {
 
 function getBookingSubMenuButtons() {
   return [
-    { id: "consult_menu", title: "Consult | استشارة" },
+    { id: "consult_menu", title: "How it works | كيف يعمل" },
     { id: "service_menu", title: "Service | سيرفس" },
     { id: "talk_to_team", title: "Help | ساعدني" }
   ];
@@ -15756,6 +15833,37 @@ app.post("/webhook", async (req, res) => {
     const lineConfig = getLineConfig(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
     const profileName = getWhatsAppCustomerName(value?.contacts?.[0]);
 
+      // V60.2.4 Services / Results / How it works premium route
+      const iconicServicesRawText = (
+        message?.interactive?.button_reply?.title ||
+        message?.interactive?.list_reply?.title ||
+        message?.button?.text ||
+        message?.text?.body ||
+        ""
+      ).toString().trim();
+      const iconicServicesText = normalizeText(iconicServicesRawText);
+
+      if (["services | خدماتنا", "services", "خدماتنا"].includes(iconicServicesText)) {
+        await sendWhatsAppButtonMessage(from, buildServicesMenuBody(profileName), [
+          { id: "results", title: "Results | نتائج" },
+          { id: "location", title: "Location | موقعنا" },
+          { id: "how_it_works", title: "How it works | كيف يعمل" }
+        ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
+        addInboxMessage(from, "bot", buildServicesMenuBody(profileName), "Services Menu", incomingPhoneNumberId, { customerName: profileName, messageType: "Services Menu" });
+        return res.sendStatus(200);
+      }
+
+      if (["how it works | كيف يعمل", "how it works", "كيف يعمل"].includes(iconicServicesText)) {
+        await sendWhatsAppVideoByLink(from, HOW_IT_WORKS_VIDEO_URL, "", incomingPhoneNumberId);
+        await sendWhatsAppButtonMessage(from, buildHowItWorksBody(profileName), [
+          { id: "booking", title: "Booking | حجز" },
+          { id: "results", title: "Results | نتائج" },
+          { id: "team", title: "Team | فريقنا" }
+        ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
+        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "How it works", incomingPhoneNumberId, { customerName: profileName, messageType: "How it works" });
+        return res.sendStatus(200);
+      }
+
     conversationPhoneNumberId[from] = incomingPhoneNumberId;
 
     console.log("Incoming message received on:", lineConfig.branch, incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
@@ -16102,7 +16210,7 @@ No problem. We will not send a reminder for this appointment.`;
     }
 
     if (isConsultationFlowText(originalText || text)) {
-      const consultationActionText = getSmartCustomerActionText(message, originalText || text) || "Consult | استشارة";
+      const consultationActionText = getSmartCustomerActionText(message, originalText || text) || "How it works | كيف يعمل";
       const consultationCustomerBody = buildCustomerActionBody(profileName, consultationActionText);
 
       addInboxMessage(
