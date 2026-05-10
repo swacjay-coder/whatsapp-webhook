@@ -1,1 +1,1 @@
-debug full v60 direct
+debug full v60 direct fixed
