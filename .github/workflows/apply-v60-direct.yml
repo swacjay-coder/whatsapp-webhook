@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V60.2.2
+      - name: Apply V60.2.3
         run: |
           set -e
-          python3 v6022_clean_names_headers.py
+          python3 v6023_smart_names_new_header.py
           node --check server.js
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add server.js package.json
-          git commit -m "Apply V60.2.2 clean names and headers" || echo "No changes"
+          git commit -m "Apply V60.2.3 smart names and new header" || echo "No changes"
           git push
