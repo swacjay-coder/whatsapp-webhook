@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-4-services-results-how-it-works-video";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-2-5-fix-booking-consult-scope-services-how-it-works";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 
@@ -150,7 +150,7 @@ const ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI = (
 ).toString().trim();
 
 // V31.5.8.58 - Dedicated Dubai Consultation Booking Flow:
-// Opens the new consultation Flow for Dubai when customers choose How it works | كيف يعمل.
+// Opens the new consultation Flow for Dubai when customers choose Consult | استشارة.
 const ICONIC_CONSULTATION_FLOW_ID_DUBAI = (
   process.env.ICONIC_CONSULTATION_FLOW_ID_DUBAI ||
   process.env.DUBAI_CONSULTATION_FLOW_ID ||
@@ -728,7 +728,7 @@ function buildDirectBookingChoiceBody(customerName = "") {
 function getDirectBookingChoiceButtons() {
   return [
     { id: "book_service_flow", title: "Book Service | سيرفس" },
-    { id: "consult_menu", title: "How it works | كيف يعمل" }
+    { id: "consult_menu", title: "Consult | استشارة" }
   ];
 }
 
@@ -998,7 +998,7 @@ function humanizeActionId(value) {
     booking_menu: "Booking | حجز",
     services_menu: "Services | خدماتنا",
     service_menu: "Service | سيرفس",
-    consult_menu: "How it works | كيف يعمل",
+    consult_menu: "Consult | استشارة",
     book_service_flow: "Book Service | سيرفس",
     talk_to_team: "Team | فريقنا",
     help_team: "Help | ساعدني",
@@ -1676,7 +1676,7 @@ function getMainMenuButtons() {
 
 function getBookingSubMenuButtons() {
   return [
-    { id: "consult_menu", title: "How it works | كيف يعمل" },
+    { id: "consult_menu", title: "Consult | استشارة" },
     { id: "service_menu", title: "Service | سيرفس" },
     { id: "talk_to_team", title: "Help | ساعدني" }
   ];
@@ -15856,9 +15856,9 @@ app.post("/webhook", async (req, res) => {
       if (["how it works | كيف يعمل", "how it works", "كيف يعمل"].includes(iconicServicesText)) {
         await sendWhatsAppVideoByLink(from, HOW_IT_WORKS_VIDEO_URL, "", incomingPhoneNumberId);
         await sendWhatsAppButtonMessage(from, buildHowItWorksBody(profileName), [
-          { id: "booking", title: "Booking | حجز" },
+          { id: "booking_menu", title: "Booking | حجز" },
           { id: "results", title: "Results | نتائج" },
-          { id: "team", title: "Team | فريقنا" }
+          { id: "talk_to_team", title: "Team | فريقنا" }
         ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
         addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "How it works", incomingPhoneNumberId, { customerName: profileName, messageType: "How it works" });
         return res.sendStatus(200);
@@ -16210,7 +16210,7 @@ No problem. We will not send a reminder for this appointment.`;
     }
 
     if (isConsultationFlowText(originalText || text)) {
-      const consultationActionText = getSmartCustomerActionText(message, originalText || text) || "How it works | كيف يعمل";
+      const consultationActionText = getSmartCustomerActionText(message, originalText || text) || "Consult | استشارة";
       const consultationCustomerBody = buildCustomerActionBody(profileName, consultationActionText);
 
       addInboxMessage(
