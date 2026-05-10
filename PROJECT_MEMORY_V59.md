@@ -1,29 +1,20 @@
-# Iconic Hair Care Team Inbox - Project Memory V59
+# Iconic Hair Care Team Inbox - Project Memory V60.1
 
 Last updated: 2026-05-10
 
-## Current live version
+## Current active live base
 
-Current live version on Render:
+Current active base after today's work:
 
 ```txt
-iconic-team-inbox-v31-5-8-59-direct-booking-intent-abu-dhabi-consultation-and-bot-pause
+V31.5.8.60.1
+iconic-team-inbox-v31-5-8-60-1-fix-flow-staff-notification-routing
 ```
 
 Version check URL:
 
 ```txt
 https://whatsapp-webhook-g0c5.onrender.com/api/version
-```
-
-Confirmed `/api/version` returned V59 live.
-
-## Repo and deployment
-
-GitHub repo:
-
-```txt
-https://github.com/iconichaircare7-dot/whatsapp-webhook
 ```
 
 Render service:
@@ -38,201 +29,162 @@ Render public URL:
 https://whatsapp-webhook-g0c5.onrender.com
 ```
 
-Render Start Command must be:
+GitHub repo:
 
 ```txt
-npm start
+https://github.com/iconichaircare7-dot/whatsapp-webhook
 ```
 
-Why: `package.json` start script applies `v59.patch` before running `server.js`.
+## Critical do-not-touch note
 
-Current `package.json` start script:
-
-```txt
-grep -q v31-5-8-59 server.js || git apply v59.patch && node --check server.js && node server.js
-```
-
-This means:
-
-1. If `server.js` is not already V59, Render applies `v59.patch`.
-2. Then it runs `node --check server.js`.
-3. Then it starts `node server.js`.
-
-## Critical future-edit rule
-
-For any future code change, do not tell the user to manually upload a full `server.js` file unless there is absolutely no other option.
-
-The preferred workflow is:
+These settings and variables are now confirmed working. Do not change them unless Osama explicitly asks:
 
 ```txt
-1. Treat V31.5.8.59 as the current active base.
-2. Inspect the current GitHub files.
-3. Create a small incremental patch file for the next version, for example:
-   v60.patch
-   v61.patch
-4. Update package.json start script if needed so Render applies the new patch safely.
-5. Run / include node --check server.js before starting.
-6. Trigger Render deploy through GitHub Action / Deploy Hook.
-7. Verify using /api/version.
+DUBAI_STAFF_NUMBER=971503424811
+ABU_DHABI_STAFF_NUMBER=<current Abu Dhabi staff number in Render ENV>
+ICONIC_CONSULTATION_FLOW_ID_DUBAI=1607726336999909
+ICONIC_CONSULTATION_FLOW_ID_ABU_DHABI=1648749433033956
+ICONIC_SERVICE_BOOKING_FLOW_ID_DUBAI=1707428933768266
+ICONIC_SERVICE_BOOKING_FLOW_ID_ABU_DHABI=986634320965936
 ```
 
 Important:
 
 ```txt
-Do not make the user download server.js and upload it manually.
-Do not say the task is impossible just because server.js is large.
-Use the patch approach used in V59.
+Dubai staff notification tested and confirmed delivered to 971503424811.
+Abu Dhabi staff notification tested and confirmed delivered to Abu Dhabi staff.
+Do not replace DUBAI_STAFF_NUMBER back to 971569979163 unless retested and confirmed delivered/read.
 ```
 
-If another assistant/personality opens this project later, they must understand:
+Old Dubai staff number issue:
 
 ```txt
-The working solution for large server.js edits is patch-based deployment, not manual full-file upload.
+971569979163 received outbound failures from WhatsApp Cloud API with error code 131000 / Something went wrong.
+This number should not be used as the active Dubai staff notification recipient for now.
 ```
 
-## Important deployment improvement
+## V60.1 final status
 
-A Render Deploy Hook was created in Render and saved as a GitHub Actions secret:
+V60.1 fixed Flow staff notification routing by passing the real display phone number from the webhook metadata into the Flow submit handler and then into `notifyStaffAboutFlowBooking`.
+
+Confirmed V60.1 commit:
 
 ```txt
-RENDER_DEPLOY_HOOK
+8dcb58a93794d736d22f1ab6557555fe1198061b
+Apply V60.1 staff notify routing fix
 ```
 
-A GitHub Action was created:
+Confirmed deploy trigger:
 
 ```txt
-.github/workflows/render-deploy.yml
+dcaef4c7f161eff68061532ef3267fe0786b5a6c
+Trigger Render deploy for V60.1 staff notify fix
 ```
 
-Workflow name:
+After changing Dubai staff ENV to 971503424811, Render deploy was triggered:
 
 ```txt
-Deploy to Render
+e08fa0436c604074b2130ababfa705c4cf5f7f16
+Trigger Render deploy after Dubai staff number change
 ```
 
-It triggers Render deploy by calling the secret deploy hook.
+## V60 purpose and behavior
 
-A trigger file was added:
+V60/V60.1 includes:
 
 ```txt
-.render-deploy-trigger.txt
-```
-
-Updating this file can trigger the workflow and deploy Render without manually entering Render.
-
-GitHub Actions URL:
-
-```txt
-https://github.com/iconichaircare7-dot/whatsapp-webhook/actions
-```
-
-## Key commits from this work
-
-V59 patch file added:
-
-```txt
-054b296dbfe4a6c3b93df456267f4528783fafb7
-Add V59 patch
-```
-
-Package start command changed to apply V59 patch:
-
-```txt
-fd0e3c0479c980e99a0846956e08b7be26994c78
-Apply V59 patch before start
-```
-
-GitHub Action added:
-
-```txt
-21fd88a981e9e9c02ecad2eddb4d687085e15aa2
-Add Render deploy workflow
-```
-
-First deploy trigger committed:
-
-```txt
-a23a4bd2d4c82bae9a547eba76859d0cba5b7f4d
-Trigger Render deploy
-```
-
-## V59 purpose
-
-V59 improves customer routing and bot behavior:
-
 1. Direct consultation intent opens Consultation Flow immediately.
 2. Direct service intent opens Service Booking Flow immediately.
-3. General booking intent sends only two buttons: Service or Consultation.
-4. Abu Dhabi Consultation Flow is added.
-5. Team / Help requests send one final handoff message and pause the bot.
-6. Staff replies from Team Inbox pause the bot for that customer.
-
-## Abu Dhabi Consultation Flow
-
-Abu Dhabi Consultation Flow ID:
-
-```txt
-1648749433033956
+3. General booking intent sends only two buttons:
+   Book Service | سيرفس
+   Consult | استشارة
+4. Customer name and phone are added to WhatsApp Flow booking request messages.
+5. Flow submissions save to Team Inbox and Google Sheet.
+6. Flow submissions send staff notifications by branch.
+7. Dubai staff notification routes to DUBAI_STAFF_NUMBER.
+8. Abu Dhabi staff notification routes to ABU_DHABI_STAFF_NUMBER.
+9. Multiple staff numbers are supported if comma-separated.
+10. Resume bot command exists:
+    تشغيل البوت
+    resume bot
 ```
 
-The code adds these environment fallback constants through V59 patch:
+## Working staff notification variables
+
+Dubai:
 
 ```txt
-ICONIC_CONSULTATION_FLOW_ID_ABU_DHABI=1648749433033956
-ICONIC_CONSULTATION_FLOW_TOKEN_PREFIX_ABU_DHABI=iconic_consultation_flow_abudhabi
+DUBAI_STAFF_NUMBER=971503424811
 ```
 
-Abu Dhabi consultation flow behavior:
+Abu Dhabi:
 
 ```txt
-Screen: CONSULTATION_BOOKING
-Branch: Abu Dhabi
-No Today dynamic logic
-Tomorrow / Day After Tomorrow only inside the static Flow
+ABU_DHABI_STAFF_NUMBER=<keep current Render ENV value; tested and working>
 ```
 
-## Dubai Consultation Flow
-
-Dubai Consultation Flow ID:
+If more than one staff recipient is needed later, use comma-separated numbers without spaces:
 
 ```txt
-1607726336999909
+DUBAI_STAFF_NUMBER=971503424811,9715XXXXXXX
+ABU_DHABI_STAFF_NUMBER=9715YYYYYYY,9715ZZZZZZZ
 ```
 
-Dubai uses:
+Number format must be:
+
+```txt
+9715XXXXXXXX
+```
+
+No plus sign and no spaces.
+
+## Flow IDs and branch mapping
+
+Dubai phone number:
+
+```txt
+Dubai display number: 97143963333
+Dubai phone_number_id: 1100042333191350
+```
+
+Abu Dhabi phone number:
+
+```txt
+Abu Dhabi display number: 97125622778
+Abu Dhabi phone_number_id: 1000146433192239
+```
+
+Dubai Consultation Flow:
 
 ```txt
 ICONIC_CONSULTATION_FLOW_ID_DUBAI=1607726336999909
 Screen: CONSULTATION_BOOKING
+Branch payload: Dubai
 Dynamic Today time options through endpoint
 ```
 
-Important issue solved earlier:
-
-If Flow send fails with:
+Abu Dhabi Consultation Flow:
 
 ```txt
-(#131009) Parameter value is not valid
-Sending a flow in a draft state requires setting the mode to 'draft'.
+ICONIC_CONSULTATION_FLOW_ID_ABU_DHABI=1648749433033956
+Screen: CONSULTATION_BOOKING
+Branch payload: Abu Dhabi
+No Today dynamic logic in Abu Dhabi static Flow
 ```
 
-It means the Flow is still Draft in Meta and must be Published. Do not change code for this; publish the Flow.
-
-## Service Booking Flow
-
-Dubai Service Flow ID:
+Dubai Service Booking Flow:
 
 ```txt
-1707428933768266
+ICONIC_SERVICE_BOOKING_FLOW_ID_DUBAI=1707428933768266
 ```
 
-Abu Dhabi Service Flow ID:
+Abu Dhabi Service Booking Flow:
 
 ```txt
-986634320965936
+ICONIC_SERVICE_BOOKING_FLOW_ID_ABU_DHABI=986634320965936
 ```
 
-Correct ENV name for Abu Dhabi service:
+Correct Abu Dhabi Service ENV name:
 
 ```txt
 ICONIC_SERVICE_BOOKING_FLOW_ID_ABU_DHABI
@@ -244,213 +196,118 @@ Do not use wrong name:
 ICONIC_SERVICE_BOOKING_FLOWID_ABU_DHABI
 ```
 
-Service flow behavior remains unchanged in V59.
+## Abu Dhabi Consultation Flow JSON reference
 
-## Direct intent behavior added in V59
-
-### Consultation intent opens Consultation Flow directly
-
-Trigger examples:
+Abu Dhabi Consultation Flow must follow Dubai's structure/version style:
 
 ```txt
-استشارة
-استشاره
-بدي استشارة
-بدي استشاره
-اريد استشارة
-أريد استشارة
-حجز استشارة
-حجز استشاره
-consult
-consultation
-book consult
-book consultation
-i want consultation
+version: 7.2
+data_api_version: 3.0
+routing_model: { CONSULTATION_BOOKING: [] }
+screen id: CONSULTATION_BOOKING
+title: Abu Dhabi Consultation
+branch payload: Abu Dhabi
+preferred_day: tomorrow, day_after_tomorrow
+preferred_time: static list
+consultation_type: same as Dubai
+no branch dropdown shown to customer
 ```
 
-Behavior:
+The accepted final Abu Dhabi Flow direction:
 
 ```txt
-Dubai number -> opens Dubai Consultation Flow
-Abu Dhabi number -> opens Abu Dhabi Consultation Flow
+Use the same structure as Dubai Consultation Flow.
+Remove Today.
+Remove dynamic data_exchange.
+Use static preferred_time data-source.
+Do not show Branch to customer.
+Include branch: Abu Dhabi in complete payload.
+Include request_type: Consultation Booking in complete payload.
 ```
 
-### Service intent opens Service Flow directly
+## Render/GitHub deployment workflow
 
-Trigger examples:
+Render Deploy Hook is saved as GitHub Actions secret:
 
 ```txt
-سيرفس
-خدمة
-خدمه
-حجز سيرفس
-موعد سيرفس
-موعد خدمة
-موعد خدمه
-متابعة
-تركيب
-تعديل
-service
-book service
-service appointment
-follow up
-follow-up
-fitting
-adjustment
+RENDER_DEPLOY_HOOK
 ```
 
-Behavior:
+GitHub workflow:
 
 ```txt
-Opens Service Booking Flow directly according to branch / phone_number_id
+.github/workflows/render-deploy.yml
 ```
 
-### General booking intent sends only two buttons
-
-Trigger examples:
+Trigger file:
 
 ```txt
-حجز
-موعد
-حجز موعد
-بدي احجز
-اريد حجز
-أريد حجز
-احجز موعد
-booking
-book
-appointment
-book appointment
-i want to book
+.render-deploy-trigger.txt
 ```
 
-Bot reply:
+To deploy without entering Render:
 
 ```txt
-مرحبا {{customerName}} 👋
-
-أكيد، اختر نوع الحجز المناسب لك:
-
-إذا كنت عميل حالي وتريد خدمة / متابعة / تركيب / تعديل، اختر سيرفس.
-
-إذا كنت عميل جديد وتريد معرفة الحل الأنسب، اختر استشارة.
-
-------------------------------
-
-Hello {{customerName}} 👋
-
-Sure, please choose the right booking type:
-
-If you are an existing client and need service / follow-up / fitting / adjustment, choose Service.
-
-If you are a new client and want to know the best solution, choose Consultation.
+Update .render-deploy-trigger.txt
+GitHub Action Deploy to Render runs
+Render deploy starts
+Verify /api/version
 ```
 
-Buttons:
+## Current package start command
+
+Current start command in package.json:
 
 ```txt
-Book Service | سيرفس
-Consult | استشارة
+node --check server.js && node server.js
 ```
 
-## Team handoff and bot pause behavior
+Do not revert this to old v59/v60 patch command unless intentionally rolling back.
 
-If customer presses or writes:
+## Future edit rule
+
+For future code changes:
 
 ```txt
-Team | فريقنا
-Help | ساعدني
-Talk to Team
-تكلم مع الفريق
-تواصل مع الفريق
-احكي مع الفريق
-فريق
-موظف
-support
-human
+Do not ask Osama to download/upload full server.js manually.
+Use GitHub workflow / helper script / patch approach.
+Run node --check server.js before deploy.
+Trigger Render deploy through GitHub Action.
+Verify /api/version after deploy.
 ```
 
-Bot sends one final message:
-
-```txt
-تمام {{customerName}} 👌
-
-تم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.
-
-------------------------------
-
-Sure {{customerName}} 👌
-
-Your conversation has been forwarded to our team, and one of our specialists will assist you shortly.
-```
-
-Then bot status becomes:
-
-```txt
-Talk to Team
-Bot paused
-```
-
-After that, future messages from the same customer should be logged but the bot should not auto-reply.
-
-If staff replies from Team Inbox, conversation status becomes:
-
-```txt
-Human Reply
-Bot paused
-```
-
-Future customer messages should not trigger bot auto-replies.
-
-## Do not touch without explicit reason
+## Do not touch without explicit request
 
 Do not change these unless explicitly requested:
 
 ```txt
 /api/wake
-reminders
-cron-job
+/api/reminders/preview
+/api/reminders/send-due
 FOLLOW_UP_DELAY_DAYS
 FOLLOW_UP_TEMPLATE_NAME_DUBAI
 FOLLOW_UP_TEMPLATE_NAME_ABU_DHABI
+cron-job
 opt-in / opt-out
 Google Sheets reminder logic
 Flyksoft
 Service Flow structure
-Dubai Consultation Flow structure
+Dubai Consultation Flow dynamic behavior
+staff notification ENV variables
 ```
-
-## Existing approved quick reply structure
-
-Main Menu buttons:
-
-```txt
-Booking | حجز
-Services | خدماتنا
-Team | فريقنا
-```
-
-Booking menu now should use only:
-
-```txt
-Book Service | سيرفس
-Consult | استشارة
-```
-
-No more extra Help button in the booking choice when customer asks for general booking.
 
 ## Testing checklist after deploy
 
-After any deploy, test:
+After deploy check:
 
 ```txt
 https://whatsapp-webhook-g0c5.onrender.com/api/version
 ```
 
-Expected version:
+Expected currently:
 
 ```txt
-iconic-team-inbox-v31-5-8-59-direct-booking-intent-abu-dhabi-consultation-and-bot-pause
+iconic-team-inbox-v31-5-8-60-1-fix-flow-staff-notification-routing
 ```
 
 WhatsApp tests:
@@ -470,23 +327,23 @@ Consult | استشارة
 4. Press Team | فريقنا
 Expected: final handoff message is sent, then bot pauses.
 
-5. Staff replies from Team Inbox
-Expected: conversation becomes Human Reply and bot pauses.
+5. Send: تشغيل البوت or resume bot
+Expected: Bot Active confirmation.
+
+6. Submit Dubai Flow from a customer number
+Expected: Team Inbox + Google Sheet + notification to 971503424811.
+
+7. Submit Abu Dhabi Flow from a customer number
+Expected: Team Inbox + Google Sheet + notification to Abu Dhabi staff.
 ```
 
-## Important operational notes
+## Important operational note
 
-- Repo is public, so never commit Render Deploy Hook URL directly.
-- Render Deploy Hook is stored safely as GitHub Secret `RENDER_DEPLOY_HOOK`.
-- If future assistant says the file is too big to edit, use patch approach again.
-- The working approach is: create a small patch file, update `package.json` or apply patch safely, then deploy through GitHub Action.
-- Always verify with `/api/version` after deployment.
-- For future edits, do not ask Osama to upload `server.js` manually. Use GitHub patch workflow and Render Deploy Hook.
+Testing from staff numbers can confuse conversation states and staff notification tests. Prefer using a non-staff customer number for Flow tests.
 
-## Current known stable base
-
-Use V59 as current active base. Do not go back to V58 unless explicitly rolling back.
+If testing old staff number 971569979163, verify WhatsApp delivery status first. Previously it failed outbound delivery with:
 
 ```txt
-Current active base: V31.5.8.59
+code: 131000
+Something went wrong
 ```
