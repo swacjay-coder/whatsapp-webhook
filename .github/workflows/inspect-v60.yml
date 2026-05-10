@@ -14,14 +14,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V59 patch and inspect targets
+      - name: Check V60 patch and write output
         run: |
-          set -e
           OUT="V60_INSPECTION_OUTPUT.md"
+          ERR="V60_PATCH_ERROR.md"
+          rm -f "$OUT" "$ERR"
+
           if ! grep -q v31-5-8-59 server.js; then
             git apply v59.patch
           fi
           node --check server.js
+
+          if git apply --check v60.patch 2> /tmp/v60_patch_error.txt; then
+            echo "V60 patch check passed" > "$ERR"
+          else
+            echo "# V60 Patch Error" > "$ERR"
+            echo >> "$ERR"
+            cat /tmp/v60_patch_error.txt >> "$ERR"
+          fi
+
           {
             echo "# V60 Inspection Output"
             echo
@@ -31,32 +42,28 @@ jobs:
             grep -n "BOT_VERSION" server.js || true
             echo
             echo "## FLOW BOOKING DATA"
-            grep -n "function getWhatsAppFlowBookingData" server.js || true
             line=$(grep -n "function getWhatsAppFlowBookingData" server.js | head -1 | cut -d: -f1 || true)
-            if [ -n "$line" ]; then sed -n "$((line-20)),$((line+120))p" server.js; fi
+            if [ -n "$line" ]; then sed -n "$((line-10)),$((line+80))p" server.js; fi
             echo
-            echo "## BOOKING REQUEST MESSAGE"
-            grep -n "function buildWhatsAppFlowBookingRequestMessage" server.js || true
-            line=$(grep -n "function buildWhatsAppFlowBookingRequestMessage" server.js | head -1 | cut -d: -f1 || true)
-            if [ -n "$line" ]; then sed -n "$((line-20)),$((line+90))p" server.js; fi
+            echo "## HANDLE FLOW SUBMIT"
+            line=$(grep -n "async function handleWhatsAppFlowBookingSubmit" server.js | head -1 | cut -d: -f1 || true)
+            if [ -n "$line" ]; then sed -n "$((line)),$((line+110))p" server.js; fi
             echo
-            echo "## SAVE BOOKING REQUEST"
-            grep -n "saveBooking" server.js || true
+            echo "## STAFF HELPERS"
+            line=$(grep -n "function getStaffNotificationNumber" server.js | head -1 | cut -d: -f1 || true)
+            if [ -n "$line" ]; then sed -n "$((line-20)),$((line+80))p" server.js; fi
             echo
-            echo "## FLOW HANDLED / BOOKING DATA CALLS"
-            grep -n "getWhatsAppFlowBookingData\|buildWhatsAppFlowBookingRequestMessage\|WhatsApp Flow Booking" server.js || true
+            echo "## TALK TO TEAM FUNCTIONS"
+            line=$(grep -n "function isTalkToTeamText" server.js | head -1 | cut -d: -f1 || true)
+            if [ -n "$line" ]; then sed -n "$((line-10)),$((line+80))p" server.js; fi
             echo
-            echo "## STAFF NOTIFICATION USAGE"
-            grep -n "sendStaffNotification\|Staff Notify\|staff notification" server.js || true
-            echo
-            echo "## TEAM INBOX SEND ROUTES"
-            grep -n "Human Reply\|send-message\|send-image\|resume" server.js | head -120 || true
-            echo
-            echo "## API ROUTES RELATED TO CONVERSATION STATE"
-            grep -n "conversation-state\|conversationStatus\|setConversationStatus\|saveConversationState" server.js | head -160 || true
+            echo "## WEBHOOK PAUSE GATE"
+            line=$(grep -n "const isOptInMessage" server.js | head -1 | cut -d: -f1 || true)
+            if [ -n "$line" ]; then sed -n "$((line-10)),$((line+80))p" server.js; fi
           } > "$OUT"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$OUT"
-          git commit -m "Write V60 inspection output" || echo "No inspection changes"
+          git add "$OUT" "$ERR"
+          git commit -m "Write V60 patch check output" || echo "No inspection changes"
           git push
