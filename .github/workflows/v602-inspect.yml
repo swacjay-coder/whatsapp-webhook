@@ -1,0 +1,25 @@
+name: Inspect V60.2 Send Functions
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".v602-inspect-trigger.txt"
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run V60.2 send function inspection
+        run: |
+          set -e
+          python3 v602_inspect_send_functions.py
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add V602_SEND_FUNCTIONS.md
+          git commit -m "Write V60.2 send function inspection" || echo "No changes"
+          git push
