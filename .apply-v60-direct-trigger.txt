@@ -1,1 +1,1 @@
-inspect v60.2.2 reply bodies
+apply v60.2.2 clean names and headers
