@@ -1,0 +1,22 @@
+name: Deploy to Render
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".render-deploy-trigger.txt"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK secret is missing"
+            exit 1
+          fi
+          curl -fsSL "$RENDER_DEPLOY_HOOK"
+          echo "Render deploy hook triggered"
