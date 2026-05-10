@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-51-dubai-smart-abudhabi-stable-flow";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-52-service-booking-flow-routing";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -146,6 +146,20 @@ const ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI = (
   process.env.ABU_DHABI_BOOKING_FLOW_TOKEN_PREFIX ||
   "iconic_booking_flow_abudhabi"
 ).toString().trim();
+
+// V31.5.8.52 - Dedicated Service Booking Flow:
+// Safe independent Flow ID for existing clients who need Service / Fitting / Follow-up / Adjustment appointments.
+const ICONIC_SERVICE_BOOKING_FLOW_ID = (
+  process.env.ICONIC_SERVICE_BOOKING_FLOW_ID ||
+  process.env.SERVICE_BOOKING_FLOW_ID ||
+  "1707428933768266"
+).toString().trim();
+const ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX = (
+  process.env.ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX ||
+  process.env.SERVICE_BOOKING_FLOW_TOKEN_PREFIX ||
+  "iconic_service_booking_flow"
+).toString().trim();
+const ICONIC_SERVICE_BOOKING_FLOW_CTA = (process.env.ICONIC_SERVICE_BOOKING_FLOW_CTA || "Book Service").toString().slice(0, 30);
 
 const ICONIC_BOOKING_FLOW_CTA = (process.env.ICONIC_BOOKING_FLOW_CTA || "Book now").toString().slice(0, 30);
 const ICONIC_BOOKING_FLOW_ENABLED = (process.env.ICONIC_BOOKING_FLOW_ENABLED || "true").toString().toLowerCase() !== "false";
@@ -242,7 +256,8 @@ function getBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
       phoneNumberId: ABU_DHABI_PHONE_NUMBER_ID,
       flowId: ICONIC_BOOKING_FLOW_ID_ABU_DHABI,
       tokenPrefix: ICONIC_BOOKING_FLOW_TOKEN_PREFIX_ABU_DHABI,
-      envName: "ICONIC_BOOKING_FLOW_ID_ABU_DHABI"
+      envName: "ICONIC_BOOKING_FLOW_ID_ABU_DHABI",
+      requestType: "Consultation Booking"
     };
   }
 
@@ -251,7 +266,22 @@ function getBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
     phoneNumberId: finalPhoneNumberId || DUBAI_PHONE_NUMBER_ID,
     flowId: ICONIC_BOOKING_FLOW_ID_DUBAI,
     tokenPrefix: ICONIC_BOOKING_FLOW_TOKEN_PREFIX_DUBAI,
-    envName: "ICONIC_BOOKING_FLOW_ID_DUBAI"
+    envName: "ICONIC_BOOKING_FLOW_ID_DUBAI",
+    requestType: "Consultation Booking"
+  };
+}
+
+function getServiceBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const lineConfig = getLineConfig(finalPhoneNumberId, displayPhoneNumber);
+
+  return {
+    branch: lineConfig.branch,
+    phoneNumberId: finalPhoneNumberId || DUBAI_PHONE_NUMBER_ID,
+    flowId: ICONIC_SERVICE_BOOKING_FLOW_ID,
+    tokenPrefix: ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX,
+    envName: "ICONIC_SERVICE_BOOKING_FLOW_ID",
+    requestType: "Service Appointment"
   };
 }
 
@@ -1043,7 +1073,13 @@ async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phone
 async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
-  const bookingFlowConfig = getBookingFlowConfigForLine(finalPhoneNumberId);
+  const requestedFlowType = (options.flowType || options.requestType || "").toString().toLowerCase();
+  const isServiceBookingFlow = requestedFlowType.includes("service");
+  const bookingFlowConfig = isServiceBookingFlow
+    ? getServiceBookingFlowConfigForLine(finalPhoneNumberId)
+    : getBookingFlowConfigForLine(finalPhoneNumberId);
+  const selectedFlowCta = isServiceBookingFlow ? ICONIC_SERVICE_BOOKING_FLOW_CTA : ICONIC_BOOKING_FLOW_CTA;
+  const selectedFlowHeader = isServiceBookingFlow ? "Service Booking" : "Book Appointment";
 
   if (!ICONIC_BOOKING_FLOW_ENABLED) {
     return {
@@ -1068,21 +1104,38 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
     Date.now().toString()
   ].filter(Boolean).join("_");
 
-  const flowBody = [
-    `${BUSINESS_NAME_SPACED} ✨`,
-    "",
-    "احجز طلبك خلال ثواني من داخل واتساب.",
-    "",
-    "اختر الفرع، اليوم، والوقت المفضل. الفريق سيؤكد الموعد النهائي بعد مراجعة التوفر.",
-    "",
-    "------------------------------",
-    "",
-    `${BUSINESS_NAME_SPACED} ✨`,
-    "",
-    "Book your request in seconds inside WhatsApp.",
-    "",
-    "Choose the branch, preferred day, and preferred time. Our team will confirm the final appointment after checking availability."
-  ].join(String.fromCharCode(10));
+  const flowBody = (isServiceBookingFlow
+    ? [
+        `${BUSINESS_NAME_SPACED} ✨`,
+        "",
+        "احجز موعد السيرفس خلال ثواني من داخل واتساب.",
+        "",
+        "اختر الفرع، اليوم، الوقت، واسم الموظف المفضل إن وجد. الفريق سيؤكد الموعد النهائي بعد مراجعة التوفر.",
+        "",
+        "------------------------------",
+        "",
+        `${BUSINESS_NAME_SPACED} ✨`,
+        "",
+        "Book your service appointment in seconds inside WhatsApp.",
+        "",
+        "Choose the branch, preferred day, preferred time, and preferred team member if any. Our team will confirm the final appointment after checking availability."
+      ]
+    : [
+        `${BUSINESS_NAME_SPACED} ✨`,
+        "",
+        "احجز طلبك خلال ثواني من داخل واتساب.",
+        "",
+        "اختر الفرع، اليوم، والوقت المفضل. الفريق سيؤكد الموعد النهائي بعد مراجعة التوفر.",
+        "",
+        "------------------------------",
+        "",
+        `${BUSINESS_NAME_SPACED} ✨`,
+        "",
+        "Book your request in seconds inside WhatsApp.",
+        "",
+        "Choose the branch, preferred day, and preferred time. Our team will confirm the final appointment after checking availability."
+      ]
+  ).join(String.fromCharCode(10));
 
   const payload = {
     messaging_product: "whatsapp",
@@ -1093,7 +1146,7 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
       type: "flow",
       header: {
         type: "text",
-        text: "Book Appointment"
+        text: selectedFlowHeader
       },
       body: {
         text: flowBody
@@ -1107,7 +1160,7 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
           flow_message_version: "3",
           flow_id: bookingFlowConfig.flowId,
           flow_token: flowToken,
-          flow_cta: ICONIC_BOOKING_FLOW_CTA,
+          flow_cta: selectedFlowCta,
           flow_action: "navigate",
           flow_action_payload: isAbuDhabiLine(finalPhoneNumberId)
             ? {
@@ -1115,6 +1168,10 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
                 data: {
                   default_branch: options.branch || lineConfig.branch,
                   customer_name: options.customerName || "",
+                  request_type: bookingFlowConfig.requestType,
+                  flow_type: isServiceBookingFlow ? "service_booking" : "consultation_booking",
+                  request_type: bookingFlowConfig.requestType,
+                  flow_type: isServiceBookingFlow ? "service_booking" : "consultation_booking",
                   default_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
                   preferred_time_options: getBookingTimeOptionsForFlow("Tomorrow"),
                   today_available: false,
@@ -1189,11 +1246,27 @@ function buildLocationMessageBody(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
 
 function getMainMenuButtons() {
   // WhatsApp reply button titles must stay short.
-  // Bilingual labels are kept under the safe button-title length.
+  // English first keeps the flow clear for Arabic and non-Arabic clients.
   return [
-    { id: "book_appointment", title: "حجز موعد / Book" },
-    { id: "services", title: "الخدمات / Services" },
-    { id: "location_branch", title: "الموقع / Location" }
+    { id: "booking_menu", title: "Booking | حجز" },
+    { id: "services", title: "Services | خدماتنا" },
+    { id: "talk_to_team", title: "Team | فريقنا" }
+  ];
+}
+
+function getBookingSubMenuButtons() {
+  return [
+    { id: "consult_menu", title: "Consult | استشارة" },
+    { id: "service_menu", title: "Service | سيرفس" },
+    { id: "talk_to_team", title: "Help | ساعدني" }
+  ];
+}
+
+function getServiceSubMenuButtons() {
+  return [
+    { id: "book_service_flow", title: "Book Service | سيرفس" },
+    { id: "talk_to_team", title: "Team | فريقنا" },
+    { id: "location_branch", title: "Location | موقعنا" }
   ];
 }
 
@@ -1307,6 +1380,62 @@ function getIconicBookingFlowData(preferredDay = "") {
   };
 }
 
+function getServiceBookingTeamMemberOptionsForFlow(branch = "Dubai") {
+  const normalizedBranch = normalizeFlowBranch(branch, "Dubai");
+  const dubaiTeam = [
+    "Mr. Ahmed",
+    "Tamer",
+    "Wael",
+    "Bashir",
+    "Omar",
+    "Emad",
+    "Ani",
+    "Any Available"
+  ];
+  const abuDhabiTeam = [
+    "Adham",
+    "Osama",
+    "Any Available"
+  ];
+
+  const team = normalizedBranch === "Abu Dhabi" ? abuDhabiTeam : dubaiTeam;
+
+  return team.map((name) => ({
+    id: name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
+    title: name
+  }));
+}
+
+function getServiceTypeOptionsForFlow() {
+  return [
+    { id: "fitting_appointment", title: "Fitting Appointment" },
+    { id: "service", title: "Service" },
+    { id: "follow_up_visit", title: "Follow-up Visit" },
+    { id: "adjustment", title: "Adjustment" },
+    { id: "other", title: "Other" }
+  ];
+}
+
+function getServiceBookingFlowData(branch = "Dubai", preferredDay = "Tomorrow") {
+  const normalizedBranch = normalizeFlowBranch(branch, "Dubai");
+  const normalizedPreferredDay = normalizeFlowDay(preferredDay || "Tomorrow");
+
+  return {
+    default_branch: normalizedBranch,
+    selected_branch: normalizedBranch,
+    selected_day: normalizedPreferredDay,
+    preferred_day: normalizedPreferredDay,
+    preferred_time_options: getBookingTimeOptionsForFlow(normalizedPreferredDay),
+    team_member_options: getServiceBookingTeamMemberOptionsForFlow(normalizedBranch),
+    service_type_options: getServiceTypeOptionsForFlow(),
+    request_type: "Service Appointment",
+    today_available: isTodayAvailableForFlow(),
+    today_unavailable_message: getBookingTimeOptionsForFlow("Today").length > 0
+      ? ""
+      : "Today is no longer available, please choose Tomorrow or This Week."
+  };
+}
+
 function decryptWhatsAppFlowRequest(body = {}) {
   const encryptedAesKey = body.encrypted_aes_key;
   const encryptedFlowData = body.encrypted_flow_data;
@@ -1384,6 +1513,9 @@ function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
   }
 
   const data = flowRequest.data || {};
+  const flowToken = (flowRequest.flow_token || data.flow_token || "").toString();
+  const isServiceFlow = flowToken.includes(ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX) ||
+    compactText(data.request_type || data.flow_type || "").includes("service");
   const preferredDay = normalizeFlowChoiceText(
     data.preferred_day ||
     data.day ||
@@ -1391,6 +1523,16 @@ function buildIconicBookingFlowExchangeResponse(flowRequest = {}) {
     flowRequest.preferred_day ||
     ""
   );
+
+  if (isServiceFlow) {
+    const selectedBranch = normalizeFlowChoiceText(data.branch || data.default_branch || data.selected_branch || "Dubai");
+
+    return {
+      version: "3.0",
+      screen: "BOOKING_DETAILS",
+      data: getServiceBookingFlowData(selectedBranch, preferredDay || "Tomorrow")
+    };
+  }
 
   return {
     version: "3.0",
@@ -1514,17 +1656,24 @@ function getWhatsAppFlowBookingData(message, lineConfig = {}) {
   const branchValue = findFlowResponseValue(payload, ["branch", "فرع"]);
   const dayValue = findFlowResponseValue(payload, ["preferred_day", "day", "اليوم"]);
   const timeValue = findFlowResponseValue(payload, ["preferred_time", "time", "وقت"]);
-  const serviceValue = findFlowResponseValue(payload, ["service_interest", "service", "request_type", "نوع"]);
+  const serviceValue = findFlowResponseValue(payload, ["service_interest", "request_type", "نوع"]);
+  const serviceTypeValue = findFlowResponseValue(payload, ["service_type", "service", "service appointment", "sيرفس"]);
+  const teamMemberValue = findFlowResponseValue(payload, ["team_member", "team member", "staff", "employee", "موظف", "فريق"]);
   const notesValue = findFlowResponseValue(payload, ["notes", "note", "preferred_exact_time", "ملاحظ"]);
 
   const branch = normalizeFlowBranch(branchValue, lineConfig.branch || "Dubai");
+  const normalizedServiceType = normalizeFlowChoiceText(serviceTypeValue);
+  const normalizedTeamMember = normalizeFlowChoiceText(teamMemberValue);
+  const isServiceAppointment = Boolean(normalizedServiceType || normalizedTeamMember);
 
   return {
     rawPayload: payload,
     branch,
     preferredDay: normalizeFlowDay(dayValue),
     preferredTime: normalizeFlowTime(timeValue),
-    serviceInterest: normalizeFlowServiceInterest(serviceValue),
+    serviceInterest: isServiceAppointment ? "Service Appointment" : normalizeFlowServiceInterest(serviceValue),
+    serviceType: normalizedServiceType,
+    teamMember: normalizedTeamMember,
     notes: notesValue || ""
   };
 }
@@ -1536,6 +1685,8 @@ function buildWhatsAppFlowBookingRequestMessage(flowData = {}) {
     `Preferred day: ${flowData.preferredDay || ""}`,
     `Preferred time: ${flowData.preferredTime || ""}`,
     `Service interest: ${flowData.serviceInterest || ""}`,
+    flowData.serviceType ? `Service type: ${flowData.serviceType}` : "Service type: ",
+    flowData.teamMember ? `Team member: ${flowData.teamMember}` : "Team member: ",
     flowData.notes ? `Notes: ${flowData.notes}` : "Notes: ",
     "Flyksoft Status: Not added",
     "Customer selection: WhatsApp Flow submit"
@@ -1675,6 +1826,37 @@ function isFastBookingStartText(text) {
     value.includes("book appointment") ||
     value === "book" ||
     value.includes(" book");
+}
+
+function isServiceMenuText(text) {
+  const value = compactText(text);
+
+  return value === "service | سيرفس" ||
+    value === "service_menu" ||
+    value === "service" ||
+    value === "سيرفس" ||
+    value.includes("service |") ||
+    value.includes("سيرفس");
+}
+
+function isBookServiceFlowText(text) {
+  const value = compactText(text);
+
+  return value === "book_service_flow" ||
+    value === "book service | سيرفس" ||
+    value === "book service" ||
+    value === "service booking" ||
+    value.includes("book service") ||
+    value.includes("حجز سيرفس");
+}
+
+function isBookingMenuText(text) {
+  const value = compactText(text);
+
+  return value === "booking_menu" ||
+    value === "booking | حجز" ||
+    value === "booking" ||
+    value === "حجز";
 }
 
 function getFastBookingBranchChoice(text) {
@@ -2684,6 +2866,12 @@ app.get("/api/version", (req, res) => {
       flowIdConfigured: Boolean(ICONIC_BOOKING_FLOW_ID),
       cta: ICONIC_BOOKING_FLOW_CTA,
       dynamicEndpoint: "/api/flows/iconic-booking"
+    },
+    serviceBookingFlow: {
+      flowIdConfigured: Boolean(ICONIC_SERVICE_BOOKING_FLOW_ID),
+      flowId: ICONIC_SERVICE_BOOKING_FLOW_ID || "",
+      cta: ICONIC_SERVICE_BOOKING_FLOW_CTA,
+      tokenPrefix: ICONIC_SERVICE_BOOKING_FLOW_TOKEN_PREFIX
     },
     note: "Call Now uses approved templates. Location uses WhatsApp CTA URL buttons."
   });
@@ -15061,6 +15249,64 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    if (isBookServiceFlowText(originalText || text)) {
+      addInboxMessage(
+        from,
+        "customer",
+        profileName ? `${profileName}: ${originalText}` : originalText,
+        "Service Appointment",
+        incomingPhoneNumberId,
+        {
+          customerName: profileName,
+          messageType: "Customer Service Booking Flow Request"
+        }
+      );
+
+      setConversationStatus(from, "Service Flow - Opened");
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: "Service Flow - Opened",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
+        tags: ["Booking", "Service Appointment", "WhatsApp Flow"],
+        updatedBy: "Service Booking Flow"
+      });
+
+      const flowSendResult = await sendWhatsAppFlowMessage(from, incomingPhoneNumberId, {
+        branch: lineConfig.branch,
+        customerName: profileName,
+        flowType: "service",
+        requestType: "Service Appointment"
+      });
+
+      if (flowSendResult.ok) {
+        addInboxMessage(
+          from,
+          "bot",
+          `Service Booking Flow sent: ${ICONIC_SERVICE_BOOKING_FLOW_ID}`,
+          "Service Flow - Opened",
+          incomingPhoneNumberId,
+          {
+            customerName: profileName,
+            messageType: "Service Booking Flow Sent"
+          }
+        );
+      } else {
+        const fallbackServiceText =
+          `${BUSINESS_NAME_SPACED} ✨\n\n` +
+          "تعذر فتح نموذج حجز السيرفس حالياً. فريقنا سيتابع معك داخل المحادثة.\n\n" +
+          "------------------------------\n\n" +
+          `${BUSINESS_NAME_SPACED} ✨\n\n` +
+          "The service booking form could not be opened right now. Our team will assist you inside this chat.";
+
+        await sendWhatsAppMessage(from, fallbackServiceText, incomingPhoneNumberId);
+        addInboxMessage(from, "bot", fallbackServiceText, "Service Flow Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Service Booking Flow Fallback" });
+      }
+
+      return res.sendStatus(200);
+    }
+
     const fastBookingHandled = await handleFastBookingButtons({
       from,
       originalText,
@@ -15329,33 +15575,38 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    /* 1 — حجز استشارة */
+    /* V31.5.8.52 — Booking menu */
     else if (
+      isBookingMenuText(originalText || text) ||
       text === "1" ||
-      text === "١" ||
-      text.includes("احجز") ||
-      text.includes("حجز موعد") ||
-      text.includes("موعد") ||
-      text.includes("appointment") ||
-      text.includes("book consultation") ||
-      text.includes("book appointment") ||
-      text.includes("book")
+      text === "١"
     ) {
-      setConversationStatus(from, "Booking Request");
+      setConversationStatus(from, "Booking Menu");
 
       replyText =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `تم استلام طلب الحجز مع فرع ${branchNameAr} بنجاح ✅\n\n` +
-        "فريق Iconic Hair Care سيراجع المحادثة ويرد عليك بالخطوة المناسبة في أقرب وقت.\n\n" +
-        "إذا عندك وقت مفضل أو ملاحظة إضافية، يمكنك إرسالها هنا.\n\n" +
+        `تمام ${profileName || ""} 👌\n\n` +
+        "اختر نوع الحجز المناسب لك:\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `Your booking request with our ${lineConfig.branch} branch has been received successfully ✅\n\n` +
-        "The Iconic Hair Care team will review the conversation and reply with the next suitable step as soon as possible.\n\n" +
-        "If you have a preferred time or any additional note, you may send it here.";
+        "Please choose the booking type:";
 
-      replyButtons = getConsultActionButtons();
-      sendReminderOptInPrompt = true;
+      replyButtons = getBookingSubMenuButtons();
+    }
+
+    /* V31.5.8.52 — Service booking submenu */
+    else if (isServiceMenuText(originalText || text)) {
+      setConversationStatus(from, "Service Appointment");
+
+      replyText =
+        `${BUSINESS_NAME_SPACED} ✨\n\n` +
+        `تمام ${profileName || ""} 👌\n\n` +
+        "هذا الخيار مخصص للعملاء الحاليين لحجز موعد سيرفس، متابعة، تركيب، أو Service visit.\n\n" +
+        "------------------------------\n\n" +
+        `${BUSINESS_NAME_SPACED} ✨\n\n` +
+        "Please choose this option if you are an existing client and would like to book a service appointment, follow-up, fitting, or service visit.";
+
+      replyButtons = getServiceSubMenuButtons();
     }
 
     /* 2 — الخدمات: بوابة ذكية أعمق */
