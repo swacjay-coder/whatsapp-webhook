@@ -66,11 +66,11 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-9-details-video-cache-bust";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-0-details-wordpress-video-upload-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
-// V60.3.0.9: Force Details to use the new WordPress explanation video with a cache-busted URL, independent from old Render env overrides.
-const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4?v=60309-details";
+// V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
+const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4";
 const RESULTS_VIDEO_URL = (process.env.RESULTS_VIDEO_URL || "").toString().trim();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -1403,6 +1403,11 @@ async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DUBA
 async function uploadWhatsAppVideoFromUrl(videoUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID, filename = "iconic-video.mp4") {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const cleanVideoUrl = (videoUrl || "").toString().trim();
+  const safeFilename = (filename || "iconic-video.mp4")
+    .toString()
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 90) || "iconic-video.mp4";
 
   if (!cleanVideoUrl) {
     return {
@@ -1412,7 +1417,21 @@ async function uploadWhatsAppVideoFromUrl(videoUrl, phoneNumberId = DUBAI_PHONE_
     };
   }
 
-  const videoResponse = await fetch(cleanVideoUrl);
+  let videoResponse;
+  try {
+    videoResponse = await fetch(cleanVideoUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 IconicHairCareBot/1.0",
+        "Accept": "video/mp4,video/*,*/*"
+      }
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: 500,
+      result: { error: "Video URL fetch threw error", url: cleanVideoUrl, message: error?.message || String(error) }
+    };
+  }
 
   if (!videoResponse.ok) {
     return {
@@ -1422,9 +1441,22 @@ async function uploadWhatsAppVideoFromUrl(videoUrl, phoneNumberId = DUBAI_PHONE_
     };
   }
 
-  const contentType = (videoResponse.headers.get("content-type") || "video/mp4").split(";")[0].trim() || "video/mp4";
+  const originalContentType = (videoResponse.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  const isMp4Url = cleanVideoUrl.toLowerCase().includes(".mp4") || safeFilename.toLowerCase().endsWith(".mp4");
+  const contentType = originalContentType.startsWith("video/")
+    ? originalContentType
+    : (isMp4Url ? "video/mp4" : "video/mp4");
+
   const arrayBuffer = await videoResponse.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+
+  if (!buffer.length) {
+    return {
+      ok: false,
+      status: 400,
+      result: { error: "Video URL returned empty file", url: cleanVideoUrl, originalContentType, contentType }
+    };
+  }
 
   if (buffer.length > 16 * 1024 * 1024) {
     return {
@@ -1439,7 +1471,7 @@ async function uploadWhatsAppVideoFromUrl(videoUrl, phoneNumberId = DUBAI_PHONE_
   const blob = new Blob([buffer], { type: contentType });
   form.append("messaging_product", "whatsapp");
   form.append("type", contentType);
-  form.append("file", blob, filename || "iconic-video.mp4");
+  form.append("file", blob, safeFilename);
 
   const response = await fetch(uploadUrl, {
     method: "POST",
@@ -1453,13 +1485,32 @@ async function uploadWhatsAppVideoFromUrl(videoUrl, phoneNumberId = DUBAI_PHONE_
 
   if (!response.ok) {
     console.log("WhatsApp video media upload failed:");
-    console.log(JSON.stringify(result, null, 2));
-    return { ok: false, status: response.status, result };
+    console.log(JSON.stringify({
+      url: cleanVideoUrl,
+      filename: safeFilename,
+      originalContentType,
+      contentType,
+      sizeBytes: buffer.length,
+      result
+    }, null, 2));
+    return {
+      ok: false,
+      status: response.status,
+      result: {
+        ...result,
+        uploadDebug: {
+          url: cleanVideoUrl,
+          filename: safeFilename,
+          originalContentType,
+          contentType,
+          sizeBytes: buffer.length
+        }
+      }
+    };
   }
 
   return { ok: true, status: response.status, mediaId: result.id, result };
 }
-
 async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
   const cleanVideoUrl = (videoUrl || "").toString().trim();
   const fallbackImageUrl = (options.headerImageUrl || BOT_HEADER_IMAGE_URL || "").toString().trim();
@@ -15989,7 +16040,7 @@ app.post("/webhook", async (req, res) => {
           { id: "talk_to_team", title: "Team | فريقنا" }
         ], DETAILS_VIDEO_URL, incomingPhoneNumberId, {
           headerImageUrl: BOT_HEADER_IMAGE_URL,
-          filename: "iconic-details-video-v60309.mp4"
+          filename: "iconic-details-video-v60310.mp4"
         });
         addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "Details Video Buttons", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Video Buttons" });
         return res.sendStatus(200);
