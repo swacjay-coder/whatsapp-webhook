@@ -2,6 +2,6 @@ Render deploy trigger file.
 
 Update this file to trigger a Render deployment through GitHub Actions.
 
-Requested at: 2026-05-11T13:35:00+04:00 Dubai
-Reason: Verify regenerated Render deploy hook URL
-Attempt: clean-reset-2
+Requested at: 2026-05-11T13:42:00+04:00 Dubai
+Reason: Verify Render hook copied from Render copy button
+Attempt: clean-reset-3
