@@ -1,2 +1,4 @@
-deploy v60304
-commit pending
+Deploy requested from ChatGPT
+Version target: current main
+Requested at: 2026-05-11T12:00:00+04:00 Dubai
+Reason: Manual deploy trigger only
