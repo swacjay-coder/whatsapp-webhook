@@ -1,0 +1,3 @@
+Render deploy trigger file.
+
+Any update to this file will trigger GitHub Actions and deploy the latest main branch to Render.
