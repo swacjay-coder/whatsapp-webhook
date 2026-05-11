@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-2-services-video-header-single-message";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-3-safe-video-fallback";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 const RESULTS_VIDEO_URL = (process.env.RESULTS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
@@ -15891,22 +15891,24 @@ app.post("/webhook", async (req, res) => {
       }
 
       if (iconicIsResultsRoute) {
+        await sendWhatsAppVideoByLink(from, RESULTS_VIDEO_URL, "", incomingPhoneNumberId);
         await sendWhatsAppButtonMessage(from, buildResultsFollowupBody(profileName), [
           { id: "how_it_works", title: "Details | التفاصيل" },
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "talk_to_team", title: "Team | فريقنا" }
-        ], incomingPhoneNumberId, { headerVideoUrl: RESULTS_VIDEO_URL });
-        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Video Header", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Video Header" });
+        ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
+        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Safe Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Safe Fallback" });
         return res.sendStatus(200);
       }
 
       if (iconicIsHowItWorksRoute) {
+        await sendWhatsAppVideoByLink(from, HOW_IT_WORKS_VIDEO_URL, "", incomingPhoneNumberId);
         await sendWhatsAppButtonMessage(from, buildHowItWorksBody(profileName), [
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "results", title: "Results | نتائج" },
           { id: "talk_to_team", title: "Team | فريقنا" }
-        ], incomingPhoneNumberId, { headerVideoUrl: HOW_IT_WORKS_VIDEO_URL });
-        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "Details Video Header", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Video Header" });
+        ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
+        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "Details Safe Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Safe Fallback" });
         return res.sendStatus(200);
       }
 
