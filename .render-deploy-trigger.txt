@@ -2,6 +2,6 @@ Render deploy trigger file.
 
 Update this file to trigger a Render deployment through GitHub Actions.
 
-Requested at: 2026-05-11T19:10:00+04:00 Dubai
-Reason: Rollback local Clear Chat and restore previous Team Inbox state
-Attempt: rollback-clear-chat-2026-05-11-1910
+Requested at: 2026-05-11T19:24:00+04:00 Dubai
+Reason: Deploy cleaned stable live UI with single source script
+Attempt: clean-stable-live-ui-2026-05-11-1924
