@@ -66,9 +66,10 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-1-details-label-and-body-safe";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-2-services-video-header-single-message";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
+const RESULTS_VIDEO_URL = (process.env.RESULTS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -1342,6 +1343,7 @@ async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DUBA
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
 
   const headerImageUrl = (options.headerImageUrl || BOT_HEADER_IMAGE_URL || "").toString().trim();
+  const headerVideoUrl = (options.headerVideoUrl || "").toString().trim();
 
   const payload = {
     messaging_product: "whatsapp",
@@ -1349,14 +1351,21 @@ async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DUBA
     type: "interactive",
     interactive: {
       type: "button",
-      ...(headerImageUrl
+      ...(headerVideoUrl
         ? {
             header: {
-              type: "image",
-              image: { link: headerImageUrl }
+              type: "video",
+              video: { link: headerVideoUrl }
             }
           }
-        : {}),
+        : headerImageUrl
+          ? {
+              header: {
+                type: "image",
+                image: { link: headerImageUrl }
+              }
+            }
+          : {}),
       body: { text: body },
       action: {
         buttons: buttons.slice(0, 3).map((button, index) => ({
@@ -15881,14 +15890,23 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
+      if (iconicIsResultsRoute) {
+        await sendWhatsAppButtonMessage(from, buildResultsFollowupBody(profileName), [
+          { id: "how_it_works", title: "Details | التفاصيل" },
+          { id: "booking_menu", title: "Booking | حجز" },
+          { id: "talk_to_team", title: "Team | فريقنا" }
+        ], incomingPhoneNumberId, { headerVideoUrl: RESULTS_VIDEO_URL });
+        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Video Header", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Video Header" });
+        return res.sendStatus(200);
+      }
+
       if (iconicIsHowItWorksRoute) {
-        await sendWhatsAppVideoByLink(from, HOW_IT_WORKS_VIDEO_URL, "", incomingPhoneNumberId);
         await sendWhatsAppButtonMessage(from, buildHowItWorksBody(profileName), [
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "results", title: "Results | نتائج" },
           { id: "talk_to_team", title: "Team | فريقنا" }
-        ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
-        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "How it works", incomingPhoneNumberId, { customerName: profileName, messageType: "How it works" });
+        ], incomingPhoneNumberId, { headerVideoUrl: HOW_IT_WORKS_VIDEO_URL });
+        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "Details Video Header", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Video Header" });
         return res.sendStatus(200);
       }
 
