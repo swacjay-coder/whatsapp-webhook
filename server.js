@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-4-chat-bg-visible-shading-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-5-final-chat-bg-override";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
@@ -13294,6 +13294,38 @@ app.get("/inbox", protectInbox, (req, res) => {
     padding: 6px !important;
   }
 }
+
+
+    /* V60.3.1.5 - FINAL chat background override.
+       IMPORTANT: placed at the very end of CSS because older UI blocks below the original background were overriding previous changes.
+       Scope: chat background colors/shading only. Same background image, same layout, no WhatsApp logic touched. */
+    .chat-panel {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.72), rgba(245,253,240,.46)) !important;
+      background-color: rgba(245,253,240,.52) !important;
+    }
+
+    .chat-panel::before {
+      opacity: .18 !important;
+      filter: saturate(.70) contrast(.88) brightness(1.08) !important;
+    }
+
+    .chat-panel::after {
+      content: "" !important;
+      position: absolute !important;
+      inset: 84px 0 0 0 !important;
+      pointer-events: none !important;
+      z-index: 0 !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.18), rgba(244,252,239,.12)),
+        radial-gradient(circle at 22% 18%, rgba(120,184,62,.035), transparent 30%),
+        radial-gradient(circle at 88% 76%, rgba(18,140,126,.025), transparent 32%) !important;
+    }
+
+    #chatBody,
+    .chat-body {
+      background: transparent !important;
+    }
 
 </style>
 </head>
