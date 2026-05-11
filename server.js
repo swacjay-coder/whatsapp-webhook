@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-5-inbox-results-details-cache-cleanup";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-6-chat-background-true-color";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -8809,14 +8809,12 @@ app.get("/inbox", protectInbox, (req, res) => {
       position: relative !important;
       overflow-y: auto !important;
       isolation: isolate !important;
-      background-image:
-        linear-gradient(rgba(246, 252, 243, .46), rgba(241, 249, 238, .50)),
-        var(--iconic-chat-logo-v2285),
-        radial-gradient(circle at 18px 18px, rgba(120,184,62,.055) 1.4px, transparent 1.8px) !important;
-      background-repeat: no-repeat, no-repeat, repeat !important;
-      background-position: center center, center center, 0 0 !important;
-      background-size: cover, min(900px, 84%) auto, 28px 28px !important;
-      background-attachment: scroll, scroll, scroll !important;
+      background-image: var(--iconic-chat-logo-v2285) !important;
+      background-repeat: no-repeat !important;
+      background-position: center center !important;
+      background-size: min(900px, 84%) auto !important;
+      background-attachment: scroll !important;
+      background-color: #ffffff !important;
     }
 
     #chatBody .chat-watermark,
@@ -12754,14 +12752,12 @@ app.get("/inbox", protectInbox, (req, res) => {
       --iconic-chat-font: "Inter", "Segoe UI", "SF Pro Text", "Tahoma", "Arial", sans-serif !important;
       --iconic-chat-logo-v2285: url("/assets/iconic-chat-background-logo.png") !important;
 
-      background-image:
-        linear-gradient(rgba(246, 252, 243, .43), rgba(241, 249, 238, .48)),
-        var(--iconic-chat-logo-v2285),
-        radial-gradient(circle at 18px 18px, rgba(120,184,62,.052) 1.4px, transparent 1.8px) !important;
-      background-repeat: no-repeat, no-repeat, repeat !important;
-      background-position: center center, center center, 0 0 !important;
-      background-size: cover, 100% auto, 28px 28px !important;
-      background-attachment: scroll, scroll, scroll !important;
+      background-image: var(--iconic-chat-logo-v2285) !important;
+      background-repeat: no-repeat !important;
+      background-position: center center !important;
+      background-size: 100% auto !important;
+      background-attachment: scroll !important;
+      background-color: #ffffff !important;
 
       font-family: var(--iconic-chat-font) !important;
       text-rendering: optimizeLegibility !important;
