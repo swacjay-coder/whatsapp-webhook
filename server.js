@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-3-safe-video-fallback";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-4-nonblocking-video-buttons";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 const RESULTS_VIDEO_URL = (process.env.RESULTS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
@@ -15891,24 +15891,32 @@ app.post("/webhook", async (req, res) => {
       }
 
       if (iconicIsResultsRoute) {
-        await sendWhatsAppVideoByLink(from, RESULTS_VIDEO_URL, "", incomingPhoneNumberId);
+        try {
+          await sendWhatsAppVideoByLink(from, RESULTS_VIDEO_URL, "", incomingPhoneNumberId);
+        } catch (error) {
+          console.error("Results video send failed, continuing with buttons:", error);
+        }
         await sendWhatsAppButtonMessage(from, buildResultsFollowupBody(profileName), [
           { id: "how_it_works", title: "Details | التفاصيل" },
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "talk_to_team", title: "Team | فريقنا" }
         ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
-        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Safe Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Safe Fallback" });
+        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Nonblocking Video", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Nonblocking Video" });
         return res.sendStatus(200);
       }
 
       if (iconicIsHowItWorksRoute) {
-        await sendWhatsAppVideoByLink(from, HOW_IT_WORKS_VIDEO_URL, "", incomingPhoneNumberId);
+        try {
+          await sendWhatsAppVideoByLink(from, HOW_IT_WORKS_VIDEO_URL, "", incomingPhoneNumberId);
+        } catch (error) {
+          console.error("Details video send failed, continuing with buttons:", error);
+        }
         await sendWhatsAppButtonMessage(from, buildHowItWorksBody(profileName), [
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "results", title: "Results | نتائج" },
           { id: "talk_to_team", title: "Team | فريقنا" }
         ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
-        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "Details Safe Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Safe Fallback" });
+        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "Details Nonblocking Video", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Nonblocking Video" });
         return res.sendStatus(200);
       }
 
