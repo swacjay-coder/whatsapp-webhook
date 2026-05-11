@@ -1,1 +1,1 @@
-probe-current-route-state
+apply-v60305-buttons-only
