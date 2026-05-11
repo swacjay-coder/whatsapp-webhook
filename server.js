@@ -66,9 +66,8 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-5-final-chat-bg-override";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-5-inbox-results-details-cache-cleanup";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
-const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
 const RESULTS_VIDEO_URL = (process.env.RESULTS_VIDEO_URL || "").toString().trim();
@@ -229,7 +228,6 @@ function protectInbox(req, res, next) {
 
 
 const BUSINESS_NAME_SPACED = "I C O N I C   H A I R   C A R E";
-const WEBSITE = "https://iconichaircare.com";
 const DUBAI_LOCATION_URL = process.env.DUBAI_LOCATION_URL || "https://maps.app.goo.gl/4MXKKF6faQx4WQSy9";
 const ABU_DHABI_LOCATION_URL = process.env.ABU_DHABI_LOCATION_URL || "https://maps.app.goo.gl/twg5JEuP6JgKWP1s7";
 
@@ -367,9 +365,6 @@ function getStaffNotificationRouting(phoneNumberId, displayPhoneNumber = "") {
   };
 }
 
-function getStaffNotificationNumber(phoneNumberId, displayPhoneNumber = "") {
-  return getStaffNotificationRouting(phoneNumberId, displayPhoneNumber).number;
-}
 
 function getStaffNotificationNumbers(phoneNumberId, displayPhoneNumber = "") {
   const routing = getStaffNotificationRouting(phoneNumberId, displayPhoneNumber);
@@ -557,6 +552,7 @@ async function saveMessageToGoogleSheet(item) {
 
   console.log("Google Sheet log saved:");
   console.log(text);
+  clearMessagesApiSheetCache("message saved");
 }
 
 async function loadMessagesFromGoogleSheet() {
@@ -1107,6 +1103,20 @@ function buildCustomerActionBody(profileName = "", actionText = "") {
   return cleanName ? `${cleanName}: ${cleanAction}` : cleanAction;
 }
 
+function logCustomerActionForInbox({ from, message, profileName = "", rawText = "", fallbackAction = "", status = "Bot", phoneNumberId = DUBAI_PHONE_NUMBER_ID, messageType = "Customer Message" }) {
+  const actionText = getSmartCustomerActionText(message, rawText) || fallbackAction;
+  const customerBody = buildCustomerActionBody(profileName, actionText);
+
+  if (!customerBody || !customerBody.toString().trim()) {
+    return;
+  }
+
+  addInboxMessage(from, "customer", customerBody, status, phoneNumberId, {
+    customerName: profileName,
+    messageType
+  });
+}
+
 function getCustomerChatLink(customerNumber) {
   return `https://wa.me/${customerNumber}`;
 }
@@ -1511,6 +1521,16 @@ async function uploadWhatsAppVideoFromUrl(videoUrl, phoneNumberId = DUBAI_PHONE_
 
   return { ok: true, status: response.status, mediaId: result.id, result };
 }
+const videoHeaderMediaCache = new Map();
+
+function getVideoHeaderMediaCacheKey(videoUrl, phoneNumberId, filename) {
+  return [
+    normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID),
+    (videoUrl || "").toString().trim(),
+    (filename || "iconic-video.mp4").toString().trim()
+  ].join("|");
+}
+
 async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
   const cleanVideoUrl = (videoUrl || "").toString().trim();
   const fallbackImageUrl = (options.headerImageUrl || BOT_HEADER_IMAGE_URL || "").toString().trim();
@@ -1521,6 +1541,22 @@ async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl,
     return sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { headerImageUrl: fallbackImageUrl });
   }
 
+  const cacheKey = getVideoHeaderMediaCacheKey(cleanVideoUrl, phoneNumberId, filename);
+  const cachedMediaId = videoHeaderMediaCache.get(cacheKey);
+
+  if (cachedMediaId) {
+    const cachedSendResult = await sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { headerVideoId: cachedMediaId });
+
+    if (!cachedSendResult?.error) {
+      console.log("Video header sent using cached WhatsApp media id.");
+      return cachedSendResult;
+    }
+
+    console.log("Cached video header media id failed; refreshing upload.");
+    console.log(JSON.stringify(cachedSendResult, null, 2));
+    videoHeaderMediaCache.delete(cacheKey);
+  }
+
   const uploadResult = await uploadWhatsAppVideoFromUrl(cleanVideoUrl, phoneNumberId, filename);
 
   if (!uploadResult.ok || !uploadResult.mediaId) {
@@ -1529,47 +1565,11 @@ async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl,
     return sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { headerImageUrl: fallbackImageUrl });
   }
 
+  videoHeaderMediaCache.set(cacheKey, uploadResult.mediaId);
+
   return sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { headerVideoId: uploadResult.mediaId });
 }
 
-async function sendWhatsAppVideoByLink(to, videoUrl, caption = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
-  const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
-  const cleanVideoUrl = (videoUrl || "").toString().trim();
-
-  if (!cleanVideoUrl) {
-    throw new Error("sendWhatsAppVideoByLink missing video URL");
-  }
-
-  const videoPayload = { link: cleanVideoUrl };
-  const cleanCaption = (caption || "").toString().trim();
-  if (cleanCaption) {
-    videoPayload.caption = cleanCaption;
-  }
-
-  const payload = {
-    messaging_product: "whatsapp",
-    to,
-    type: "video",
-    video: videoPayload
-  };
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${ACCESS_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    console.error("[Iconic] sendWhatsAppVideoByLink failed", JSON.stringify(data));
-    throw new Error("sendWhatsAppVideoByLink failed");
-  }
-  return data;
-}
 
 async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
@@ -1816,13 +1816,6 @@ function getMainMenuButtons() {
   ];
 }
 
-function getBookingSubMenuButtons() {
-  return [
-    { id: "consult_menu", title: "Consult | استشارة" },
-    { id: "service_menu", title: "Service | سيرفس" },
-    { id: "talk_to_team", title: "Help | ساعدني" }
-  ];
-}
 
 function getServiceSubMenuButtons() {
   return [
@@ -2924,13 +2917,6 @@ function getConsultActionButtons() {
   ];
 }
 
-function getAfterCallButtons() {
-  return [
-    { id: "book_appointment", title: "احجز / Book" },
-    { id: "services", title: "الخدمات / Services" },
-    { id: "location_branch", title: "الموقع / Location" }
-  ];
-}
 
 function getReminderOptInButtons() {
   return [
@@ -3348,6 +3334,7 @@ async function saveConversationStateToGoogleSheetFromServer({ phone, phoneNumber
 
     console.log("Auto intent state saved:");
     console.log(responseText);
+    clearMessagesApiSheetCache("conversation state saved");
   } catch (error) {
     console.log("Auto intent state save failed:");
     console.log(error);
@@ -3415,6 +3402,7 @@ async function saveBookingRequestToGoogleSheetFromServer({ phone, phoneNumberId,
 
     console.log("Booking request saved:");
     console.log(responseText);
+    clearMessagesApiSheetCache("booking request saved");
   } catch (error) {
     console.log("Booking request save failed:");
     console.log(error);
@@ -3511,6 +3499,7 @@ async function updateBookingRequestStatusInGoogleSheetFromServer({ rowNumber, ph
 
     console.log("Booking status updated:");
     console.log(responseText);
+    clearMessagesApiSheetCache("booking request updated");
     return result;
   } catch (error) {
     console.log("Booking status update error:");
@@ -4019,8 +4008,50 @@ function mergeInboxHistory(sheetMessages = [], memoryMessages = []) {
   return sortMessagesNewestFirst(Array.from(mergedMap.values()));
 }
 
+const MESSAGES_API_SHEET_CACHE_TTL_MS = 5000;
+let messagesApiSheetCache = null;
+let messagesApiSheetCacheAt = 0;
+let messagesApiSheetCachePromise = null;
+
+function clearMessagesApiSheetCache(reason = "") {
+  messagesApiSheetCache = null;
+  messagesApiSheetCacheAt = 0;
+  if (reason) {
+    console.log(`[Messages API Cache] cleared: ${reason}`);
+  }
+}
+
+async function loadMessagesFromGoogleSheetForMessagesApi() {
+  const now = Date.now();
+
+  if (messagesApiSheetCache && (now - messagesApiSheetCacheAt) < MESSAGES_API_SHEET_CACHE_TTL_MS) {
+    return messagesApiSheetCache;
+  }
+
+  if (messagesApiSheetCachePromise) {
+    return messagesApiSheetCachePromise;
+  }
+
+  messagesApiSheetCachePromise = loadMessagesFromGoogleSheet()
+    .then((sheetData) => {
+      messagesApiSheetCache = sheetData || { messages: [], conversationStates: [], bookingRequests: [] };
+      messagesApiSheetCacheAt = Date.now();
+      return messagesApiSheetCache;
+    })
+    .catch((error) => {
+      console.log("Messages API cached Sheet load failed:");
+      console.log(error);
+      return messagesApiSheetCache || { messages: [], conversationStates: [], bookingRequests: [] };
+    })
+    .finally(() => {
+      messagesApiSheetCachePromise = null;
+    });
+
+  return messagesApiSheetCachePromise;
+}
+
   app.get("/api/messages", async (req, res) => {
-  const sheetData = await loadMessagesFromGoogleSheet();
+  const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
   const sheetMessages = sheetData.messages || [];
   const memoryMessages = inboxMessages || [];
   const conversationStates = sheetData.conversationStates || [];
@@ -13295,38 +13326,6 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 }
 
-
-    /* V60.3.1.5 - FINAL chat background override.
-       IMPORTANT: placed at the very end of CSS because older UI blocks below the original background were overriding previous changes.
-       Scope: chat background colors/shading only. Same background image, same layout, no WhatsApp logic touched. */
-    .chat-panel {
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.72), rgba(245,253,240,.46)) !important;
-      background-color: rgba(245,253,240,.52) !important;
-    }
-
-    .chat-panel::before {
-      opacity: .18 !important;
-      filter: saturate(.70) contrast(.88) brightness(1.08) !important;
-    }
-
-    .chat-panel::after {
-      content: "" !important;
-      position: absolute !important;
-      inset: 84px 0 0 0 !important;
-      pointer-events: none !important;
-      z-index: 0 !important;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.18), rgba(244,252,239,.12)),
-        radial-gradient(circle at 22% 18%, rgba(120,184,62,.035), transparent 30%),
-        radial-gradient(circle at 88% 76%, rgba(18,140,126,.025), transparent 32%) !important;
-    }
-
-    #chatBody,
-    .chat-body {
-      background: transparent !important;
-    }
-
 </style>
 </head>
 <body>
@@ -15971,7 +15970,7 @@ document.addEventListener("visibilitychange", function() {
 updateLiveNotificationUi();
 
 loadMessages();
-setInterval(loadMessages, 3000);
+setInterval(loadMessages, 5000);
 </script>
 </body>
 </html>`);
@@ -16043,6 +16042,16 @@ app.post("/webhook", async (req, res) => {
       );
 
       if (iconicIsServicesRoute) {
+        logCustomerActionForInbox({
+          from,
+          message,
+          profileName,
+          rawText: iconicServicesRawText,
+          fallbackAction: "Services | خدماتنا",
+          status: "Services Menu",
+          phoneNumberId: incomingPhoneNumberId,
+          messageType: "Customer Services Menu Request"
+        });
         await sendWhatsAppButtonMessage(from, buildServicesMenuBody(profileName), [
           { id: "results", title: "Results | نتائج" },
           { id: "location", title: "Location | موقعنا" },
@@ -16053,6 +16062,16 @@ app.post("/webhook", async (req, res) => {
       }
 
       if (iconicIsResultsRoute) {
+        logCustomerActionForInbox({
+          from,
+          message,
+          profileName,
+          rawText: iconicServicesRawText,
+          fallbackAction: "Results | نتائج",
+          status: "Results Requested",
+          phoneNumberId: incomingPhoneNumberId,
+          messageType: "Customer Results Request"
+        });
         const resultsVideoUrl = RESULTS_VIDEO_URL || getAutoReplyVideoUrl(req);
         await sendWhatsAppVideoHeaderButtonMessage(from, buildResultsFollowupBody(profileName), [
           { id: "how_it_works", title: "Details | التفاصيل" },
@@ -16067,6 +16086,16 @@ app.post("/webhook", async (req, res) => {
       }
 
       if (iconicIsHowItWorksRoute) {
+        logCustomerActionForInbox({
+          from,
+          message,
+          profileName,
+          rawText: iconicServicesRawText,
+          fallbackAction: "Details | التفاصيل",
+          status: "Details Requested",
+          phoneNumberId: incomingPhoneNumberId,
+          messageType: "Customer Details Request"
+        });
         await sendWhatsAppVideoHeaderButtonMessage(from, buildHowItWorksBody(profileName), [
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "results", title: "Results | نتائج" },
