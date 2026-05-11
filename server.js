@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-3-chat-background-soft-shading";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-4-chat-bg-visible-shading-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
@@ -5041,16 +5041,16 @@ app.get("/inbox", protectInbox, (req, res) => {
     .sender-bot { background: rgba(14,165,233,.10); color: #0369a1; }
     .sender-staff { background: rgba(124,58,237,.10); color: #6d28d9; }
 
-/* V60.3.1.3 - Chat background soft shading only: same image, softer green overlay and watermark contrast. */
+/* V60.3.1.4 - Visible chat background shading fix: same image, much lighter green overlay, softer watermark, cleaner contrast. */
     .chat-panel {
       display: flex;
       flex-direction: column;
       min-height: 0;
       position: relative;
       background:
-        linear-gradient(rgba(236,246,231,.58), rgba(236,246,231,.58)),
-        radial-gradient(circle at 20% 20%, rgba(37,211,102,.055), transparent 24%),
-        radial-gradient(circle at 90% 70%, rgba(18,140,126,.045), transparent 28%);
+        linear-gradient(rgba(246,255,242,.30), rgba(246,255,242,.30)),
+        radial-gradient(circle at 20% 20%, rgba(37,211,102,.025), transparent 24%),
+        radial-gradient(circle at 90% 70%, rgba(18,140,126,.02), transparent 28%);
     }
 
     .chat-panel::before {
@@ -5072,7 +5072,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       position: absolute;
       inset: 84px 0 0 0;
       background:
-        radial-gradient(circle at center, rgba(255,255,255,.035), transparent 40%);
+        radial-gradient(circle at center, rgba(255,255,255,.015), transparent 40%);
       pointer-events: none;
       z-index: 0;
     }
@@ -5154,7 +5154,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       align-items: center;
       pointer-events: none;
       z-index: -1;
-      opacity: .34;
+      opacity: .24;
       transform: translateY(-50%);
       margin-bottom: 0;
     }
@@ -5163,7 +5163,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       width: min(760px, 84%);
       max-height: 360px;
       object-fit: contain;
-      filter: saturate(.92) contrast(.96) brightness(1.02);
+      filter: saturate(.78) contrast(.92) brightness(.98);
     }
 
     .chat-body::after {
@@ -5171,8 +5171,8 @@ app.get("/inbox", protectInbox, (req, res) => {
       position: absolute;
       inset: 0;
       background:
-        radial-gradient(circle at center, rgba(255,255,255,.035), transparent 34%),
-        linear-gradient(180deg, rgba(236,246,231,.04), rgba(236,246,231,.04));
+        radial-gradient(circle at center, rgba(255,255,255,.015), transparent 34%),
+        linear-gradient(180deg, rgba(236,246,231,.015), rgba(236,246,231,.015));
       pointer-events: none;
       z-index: -2;
     }
