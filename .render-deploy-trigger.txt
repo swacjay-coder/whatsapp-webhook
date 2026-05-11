@@ -1,5 +1,5 @@
 Deploy requested from ChatGPT
-Version target: current main
-Requested at: 2026-05-11T12:18:00+04:00 Dubai
-Reason: Manual deploy retry trigger only
-Attempt: 2
+Version target: V31.5.8.60.3.1.5 current main
+Requested at: 2026-05-11T12:50:00+04:00 Dubai
+Reason: Manual deploy verification test with user watching
+Attempt: 3
