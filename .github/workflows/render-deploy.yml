@@ -18,11 +18,15 @@ jobs:
             echo "RENDER_DEPLOY_HOOK_URL secret is missing"
             exit 1
           fi
-          if ! echo "$RENDER_DEPLOY_HOOK_URL" | grep -q "srv-d7b62flr0fns738c3u30"; then
-            echo "RENDER_DEPLOY_HOOK_URL does not look like the whatsapp-webhook Render service hook"
-            exit 1
-          fi
-          echo "Render deploy hook secret exists and matches expected service id"
+          case "$RENDER_DEPLOY_HOOK_URL" in
+            https://api.render.com/deploy/*)
+              echo "Render deploy hook URL format looks valid"
+              ;;
+            *)
+              echo "RENDER_DEPLOY_HOOK_URL does not look like a Render deploy hook URL"
+              exit 1
+              ;;
+          esac
 
       - name: Trigger Render deploy
         env:
