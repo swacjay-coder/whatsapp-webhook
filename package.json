@@ -4,7 +4,7 @@
   "description": "WhatsApp webhook server",
   "main": "server.js",
   "scripts": {
-    "start": "node ui-polish-right-panel.js && node ui-favicon-only.js && node --check server.js && node server.js"
+    "start": "node ui-stable-live.js && node --check server.js && node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
