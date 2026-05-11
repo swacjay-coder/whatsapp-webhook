@@ -1,2 +1,1 @@
-probe v60302 snippets only
-commit safe read-only workflow
+run-check-60302-b
