@@ -2,6 +2,6 @@ Render deploy trigger file.
 
 Update this file to trigger a Render deployment through GitHub Actions.
 
-Requested at: 2026-05-11T18:12:00+04:00 Dubai
-Reason: Deploy sidebar bot header logo
-Attempt: sidebar-bot-header-logo-2026-05-11-1812
+Requested at: 2026-05-11T18:28:00+04:00 Dubai
+Reason: Restore V31.5.8.60.3.1.11 unified functional sidebar
+Attempt: restore-unified-functional-sidebar-2026-05-11-1828
