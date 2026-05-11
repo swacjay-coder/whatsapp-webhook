@@ -2,6 +2,6 @@ Render deploy trigger file.
 
 Update this file to trigger a Render deployment through GitHub Actions.
 
-Requested at: 2026-05-11T18:36:00+04:00 Dubai
-Reason: Deploy locked V31.5.8.60.3.1.11 unified functional sidebar after cleanup
-Attempt: locked-v31-5-8-60-3-1-11-clean-2026-05-11-1836
+Requested at: 2026-05-11T18:48:00+04:00 Dubai
+Reason: Deploy favicon-only bot header image on locked V31.5.8.60.3.1.11
+Attempt: favicon-only-bot-header-2026-05-11-1848
