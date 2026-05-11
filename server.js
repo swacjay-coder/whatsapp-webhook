@@ -66,9 +66,11 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-7-results-details-single-video-message-clean";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-8-details-fixed-wordpress-video";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
+// V60.3.0.8: Force Details to use the new WordPress explanation video, independent from old Render env overrides.
+const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4";
 const RESULTS_VIDEO_URL = (process.env.RESULTS_VIDEO_URL || "").toString().trim();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -15985,7 +15987,7 @@ app.post("/webhook", async (req, res) => {
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "results", title: "Results | نتائج" },
           { id: "talk_to_team", title: "Team | فريقنا" }
-        ], HOW_IT_WORKS_VIDEO_URL, incomingPhoneNumberId, {
+        ], DETAILS_VIDEO_URL, incomingPhoneNumberId, {
           headerImageUrl: BOT_HEADER_IMAGE_URL,
           filename: "iconic-details-video.mp4"
         });
