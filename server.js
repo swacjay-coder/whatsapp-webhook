@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-5-results-details-buttons-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-0-6-results-details-old-video-method";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 const HOW_IT_WORKS_VIDEO_URL = (process.env.HOW_IT_WORKS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
 const RESULTS_VIDEO_URL = (process.env.RESULTS_VIDEO_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Video-2026-04-30-at-4.32.42-PM.mp4").toString().trim();
@@ -15891,22 +15891,64 @@ app.post("/webhook", async (req, res) => {
       }
 
       if (iconicIsResultsRoute) {
+        const resultsVideoUrl = getAutoReplyVideoUrl(req) || RESULTS_VIDEO_URL;
+        const resultsVideoCaption = buildAutoVideoCaption();
+        const resultsVideoResult = await sendWhatsAppVideoMessage(from, resultsVideoUrl, resultsVideoCaption, incomingPhoneNumberId);
+
+        if (resultsVideoResult.ok) {
+          addInboxMessage(
+            from,
+            "bot",
+            `[Video sent] ${AUTO_REPLY_VIDEO_FILENAME}\n${resultsVideoCaption}`,
+            "Results Video",
+            incomingPhoneNumberId,
+            {
+              customerName: profileName,
+              messageType: "Results Video"
+            }
+          );
+        } else {
+          console.log("Results video could not be sent, sending buttons only:");
+          console.log(JSON.stringify(resultsVideoResult, null, 2));
+        }
+
         await sendWhatsAppButtonMessage(from, buildResultsFollowupBody(profileName), [
           { id: "how_it_works", title: "Details | التفاصيل" },
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "talk_to_team", title: "Team | فريقنا" }
         ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
-        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Buttons Only", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Buttons Only" });
+        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Video + Buttons", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Video + Buttons" });
         return res.sendStatus(200);
       }
 
       if (iconicIsHowItWorksRoute) {
+        const detailsVideoUrl = getAutoReplyVideoUrl(req) || HOW_IT_WORKS_VIDEO_URL;
+        const detailsVideoCaption = buildAutoVideoCaption();
+        const detailsVideoResult = await sendWhatsAppVideoMessage(from, detailsVideoUrl, detailsVideoCaption, incomingPhoneNumberId);
+
+        if (detailsVideoResult.ok) {
+          addInboxMessage(
+            from,
+            "bot",
+            `[Video sent] ${AUTO_REPLY_VIDEO_FILENAME}\n${detailsVideoCaption}`,
+            "Details Video",
+            incomingPhoneNumberId,
+            {
+              customerName: profileName,
+              messageType: "Details Video"
+            }
+          );
+        } else {
+          console.log("Details video could not be sent, sending buttons only:");
+          console.log(JSON.stringify(detailsVideoResult, null, 2));
+        }
+
         await sendWhatsAppButtonMessage(from, buildHowItWorksBody(profileName), [
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "results", title: "Results | نتائج" },
           { id: "talk_to_team", title: "Team | فريقنا" }
         ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
-        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "Details Buttons Only", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Buttons Only" });
+        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "Details Video + Buttons", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Video + Buttons" });
         return res.sendStatus(200);
       }
 
