@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-2-staff-notification-exclusion-reminder-separation";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-3-no-appointment-reminder-before-team-confirm";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -894,12 +894,10 @@ function isOptInText(text) {
     value === "yes, i agree to receive appointment reminder and service follow-up from iconic hair care" ||
     value.includes("yes, i agree to receive appointment reminders and service follow-ups from iconic hair care") ||
     value.includes("yes, i agree to receive appointment reminder and service follow-up from iconic hair care") ||
+    value === "أوافق" ||
+    value === "اوافق" ||
     value === "أوافق / yes" ||
     value === "اوافق / yes" ||
-    value === "yes, remind me" ||
-    value === "yes remind me" ||
-    value === "yes reminders" ||
-    value === "yes offers" ||
     value.includes("أوافق على التذكير") ||
     value.includes("اوافق على التذكير") ||
     value.includes("أوافق على تذكير") ||
@@ -2382,15 +2380,18 @@ function buildWhatsAppFlowConfirmationBody(flowData = {}) {
     flowData.serviceType ? `نوع الخدمة / Service type: ${flowData.serviceType}` : "",
     flowData.teamMember ? `الموظف / Team member: ${flowData.teamMember}` : "",
     "",
-    "هل تحب نذكّرك قبل موعدك بساعة؟",
-    "Would you like us to remind you 1 hour before your appointment?"
+    "الموعد حالياً بانتظار تأكيد الفريق.",
+    "بعد تأكيد الموعد، سيصلك تثبيت رسمي من Iconic Hair Care.",
+    "",
+    "Your appointment is currently pending team confirmation.",
+    "After the appointment is confirmed, you will receive the official confirmation from Iconic Hair Care."
   ].filter((line) => line !== "").join(String.fromCharCode(10));
 }
 
 function getAppointmentReminderOptInButtons() {
   return [
-    { id: "appointment_reminder_yes", title: "Yes | نعم" },
-    { id: "appointment_reminder_no", title: "No | لا" }
+    { id: "appointment_reminder_yes", title: "أي | نعم" },
+    { id: "appointment_reminder_no", title: "لا | No" }
   ];
 }
 
@@ -2401,6 +2402,8 @@ function isAppointmentReminderYesText(text) {
   // Do not treat a plain typed "yes" as a 1-hour appointment reminder opt-in.
   // Plain YES can belong to the separate 20-day service follow-up consent flow.
   return value === "appointment_reminder_yes" ||
+    value === "أي | نعم" ||
+    value === "اي | نعم" ||
     value === "yes | نعم";
 }
 
@@ -2411,7 +2414,38 @@ function isAppointmentReminderNoText(text) {
   // Same separation rule: only the explicit appointment reminder button/title
   // controls the 1-hour appointment reminder flow.
   return value === "appointment_reminder_no" ||
+    value === "لا | no" ||
     value === "no | لا";
+}
+
+function isConfirmedAppointmentStatus(status = "") {
+  const value = compactText(status);
+  if (!value) return false;
+
+  return value === "confirmed appointment" ||
+    value === "appointment confirmed" ||
+    value === "booking confirmed" ||
+    value === "confirmed booking" ||
+    value === "approved" ||
+    value.includes("confirmed appointment") ||
+    value.includes("appointment confirmed") ||
+    value.includes("booking confirmed");
+}
+
+function isApprovedBookingStatus(status = "") {
+  const value = compactText(status);
+  return value.includes("approved") || value.includes("confirmed");
+}
+
+function buildAppointmentReminderNotConfirmedBody(customerName = "") {
+  const cleanName = cleanCustomerName(customerName);
+  const intro = cleanName ? `تمام ${cleanName}` : "تمام";
+
+  return `${intro}، طلب الموعد لا يزال بانتظار تأكيد الفريق.\n\n` +
+    "تذكير الموعد قبل ساعة لا يتفعّل إلا بعد تأكيد الموعد النهائي من الفريق ✅\n\n" +
+    "------------------------------\n\n" +
+    "Your appointment request is still pending team confirmation.\n\n" +
+    "The 1-hour appointment reminder is activated only after the team confirms the final appointment ✅";
 }
 
 
@@ -2483,18 +2517,21 @@ async function handleWhatsAppFlowBookingSubmit({
   });
 
   const confirmationBody = buildWhatsAppFlowConfirmationBody(flowData);
-  const confirmationButtons = getAppointmentReminderOptInButtons();
 
-  await sendWhatsAppButtonMessage(from, confirmationBody, confirmationButtons, incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
+  // V31.5.8.60.3.3:
+  // Flow submit is only a booking request. Do not ask for or activate a 1-hour
+  // appointment reminder here because the appointment is still Pending.
+  // The appointment reminder question is sent only after the team confirms the booking.
+  await sendWhatsAppMessage(from, confirmationBody, incomingPhoneNumberId);
   addInboxMessage(
     from,
     "bot",
-    formatButtonLog(confirmationBody, confirmationButtons),
+    confirmationBody,
     "Booking Request",
     incomingPhoneNumberId,
     {
       customerName: profileName,
-      messageType: "WhatsApp Flow Confirmation"
+      messageType: "WhatsApp Flow Confirmation - Pending"
     }
   );
 
@@ -2968,20 +3005,22 @@ function getConsultActionButtons() {
 
 function getReminderOptInButtons() {
   return [
-    { id: "reminder_opt_in_yes", title: "أوافق / Yes" },
-    { id: "reminder_opt_in_no", title: "لا / No" },
+    { id: "reminder_opt_in_yes", title: "أوافق" },
+    { id: "reminder_opt_in_no", title: "لا أوافق" },
     { id: "talk_to_team", title: "الفريق / Team" }
   ];
 }
 
 function buildReminderOptInBody() {
   return `${BUSINESS_NAME_SPACED} ✨\n\n` +
-    "إذا بتحب، فينا نرسل لك من وقت لآخر تذكيرات متابعة للخدمة وعروض خاصة من Iconic Hair Care.\n\n" +
-    "الموافقة اختيارية، وتقدر توقف التذكيرات والعروض بأي وقت بإرسال STOP أو إيقاف.\n\n" +
+    "هل توافق على استلام تذكير / متابعة من Iconic Hair Care؟\n\n" +
+    "هذا التذكير خاص بمتابعة الخدمة كل 20 يوم تقريباً، وليس تذكير الموعد قبل ساعة.\n\n" +
+    "الموافقة اختيارية، وتقدر توقف التذكير بأي وقت بإرسال STOP أو إيقاف.\n\n" +
     "------------------------------\n\n" +
     `${BUSINESS_NAME_SPACED} ✨\n\n` +
-    "If you’d like, we can send you occasional service follow-up reminders and special offers from Iconic Hair Care.\n\n" +
-    "This is optional. You can stop reminders and offers anytime by sending STOP.";
+    "Do you agree to receive service follow-up reminders from Iconic Hair Care?\n\n" +
+    "This reminder is for service follow-up around every 20 days, not the 1-hour appointment reminder.\n\n" +
+    "This is optional. You can stop reminders anytime by sending STOP.";
 }
 
 function formatButtonLog(body, buttons) {
@@ -3602,19 +3641,28 @@ function buildBookingCustomerUpdateBody(status, notes = "") {
   if (statusValue.includes("approved")) {
     return {
       ok: true,
+      buttons: getAppointmentReminderOptInButtons(),
       body: [
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "تم تأكيد طلب الموعد من طرف فريقنا ✅",
-        "سيتابع معك الفريق لتثبيت التفاصيل النهائية بسرّية.",
+        "تم تأكيد موعدك من طرف فريقنا ✅",
+        cleanNotes ? "تفاصيل الموعد:" : "",
+        cleanNotes ? cleanNotes : "",
+        "",
+        "هل تحب نذكّرك قبل موعدك بساعة؟",
+        "اضغط: أي | نعم لتفعيل تذكير الموعد قبل ساعة.",
         "",
         "------------------------------",
         "",
         BUSINESS_NAME_SPACED + " ✨",
         "",
-        "Your appointment request has been confirmed by our team ✅",
-        "Our team will follow up privately to finalize the details."
-      ].join("\n")
+        "Your appointment has been confirmed by our team ✅",
+        cleanNotes ? "Appointment details:" : "",
+        cleanNotes ? cleanNotes : "",
+        "",
+        "Would you like us to remind you 1 hour before your appointment?",
+        "Tap: أي | نعم to activate the 1-hour appointment reminder."
+      ].filter((line) => line !== "").join("\n")
     };
   }
 
@@ -4173,7 +4221,10 @@ app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
       return res.status(400).json(messageBuild);
     }
 
-    const sendResult = await sendWhatsAppMessage(to, messageBuild.body, phoneNumberId);
+    const updateButtons = Array.isArray(messageBuild.buttons) ? messageBuild.buttons : [];
+    const sendResult = updateButtons.length > 0
+      ? await sendWhatsAppButtonMessage(to, messageBuild.body, updateButtons, phoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL })
+      : await sendWhatsAppMessage(to, messageBuild.body, phoneNumberId);
 
     if (sendResult?.error) {
       return res.status(500).json({
@@ -4183,14 +4234,31 @@ app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
       });
     }
 
+    const loggedUpdateBody = updateButtons.length > 0
+      ? formatButtonLog(messageBuild.body, updateButtons)
+      : messageBuild.body;
+
+    if (isApprovedBookingStatus(status)) {
+      setConversationStatus(to, "Confirmed Appointment");
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: to,
+        phoneNumberId,
+        branch: getLineConfig(phoneNumberId).branch,
+        status: "Confirmed Appointment",
+        assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
+        tags: ["Booking", "Confirmed", "Appointment Reminder Eligible"],
+        updatedBy: "Team Confirmed Booking"
+      });
+    }
+
     addInboxMessage(
       to,
       "staff",
-      messageBuild.body,
-      "Human Reply",
+      loggedUpdateBody,
+      isApprovedBookingStatus(status) ? "Confirmed Appointment" : "Human Reply",
       phoneNumberId,
       {
-        messageType: "Booking Customer Update"
+        messageType: updateButtons.length > 0 ? "Booking Customer Update With Reminder Option" : "Booking Customer Update"
       }
     );
 
@@ -14941,7 +15009,10 @@ function isOperationalReminderConsentMessage(message) {
     body === "unsubscribe" ||
     body.includes("yes, i agree to receive appointment reminders and service follow-ups from iconic hair care") ||
     body.includes("yes, i agree to receive appointment reminder and service follow-up from iconic hair care") ||
-    body.includes("service follow-up reminders and special offers") ||
+    body.includes("service follow-up reminders") ||
+    body.includes("تذكير / متابعة") ||
+    body.includes("أوافق") ||
+    body.includes("اوافق") ||
     body.includes("أوافق / yes") ||
     body.includes("اوافق / yes");
 }
@@ -16289,37 +16360,55 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (isAppointmentReminderYesText(originalText || text)) {
+      const currentAppointmentStatus = conversationStatus[from] || await getSavedConversationStatusForPhone(from, incomingPhoneNumberId);
+
+      if (!isConfirmedAppointmentStatus(currentAppointmentStatus)) {
+        const notConfirmedBody = buildAppointmentReminderNotConfirmedBody(profileName);
+        await sendWhatsAppMessage(from, notConfirmedBody, incomingPhoneNumberId);
+        addInboxMessage(from, "bot", notConfirmedBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Blocked - Pending Confirmation" });
+        return res.sendStatus(200);
+      }
+
       await saveConversationStateToGoogleSheetFromServer({
         phone: from,
         phoneNumberId: incomingPhoneNumberId,
         branch: lineConfig.branch,
-        status: "Appointment Reminder Opt-in",
+        status: "Appointment Reminder Active",
         assignee: getBranchTeamAssignee(lineConfig.branch),
-        tags: ["Appointment Reminder", "Opt-in", "1 Hour Before"],
-        updatedBy: "Appointment Reminder Button"
+        tags: ["Appointment Reminder", "Opt-in", "1 Hour Before", "Confirmed Appointment"],
+        updatedBy: "Appointment Reminder Button After Confirm"
       });
 
       const reminderName = cleanCustomerName(profileName);
-      const reminderYesBody = `${reminderName ? `تمام ${reminderName}، تم تسجيل طلب التذكير ✅` : "تم تسجيل طلب التذكير ✅"}
+      const reminderYesBody = `${reminderName ? `تمام ${reminderName}، تم تفعيل تذكير الموعد ✅` : "تم تفعيل تذكير الموعد ✅"}
 
-سنرسل لك تذكير قبل موعدك بساعة.
+سنذكّرك قبل موعدك بساعة.
 
 Done ✅
-We will remind you 1 hour before your appointment.`;
+Your 1-hour appointment reminder is active.`;
       await sendWhatsAppMessage(from, reminderYesBody, incomingPhoneNumberId);
-      addInboxMessage(from, "bot", reminderYesBody, "Appointment Reminder Opt-in", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Opt-in" });
+      addInboxMessage(from, "bot", reminderYesBody, "Appointment Reminder Active", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Active" });
       return res.sendStatus(200);
     }
 
     if (isAppointmentReminderNoText(originalText || text)) {
+      const currentAppointmentStatus = conversationStatus[from] || await getSavedConversationStatusForPhone(from, incomingPhoneNumberId);
+
+      if (!isConfirmedAppointmentStatus(currentAppointmentStatus)) {
+        const notConfirmedBody = buildAppointmentReminderNotConfirmedBody(profileName);
+        await sendWhatsAppMessage(from, notConfirmedBody, incomingPhoneNumberId);
+        addInboxMessage(from, "bot", notConfirmedBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Declined Blocked - Pending Confirmation" });
+        return res.sendStatus(200);
+      }
+
       await saveConversationStateToGoogleSheetFromServer({
         phone: from,
         phoneNumberId: incomingPhoneNumberId,
         branch: lineConfig.branch,
         status: "Appointment Reminder Declined",
         assignee: getBranchTeamAssignee(lineConfig.branch),
-        tags: ["Appointment Reminder", "Declined"],
-        updatedBy: "Appointment Reminder Button"
+        tags: ["Appointment Reminder", "Declined", "Confirmed Appointment"],
+        updatedBy: "Appointment Reminder Button After Confirm"
       });
 
       const reminderName = cleanCustomerName(profileName);
@@ -16390,7 +16479,7 @@ No problem. We will not send a reminder for this appointment.`;
           extraFields: {
             opt_in: "yes",
             opt_in_date: optEventDate,
-            opt_in_source: "Auto-reply WhatsApp - 20-day service follow-up and offers",
+            opt_in_source: "Auto-reply WhatsApp - 20-day service follow-up reminder",
             opt_out: "",
             opt_out_date: ""
           }
@@ -16400,13 +16489,13 @@ No problem. We will not send a reminder for this appointment.`;
       const optInReply =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "تم حفظ موافقتك بنجاح ✅\n\n" +
-        "سنستخدم هذا الرقم فقط لإرسال تذكيرات متابعة الخدمة كل 20 يوم تقريباً والعروض الخاصة من Iconic Hair Care.\n\n" +
-        "لإيقاف التذكيرات والعروض في أي وقت، أرسل: STOP أو إيقاف\n\n" +
+        "سنستخدم هذا الرقم فقط لإرسال تذكير / متابعة الخدمة كل 20 يوم تقريباً من Iconic Hair Care.\n\n" +
+        "لإيقاف التذكير في أي وقت، أرسل: STOP أو إيقاف\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Your opt-in has been saved successfully ✅\n\n" +
-        "We will use this number only for 20-day service follow-up reminders and occasional special offers from Iconic Hair Care.\n\n" +
-        "To stop reminders and offers at any time, send: STOP";
+        "We will use this number only for 20-day service follow-up reminders from Iconic Hair Care.\n\n" +
+        "To stop reminders at any time, send: STOP";
 
       await sendWhatsAppMessage(from, optInReply, incomingPhoneNumberId);
       addInboxMessage(from, "bot", optInReply, "Opted In", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
@@ -16438,10 +16527,10 @@ No problem. We will not send a reminder for this appointment.`;
 
       const optOutReply =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "تم إيقاف تذكيرات المتابعة والعروض لهذا الرقم ✅\n\n" +
+        "تم إيقاف تذكير / متابعة الخدمة لهذا الرقم ✅\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Service follow-up reminders and offers have been stopped for this number ✅";
+        "Service follow-up reminders have been stopped for this number ✅";
 
       await sendWhatsAppMessage(from, optOutReply, incomingPhoneNumberId);
       addInboxMessage(from, "bot", optOutReply, "Opted Out", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
@@ -16474,11 +16563,11 @@ No problem. We will not send a reminder for this appointment.`;
 
       const declineReply =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "تمام، لن ندخلك في تذكيرات المتابعة أو العروض الآن ✅\n\n" +
+        "تمام، لن ندخلك في تذكير / متابعة الخدمة الآن ✅\n\n" +
         "إذا احتجت أي مساعدة، فريقنا جاهز للرد عليك.\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "No problem, we will not add you to service follow-up reminders or offers now ✅\n\n" +
+        "No problem, we will not add you to service follow-up reminders now ✅\n\n" +
         "If you need any help, our team is ready to assist you.";
 
       await sendWhatsAppMessage(from, declineReply, incomingPhoneNumberId);
