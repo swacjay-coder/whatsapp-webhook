@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-11-safe-clean-chat-ui-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-audio-and-composer-visibility-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -4247,130 +4247,6 @@ async function loadMessagesFromGoogleSheetForMessagesApi() {
 
   return messagesApiSheetCachePromise;
 }
-
-
-function cleanChatDigits(value = "") {
-  return (value || "").toString().replace(/\D/g, "");
-}
-
-function cleanChatPhoneMatches(left = "", right = "") {
-  const a = cleanChatDigits(left);
-  const b = cleanChatDigits(right);
-  if (!a || !b) return (left || "").toString().trim() === (right || "").toString().trim();
-  return a === b || a.endsWith(b) || b.endsWith(a);
-}
-
-function cleanChatMessageMatches(message = {}, phone = "", phoneNumberId = "") {
-  const messagePhoneNumberId = normalizePhoneNumberId(message.phoneNumberId || "");
-  const targetPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
-  const phoneMatches = cleanChatPhoneMatches(message.phone || "", phone);
-  const lineMatches = !targetPhoneNumberId || !messagePhoneNumberId || messagePhoneNumberId === targetPhoneNumberId;
-  return phoneMatches && lineMatches;
-}
-
-function removeCleanedChatFromMemory(phone = "", phoneNumberId = "") {
-  let removedCount = 0;
-  for (let index = inboxMessages.length - 1; index >= 0; index -= 1) {
-    if (cleanChatMessageMatches(inboxMessages[index], phone, phoneNumberId)) {
-      inboxMessages.splice(index, 1);
-      removedCount += 1;
-    }
-  }
-  return removedCount;
-}
-
-async function requestCleanChatFromGoogleSheet(phone = "", phoneNumberId = "", requestedBy = "Team Inbox") {
-  const sheetUrl = process.env.SHEET_WEBHOOK_URL;
-  const cleanChatEnabled = (process.env.ENABLE_CLEAN_CHAT || "").toString().trim().toLowerCase() === "true";
-
-  if (!cleanChatEnabled) {
-    return {
-      ok: false,
-      code: "CLEAN_CHAT_DISABLED",
-      error: "Clean Chat is disabled. Set ENABLE_CLEAN_CHAT=true only after the Google Apps Script archive patch is installed."
-    };
-  }
-
-  if (!sheetUrl) {
-    return {
-      ok: false,
-      code: "SHEET_WEBHOOK_URL_MISSING",
-      error: "SHEET_WEBHOOK_URL is missing. Active Google Sheet messages cannot be cleaned."
-    };
-  }
-
-  const response = await fetch(sheetUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      action: "clean_chat",
-      phone,
-      phoneNumberId,
-      requestedBy,
-      source: "team_inbox",
-      archiveBeforeDelete: true
-    })
-  });
-
-  const rawText = await response.text();
-  let data = null;
-
-  try {
-    data = JSON.parse(rawText);
-  } catch (error) {
-    data = null;
-  }
-
-  if (!response.ok || !data || data.ok !== true) {
-    return {
-      ok: false,
-      code: (data && data.code) || "SHEET_CLEAN_CHAT_FAILED",
-      error: (data && data.error) || rawText || "Google Sheet clean chat request failed.",
-      status: response.status
-    };
-  }
-
-  return data;
-}
-
-app.post("/api/clean-chat", protectInbox, async (req, res) => {
-  try {
-    const phone = (req.body?.phone || "").toString().trim();
-    const phoneNumberId = normalizePhoneNumberId(req.body?.phoneNumberId || "");
-
-    if (!phone) {
-      return res.status(400).json({
-        ok: false,
-        error: "Missing customer phone."
-      });
-    }
-
-    // V31.5.8.60.3.11 Safe Clean Chat:
-    // This endpoint is intentionally UI-only. It never deletes Google Sheets rows,
-    // backend records, message logs, customer history, or in-memory messages.
-    // The browser hides the active conversation until a real page refresh reloads
-    // the saved history from /api/messages.
-    return res.json({
-      ok: true,
-      mode: "ui_only",
-      message: "Clean Chat is UI-only. No saved messages or customer history were deleted.",
-      phone,
-      phoneNumberId,
-      archivedCount: 0,
-      deletedCount: 0,
-      memoryRemovedCount: 0
-    });
-  } catch (error) {
-    console.error("Clean chat UI-only endpoint failed:");
-    console.error(error);
-    return res.status(500).json({
-      ok: false,
-      error: "Clean chat failed on server."
-    });
-  }
-});
 
   app.get("/api/messages", async (req, res) => {
   const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
@@ -14516,27 +14392,6 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 }
 
-
-/* =========================================================
-   V31.5.8.60.3.9 - Clean Chat Button UI
-   UI-only styling. Clean logic archives first, then removes active Sheet rows.
-   ========================================================= */
-.chat-actions .danger-mini-btn {
-  border-color: rgba(220,38,38,.28) !important;
-  color: #991b1b !important;
-  background: linear-gradient(180deg, #fff, #fff5f5) !important;
-}
-
-.chat-actions .danger-mini-btn:hover {
-  border-color: rgba(220,38,38,.46) !important;
-  background: linear-gradient(180deg, #fff7f7, #fee2e2) !important;
-}
-
-.chat-actions .danger-mini-btn:disabled {
-  opacity: .55 !important;
-  cursor: not-allowed !important;
-}
-
 </style>
 </head>
 <body>
@@ -14714,7 +14569,6 @@ app.get("/inbox", protectInbox, (req, res) => {
             </select>
             <button type="button" class="mini-btn" id="copyPhoneBtn">Copy phone</button>
             <button type="button" class="mini-btn" id="markReadBtn">Mark read</button>
-            <button type="button" class="mini-btn danger-mini-btn" id="cleanChatBtn" title="Hide this conversation from the current Team Inbox view only. Refresh restores it.">Clean chat</button>
             <div class="chat-tags-menu-wrap">
               <button type="button" class="mini-btn more-btn" id="chatTagsMenuBtn" aria-label="Conversation tags">⋮</button>
               <div class="chat-tags-popover is-hidden" id="chatTagsPopover">
@@ -14964,10 +14818,6 @@ try {
 
 let conversationStateMap = {};
 
-// V31.5.8.60.3.11 Safe Clean Chat:
-// Page-session only. Refreshing the browser clears this Set and reloads history from /api/messages.
-const hiddenCleanedConversationKeys = new Set();
-
 const searchBox = document.getElementById("searchBox");
 const branchFilter = document.getElementById("branchFilter");
 const statusFilter = document.getElementById("statusFilter");
@@ -14986,7 +14836,6 @@ const tagPicker = document.getElementById("tagPicker");
 const tagDisplay = document.getElementById("tagDisplay");
 const chatTagsMenuBtn = document.getElementById("chatTagsMenuBtn");
 const chatTagsPopover = document.getElementById("chatTagsPopover");
-const cleanChatBtn = document.getElementById("cleanChatBtn");
 const inputTo = document.getElementById("to");
 const inputLine = document.getElementById("phoneNumberId");
 const inputBody = document.getElementById("body");
@@ -16019,9 +15868,6 @@ function buildConversations() {
 
   (allMessages || []).forEach(function(m) {
     const key = conversationKey(m.phone || "unknown", m.phoneNumberId || "", m.branch || "");
-    if (hiddenCleanedConversationKeys.has(key)) {
-      return;
-    }
     const phone = m.phone || "unknown";
 
     if (!map[key]) {
@@ -16832,7 +16678,6 @@ function renderChat() {
       conversationStatusSelect.disabled = true;
     }
     if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = true;
-    if (cleanChatBtn) cleanChatBtn.disabled = true;
     closeChatTagsPopover();
     if (assigneeSelect) {
       assigneeSelect.value = "Dubai Team";
@@ -16861,7 +16706,6 @@ function renderChat() {
     conversationStatusSelect.disabled = false;
   }
   if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = false;
-  if (cleanChatBtn) cleanChatBtn.disabled = false;
   if (assigneeSelect) {
     assigneeSelect.value = normalizeAssigneeValue(c.assignee, c.branch);
     assigneeSelect.disabled = false;
@@ -17137,72 +16981,6 @@ async function sendVoice() {
   }
 }
 
-
-function browserCleanChatDigits(value) {
-  return (value || "").toString().replace(/\D/g, "");
-}
-
-function browserCleanChatPhoneMatches(left, right) {
-  const a = browserCleanChatDigits(left);
-  const b = browserCleanChatDigits(right);
-  if (!a || !b) return (left || "").toString().trim() === (right || "").toString().trim();
-  return a === b || a.endsWith(b) || b.endsWith(a);
-}
-
-async function cleanSelectedChat() {
-  const phone = (inputTo.value.trim() || selectedPhone || "").trim();
-  const phoneNumberId = (inputLine.value.trim() || selectedPhoneNumberId || "").trim();
-  const branch = (selectedBranch || "").trim();
-  const displayName = (chatTitle.textContent || phone || "this customer").trim();
-
-  if (!phone) {
-    resultBox.textContent = "Select a customer first.";
-    return;
-  }
-
-  const confirmed = window.confirm(
-    "Clean chat view for " + displayName + "?\n\n" +
-    "This hides the conversation only from the current Team Inbox screen.\n" +
-    "It does NOT delete Google Sheets, backend records, message logs, or customer history.\n\n" +
-    "Refresh the page to restore the saved conversation."
-  );
-
-  if (!confirmed) {
-    resultBox.textContent = "Clean chat cancelled.";
-    return;
-  }
-
-  if (cleanChatBtn) cleanChatBtn.disabled = true;
-
-  try {
-    const hiddenKey = selectedConversationKey || conversationKey(phone, phoneNumberId, branch);
-    hiddenCleanedConversationKeys.add(hiddenKey);
-
-    selectedPhone = "";
-    selectedPhoneNumberId = "";
-    selectedConversationKey = "";
-    selectedBranch = "";
-    inputTo.value = "";
-    inputLine.value = "";
-
-    chatTitle.textContent = "Select a customer";
-    chatMeta.textContent = "Clean Chat hidden this conversation from the current view only. Refresh restores it.";
-    chatBody.innerHTML = '<div class="empty">Conversation hidden from this screen only. Refresh to restore saved history.</div>';
-
-    resultBox.textContent = "Cleaned from view only. No saved history was deleted. Refresh restores it.";
-    renderAll();
-
-    // Best-effort server audit/no-op. The server endpoint is also UI-only and never deletes data.
-    fetch("/api/clean-chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, phoneNumberId, requestedBy: "Team Inbox UI-only" })
-    }).catch(function() {});
-  } finally {
-    if (cleanChatBtn) cleanChatBtn.disabled = false;
-  }
-}
-
 async function updateStatus(status) {
   const phone = inputTo.value.trim() || selectedPhone;
   if (!phone) {
@@ -17243,7 +17021,6 @@ async function updateStatus(status) {
 document.getElementById("sendBtn").addEventListener("click", sendReply);
 document.getElementById("sendImageBtn").addEventListener("click", sendImage);
 document.getElementById("sendVoiceBtn").addEventListener("click", sendVoice);
-if (cleanChatBtn) cleanChatBtn.addEventListener("click", cleanSelectedChat);
 
 if (imageFileInput) {
   imageFileInput.addEventListener("change", function() {
