@@ -14169,8 +14169,9 @@ app.get("/inbox", protectInbox, (req, res) => {
 
 
 /* =========================================================
-   V31.5.8.60.3.7 - Composer Visibility + Audio Usability Fix
-   UI-only: keeps reply icons, media buttons, and send button visible above the bottom edge.
+   V31.5.8.60.3.8 - Media Composer UI Cleanup
+   UI-only: enlarge image/voice icons, remove image caption field,
+   and tidy the Send image / Send voice area without touching backend logic.
    ========================================================= */
 .chat-panel {
   min-height: 0 !important;
@@ -14184,8 +14185,8 @@ app.get("/inbox", protectInbox, (req, res) => {
 
 .chat-composer-wrap {
   flex: 0 0 auto !important;
-  max-height: 214px !important;
-  padding: 7px 10px 9px !important;
+  max-height: 226px !important;
+  padding: 8px 10px 10px !important;
   overflow: visible !important;
   z-index: 80 !important;
 }
@@ -14220,50 +14221,62 @@ app.get("/inbox", protectInbox, (req, res) => {
 }
 
 .composer-bottom-row {
-  grid-template-columns: 88px minmax(0, 1fr) 48px !important;
-  grid-template-rows: 42px 24px !important;
+  grid-template-columns: 112px minmax(0, 1fr) 48px !important;
+  grid-template-rows: 48px 24px !important;
   grid-template-areas:
     "icons media send"
     "status status status" !important;
-  gap: 6px 8px !important;
+  gap: 7px 10px !important;
   padding: 0 12px 7px !important;
   align-items: center !important;
   overflow: visible !important;
 }
 
 .composer-icon-tools {
-  height: 42px !important;
-  gap: 7px !important;
+  height: 48px !important;
+  gap: 10px !important;
 }
 
 .composer-image-picker,
 .composer-voice-picker {
-  width: 38px !important;
-  min-width: 38px !important;
-  height: 38px !important;
-  min-height: 38px !important;
-  border-radius: 13px !important;
-  font-size: 18px !important;
+  width: 46px !important;
+  min-width: 46px !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  border-radius: 15px !important;
+  font-size: 22px !important;
 }
 
 .chat-composer-wrap .media-box {
-  min-height: 42px !important;
-  grid-template-columns: minmax(130px, 1fr) 104px 106px !important;
-  grid-auto-rows: 38px !important;
-  gap: 6px !important;
-  padding: 2px !important;
-  border-radius: 15px !important;
+  min-height: 48px !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(120px, 1fr)) !important;
+  grid-auto-rows: 40px !important;
+  gap: 8px !important;
+  padding: 4px !important;
+  border-radius: 16px !important;
   overflow: visible !important;
 }
 
-.chat-composer-wrap #imageCaption,
+.chat-composer-wrap #imageCaption {
+  display: none !important;
+}
+
 .chat-composer-wrap .send-image-btn,
 .chat-composer-wrap .send-voice-btn {
-  height: 38px !important;
-  min-height: 38px !important;
-  border-radius: 13px !important;
-  font-size: 11px !important;
-  padding: 0 9px !important;
+  width: 100% !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  border-radius: 14px !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  padding: 0 12px !important;
+  letter-spacing: 0 !important;
+}
+
+.chat-composer-wrap .send-image-btn::before,
+.chat-composer-wrap .send-voice-btn::before {
+  font-size: 16px !important;
 }
 
 .chat-composer-wrap .send-btn {
@@ -14299,7 +14312,7 @@ app.get("/inbox", protectInbox, (req, res) => {
 
 @media (max-width: 1180px), (max-height: 760px) {
   .chat-composer-wrap {
-    max-height: 196px !important;
+    max-height: 204px !important;
     padding: 6px 8px 8px !important;
   }
 
@@ -14312,30 +14325,39 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 
   .composer-bottom-row {
-    grid-template-columns: 82px minmax(0, 1fr) 44px !important;
-    grid-template-rows: 38px 22px !important;
+    grid-template-columns: 100px minmax(0, 1fr) 44px !important;
+    grid-template-rows: 42px 22px !important;
     padding: 0 10px 6px !important;
+    gap: 6px 8px !important;
+  }
+
+  .composer-icon-tools {
+    height: 42px !important;
+    gap: 8px !important;
   }
 
   .composer-image-picker,
   .composer-voice-picker {
-    width: 35px !important;
-    min-width: 35px !important;
-    height: 35px !important;
-    min-height: 35px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    font-size: 20px !important;
   }
 
   .chat-composer-wrap .media-box {
-    grid-template-columns: minmax(110px, 1fr) 92px 96px !important;
-    grid-auto-rows: 34px !important;
+    grid-template-columns: repeat(2, minmax(100px, 1fr)) !important;
+    grid-auto-rows: 36px !important;
+    gap: 6px !important;
+    padding: 3px !important;
   }
 
-  .chat-composer-wrap #imageCaption,
   .chat-composer-wrap .send-image-btn,
   .chat-composer-wrap .send-voice-btn {
-    height: 34px !important;
-    min-height: 34px !important;
-    font-size: 10px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    font-size: 11px !important;
+    padding: 0 10px !important;
   }
 
   .chat-composer-wrap .send-btn {
@@ -14344,6 +14366,29 @@ app.get("/inbox", protectInbox, (req, res) => {
     max-width: 40px !important;
     height: 40px !important;
     min-height: 40px !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .composer-bottom-row {
+    grid-template-columns: 1fr 44px !important;
+    grid-template-areas:
+      "icons send"
+      "media media"
+      "status status" !important;
+  }
+
+  .composer-icon-tools {
+    width: auto !important;
+  }
+
+  .chat-composer-wrap .media-box {
+    width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .chat-composer-wrap .result {
+    justify-self: stretch !important;
   }
 }
 
@@ -14583,9 +14628,8 @@ app.get("/inbox", protectInbox, (req, res) => {
                     <div class="media-box">
                       <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" />
                       <input id="audioFile" class="voice-file-input" type="file" accept="audio/*,.m4a,.mp3,.ogg,.amr,.aac" capture="microphone" />
-                      <input id="imageCaption" placeholder="Optional image caption..." />
-                      <button type="button" class="send-image-btn" id="sendImageBtn">Send image</button>
-                      <button type="button" class="send-voice-btn" id="sendVoiceBtn">Send voice</button>
+                      <button type="button" class="send-image-btn" id="sendImageBtn" title="Send selected image">Image</button>
+                      <button type="button" class="send-voice-btn" id="sendVoiceBtn" title="Send selected voice note">Voice</button>
                       <div class="media-hint">JPG, PNG, WEBP under 5MB. Voice: AAC, M4A, MP3, AMR, or OGG under 16MB.</div>
                     </div>
                   </div>
