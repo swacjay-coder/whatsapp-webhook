@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-audio-and-composer-visibility-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-1-premium-functional-sidebar";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -6043,6 +6043,196 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
   
+
+
+    /* V31.5.8.60.3.7.1 - Premium functional left sidebar only.
+       Safe scope: visual + existing UI filters/actions. No message loading, Sheets, flows, audio, reminders, or backend logic changed. */
+    .main-sidebar {
+      width: 248px;
+      padding: 18px 14px !important;
+      background:
+        linear-gradient(180deg, rgba(250,255,248,.98), rgba(240,249,236,.96) 100%),
+        radial-gradient(circle at 18% 0%, rgba(120,184,62,.18), transparent 38%) !important;
+      border-right: 1px solid rgba(203,220,199,.92) !important;
+      box-shadow: 14px 0 34px rgba(15,23,42,.055) !important;
+    }
+
+    .sidebar-brand {
+      border-radius: 22px;
+      padding: 10px 10px 14px !important;
+      background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(239,248,234,.72));
+      border: 1px solid rgba(215,226,212,.80);
+      box-shadow: 0 10px 26px rgba(15,23,42,.045);
+    }
+
+    .sidebar-logo {
+      width: 52px !important;
+      height: 52px !important;
+      border-radius: 18px !important;
+      box-shadow: 0 12px 24px rgba(120,184,62,.16) !important;
+    }
+
+    .sidebar-nav {
+      gap: 7px !important;
+    }
+
+    .sidebar-item {
+      width: 100%;
+      min-height: 42px !important;
+      padding: 10px 12px !important;
+      border-radius: 17px !important;
+      background: transparent;
+      border: 1px solid transparent;
+      color: #31483f !important;
+      font-family: inherit;
+      font-size: 13px !important;
+      font-weight: 900 !important;
+      text-align: left;
+      cursor: pointer;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
+      position: relative;
+    }
+
+    .sidebar-item:hover {
+      transform: translateX(2px);
+      background: rgba(255,255,255,.72);
+      border-color: rgba(120,184,62,.22);
+      box-shadow: 0 10px 22px rgba(15,23,42,.055);
+      color: #173b2b !important;
+    }
+
+    .sidebar-item.active,
+    .sidebar-item[aria-current="page"] {
+      background:
+        linear-gradient(135deg, rgba(120,184,62,.20), rgba(255,255,255,.88)),
+        linear-gradient(90deg, rgba(120,184,62,.26), rgba(18,140,126,.08)) !important;
+      color: #16352b !important;
+      border-color: rgba(120,184,62,.30) !important;
+      box-shadow: 0 12px 26px rgba(120,184,62,.13), inset 0 1px 0 rgba(255,255,255,.75) !important;
+    }
+
+    .sidebar-item.active::before,
+    .sidebar-item[aria-current="page"]::before {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 12px;
+      bottom: 12px;
+      width: 3px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #78b83e, #128c7e);
+      box-shadow: 0 0 0 4px rgba(120,184,62,.12);
+    }
+
+    .nav-icon {
+      width: 22px !important;
+      height: 22px !important;
+      min-width: 22px !important;
+      display: inline-grid !important;
+      place-items: center !important;
+      color: #315348;
+    }
+
+    .nav-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2.15;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .sidebar-item.active .nav-icon,
+    .sidebar-item[aria-current="page"] .nav-icon {
+      color: #128c7e;
+    }
+
+    .sidebar-branches {
+      padding: 13px !important;
+      border-radius: 21px !important;
+      background: rgba(255,255,255,.86) !important;
+      border-color: rgba(203,220,199,.94) !important;
+      box-shadow: 0 12px 26px rgba(15,23,42,.055) !important;
+    }
+
+    .sidebar-branches-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .sidebar-section-title {
+      margin-bottom: 0 !important;
+      letter-spacing: 1.05px !important;
+      color: #64748b !important;
+    }
+
+    .sidebar-branch-add {
+      width: 28px;
+      height: 26px;
+      border-radius: 9px;
+      border: 1px solid rgba(120,184,62,.30);
+      background: #fff;
+      color: #16352b;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 950;
+      line-height: 1;
+    }
+
+    .sidebar-branch-add:hover {
+      background: #f2faee;
+      border-color: rgba(120,184,62,.58);
+    }
+
+    .branch-row {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      font-family: inherit;
+      cursor: pointer;
+      border-radius: 14px;
+      padding: 9px 8px !important;
+      transition: background .14s ease, transform .14s ease;
+    }
+
+    .branch-row:hover {
+      background: #f3faef;
+      transform: translateX(1px);
+    }
+
+    .branch-row.active {
+      background: linear-gradient(135deg, rgba(120,184,62,.16), rgba(255,255,255,.86));
+      box-shadow: inset 0 0 0 1px rgba(120,184,62,.20);
+    }
+
+    .branch-row span {
+      color: #16352b;
+    }
+
+    .branch-row b {
+      background: #e5f7df !important;
+      color: #2d9b38 !important;
+      min-width: 34px !important;
+    }
+
+    .reference-hidden-filters.sidebar-settings-visible {
+      display: grid !important;
+      gap: 8px !important;
+      padding-top: 8px !important;
+      border-top: 1px solid rgba(226,232,226,.92) !important;
+    }
+
+    .sidebar-user {
+      border-radius: 20px !important;
+      background: linear-gradient(135deg, #102c27, #41612d) !important;
+      box-shadow: 0 16px 30px rgba(22,53,43,.18) !important;
+    }
+
+
 
     /* V18.3 - Chat Window UI only: visual polish, no data/send logic changes */
     .chat-panel {
@@ -14406,16 +14596,16 @@ app.get("/inbox", protectInbox, (req, res) => {
       </div>
 
       <nav class="sidebar-nav" aria-label="Team Inbox navigation">
-        <div class="sidebar-item active"><span class="nav-icon">▣</span><span>Team Inbox</span></div>
-        <div class="sidebar-item"><span class="nav-icon">⌂</span><span>Dashboard</span></div>
-        <div class="sidebar-item"><span class="nav-icon">○</span><span>Conversations</span></div>
-        <div class="sidebar-item"><span class="nav-icon">♢</span><span>Team</span></div>
-        <div class="sidebar-item"><span class="nav-icon">◔</span><span>Contacts</span></div>
-        <div class="sidebar-item"><span class="nav-icon">⌁</span><span>Quick Replies</span></div>
-        <div class="sidebar-item"><span class="nav-icon">⌯</span><span>Broadcast</span></div>
-        <div class="sidebar-item"><span class="nav-icon">□</span><span>Files & Media</span></div>
-        <div class="sidebar-item"><span class="nav-icon">∥</span><span>Analytics</span></div>
-        <div class="sidebar-item"><span class="nav-icon">⚙</span><span>Settings</span></div>
+        <button type="button" class="sidebar-item active" aria-current="page" data-sidebar-action="team-inbox" title="Show all conversations"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 14h4l2 3h4l2-3h4"/></svg></span><span>Team Inbox</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="dashboard" title="Jump to dashboard summary"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><path d="M12 13l4-4"/><path d="M5 19h14"/></svg></span><span>Dashboard</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="conversations" title="Show conversation list"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H8l-3 3z"/><path d="M8 9h8"/><path d="M8 12h5"/></svg></span><span>Conversations</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="team" title="Show conversations needing team attention"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0"/><path d="M3 20a7 7 0 0 1 18 0"/><path d="M18 8a3 3 0 0 1 3 3"/><path d="M3 11a3 3 0 0 1 3-3"/></svg></span><span>Team</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="contacts" title="Show customer conversations"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4h10a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/></svg></span><span>Contacts</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="quick-replies" title="Open quick replies"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2H19l-4.2 3.1 1.6 5.2L12 13.4 7.6 16.5l1.6-5.2L5 8.2h5.2z"/><path d="M19 19h2"/></svg></span><span>Quick Replies</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="broadcast" title="Show follow-up conversations"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 11v2l5 2V9z"/><path d="M9 9l9-4v14l-9-4"/><path d="M5 15l1 4"/></svg></span><span>Broadcast</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="files-media" title="Show media-request conversations"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h5"/></svg></span><span>Files & Media</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="analytics" title="Refresh and show branch counts"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/><path d="M3 19h18"/></svg></span><span>Analytics</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="settings" title="Toggle advanced filters"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 0 .3 2l.1.1-2.1 2.1-.1-.1a1.8 1.8 0 0 0-2-.3 1.8 1.8 0 0 0-1 1.6V21h-3v-.6a1.8 1.8 0 0 0-1-1.6 1.8 1.8 0 0 0-2 .3l-.1.1-2.1-2.1.1-.1a1.8 1.8 0 0 0 .3-2 1.8 1.8 0 0 0-1.6-1H4v-3h.6a1.8 1.8 0 0 0 1.6-1 1.8 1.8 0 0 0-.3-2l-.1-.1 2.1-2.1.1.1a1.8 1.8 0 0 0 2 .3 1.8 1.8 0 0 0 1-1.6V3h3v.6a1.8 1.8 0 0 0 1 1.6 1.8 1.8 0 0 0 2-.3l.1-.1 2.1 2.1-.1.1a1.8 1.8 0 0 0-.3 2 1.8 1.8 0 0 0 1.6 1h.6v3h-.6a1.8 1.8 0 0 0-1.6 1z"/></svg></span><span>Settings</span></button>
       </nav>
 
       <div class="sidebar-branches">
@@ -14423,8 +14613,8 @@ app.get("/inbox", protectInbox, (req, res) => {
           <div class="sidebar-section-title">Our Branches</div>
           <button class="sidebar-branch-add" type="button" aria-label="Add branch">＋</button>
         </div>
-        <div class="branch-row"><span><i></i> Dubai</span><b id="sideDubaiCount">0</b></div>
-        <div class="branch-row"><span><i></i> Abu Dhabi</span><b id="sideAbuCount">0</b></div>
+        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Dubai"><span><i></i> Dubai</span><b id="sideDubaiCount">0</b></button>
+        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Abu Dhabi"><span><i></i> Abu Dhabi</span><b id="sideAbuCount">0</b></button>
       </div>
 
       <div class="sidebar-user">
@@ -14993,6 +15183,8 @@ function updateReferenceFilterUi(currentCount) {
     btn.classList.toggle("active", (branchFilter.value || "") === (btn.dataset.branch || ""));
   });
 
+  updateSidebarBranchActive();
+
   if (conversationFooterText) {
     const total = buildConversations().length;
     const shown = Number(currentCount || 0);
@@ -15022,6 +15214,184 @@ referenceBranchTabs.forEach(function(btn) {
 if (refreshListBtn) {
   refreshListBtn.addEventListener("click", function() {
     loadMessages();
+  });
+}
+
+/* V31.5.8.60.3.7.1 - Functional left sidebar.
+   Uses existing filters/actions only; it does not touch message storage or /api/messages. */
+const sidebarItems = Array.from(document.querySelectorAll(".sidebar-item[data-sidebar-action]"));
+const sidebarBranchButtons = Array.from(document.querySelectorAll(".sidebar-branch-filter[data-sidebar-branch]"));
+const sidebarAdvancedFilters = document.querySelector(".reference-hidden-filters");
+const sidebarBranchAddBtn = document.querySelector(".sidebar-branch-add");
+
+function setSidebarActive(action) {
+  sidebarItems.forEach(function(item) {
+    const active = (item.dataset.sidebarAction || "") === action;
+    item.classList.toggle("active", active);
+    if (active) {
+      item.setAttribute("aria-current", "page");
+    } else {
+      item.removeAttribute("aria-current");
+    }
+  });
+}
+
+function updateSidebarBranchActive() {
+  const currentBranch = branchFilter ? (branchFilter.value || "") : "";
+  sidebarBranchButtons.forEach(function(btn) {
+    btn.classList.toggle("active", currentBranch && (btn.dataset.sidebarBranch || "") === currentBranch);
+  });
+}
+
+function clearConversationFiltersForSidebar() {
+  if (searchBox) searchBox.value = "";
+  if (branchFilter) branchFilter.value = "";
+  if (statusFilter) statusFilter.value = "";
+  if (assigneeFilter) assigneeFilter.value = "";
+  if (tagFilter) tagFilter.value = "";
+  selectedConversationKey = "";
+  selectedPhone = "";
+  selectedPhoneNumberId = "";
+}
+
+function applySidebarFilters(options) {
+  options = options || {};
+  if (searchBox && Object.prototype.hasOwnProperty.call(options, "search")) searchBox.value = options.search || "";
+  if (branchFilter && Object.prototype.hasOwnProperty.call(options, "branch")) branchFilter.value = options.branch || "";
+  if (statusFilter && Object.prototype.hasOwnProperty.call(options, "status")) statusFilter.value = options.status || "";
+  if (assigneeFilter && Object.prototype.hasOwnProperty.call(options, "assignee")) assigneeFilter.value = options.assignee || "";
+  if (tagFilter && Object.prototype.hasOwnProperty.call(options, "tag")) tagFilter.value = options.tag || "";
+  selectedConversationKey = "";
+  selectedPhone = "";
+  selectedPhoneNumberId = "";
+  renderAll();
+  updateSidebarBranchActive();
+}
+
+function scrollIntoViewSoft(element) {
+  if (!element || !element.scrollIntoView) return;
+  element.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function setSidebarResult(message) {
+  if (resultBox) {
+    resultBox.textContent = message || "";
+  }
+}
+
+function runSidebarAction(action) {
+  setSidebarActive(action);
+
+  if (action === "team-inbox") {
+    clearConversationFiltersForSidebar();
+    renderAll();
+    updateSidebarBranchActive();
+    scrollIntoViewSoft(document.querySelector(".topbar") || document.querySelector(".page"));
+    setSidebarResult("Showing all Team Inbox conversations.");
+    return;
+  }
+
+  if (action === "dashboard") {
+    clearConversationFiltersForSidebar();
+    renderAll();
+    updateSidebarBranchActive();
+    scrollIntoViewSoft(document.querySelector(".topbar") || document.querySelector(".page"));
+    setSidebarResult("Dashboard summary refreshed.");
+    return;
+  }
+
+  if (action === "conversations") {
+    clearConversationFiltersForSidebar();
+    renderAll();
+    updateSidebarBranchActive();
+    scrollIntoViewSoft(conversationList);
+    if (searchBox) searchBox.focus();
+    setSidebarResult("Conversation list ready.");
+    return;
+  }
+
+  if (action === "team") {
+    applySidebarFilters({ search: "", branch: "", status: "Needs Team", assignee: "", tag: "" });
+    scrollIntoViewSoft(conversationList);
+    setSidebarResult("Showing conversations that need team attention.");
+    return;
+  }
+
+  if (action === "contacts") {
+    applySidebarFilters({ search: "", branch: "", status: "Customer Reply", assignee: "", tag: "" });
+    scrollIntoViewSoft(conversationList);
+    setSidebarResult("Showing customer conversations.");
+    return;
+  }
+
+  if (action === "quick-replies") {
+    if (topbarQuickRepliesBtn) {
+      topbarQuickRepliesBtn.click();
+      topbarQuickRepliesBtn.focus();
+      setSidebarResult("Quick replies opened.");
+    } else {
+      setSidebarResult("Quick replies are not available on this screen.");
+    }
+    return;
+  }
+
+  if (action === "broadcast") {
+    applySidebarFilters({ search: "", branch: "", status: "Follow-up", assignee: "", tag: "" });
+    scrollIntoViewSoft(conversationList);
+    setSidebarResult("Showing follow-up conversations for broadcast planning.");
+    return;
+  }
+
+  if (action === "files-media") {
+    applySidebarFilters({ search: "", branch: "", status: "", assignee: "", tag: "Media Requested" });
+    scrollIntoViewSoft(conversationList);
+    setSidebarResult("Showing media-related conversations.");
+    return;
+  }
+
+  if (action === "analytics") {
+    clearConversationFiltersForSidebar();
+    updateStats();
+    renderAll();
+    updateSidebarBranchActive();
+    scrollIntoViewSoft(document.querySelector(".reference-branch-tabs") || document.querySelector(".topbar"));
+    setSidebarResult("Analytics counts refreshed.");
+    return;
+  }
+
+  if (action === "settings") {
+    if (sidebarAdvancedFilters) {
+      sidebarAdvancedFilters.classList.toggle("sidebar-settings-visible");
+      setSidebarResult(sidebarAdvancedFilters.classList.contains("sidebar-settings-visible") ? "Advanced filters opened." : "Advanced filters hidden.");
+    } else {
+      setSidebarResult("Settings panel is not available on this screen.");
+    }
+  }
+}
+
+sidebarItems.forEach(function(item) {
+  item.addEventListener("click", function() {
+    runSidebarAction(item.dataset.sidebarAction || "team-inbox");
+  });
+});
+
+sidebarBranchButtons.forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    const branch = btn.dataset.sidebarBranch || "";
+    setSidebarActive("conversations");
+    applySidebarFilters({ search: "", branch: branchFilter && branchFilter.value === branch ? "" : branch, status: "", assignee: "", tag: "" });
+    scrollIntoViewSoft(conversationList);
+    setSidebarResult(branch ? "Showing " + branch + " branch conversations." : "Showing all branches.");
+  });
+});
+
+if (sidebarBranchAddBtn) {
+  sidebarBranchAddBtn.addEventListener("click", function() {
+    setSidebarActive("team-inbox");
+    clearConversationFiltersForSidebar();
+    renderAll();
+    updateSidebarBranchActive();
+    setSidebarResult("Branch filters cleared.");
   });
 }
 
