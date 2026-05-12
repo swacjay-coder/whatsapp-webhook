@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-5-reply-composer-layout-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-6-professional-reply-composer-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -13696,61 +13696,111 @@ app.get("/inbox", protectInbox, (req, res) => {
 
 
 
+
 /* =========================================================
-   V31.5.8.60.3.5 - Reply Composer Layout Polish
-   Scope: UI/CSS only. Keeps message, image, voice, Flow, reminders,
-   staff notifications, Google Sheet, and ENV logic untouched.
+   V31.5.8.60.3.6 - Professional Reply Composer Fix
+   Scope: UI/CSS + button label cleanup only.
+   Keeps send message, image, voice, Flow, reminders, staff notifications,
+   Google Sheet, webhook, ENV, and booking logic untouched.
    ========================================================= */
 
+.chat-panel {
+  overflow: hidden !important;
+}
+
+#chatBody,
+.chat-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+}
+
+.chat-composer-wrap,
+.chat-composer-wrap * {
+  box-sizing: border-box !important;
+}
+
 .chat-composer-wrap {
+  position: relative !important;
+  z-index: 5 !important;
+  flex: 0 0 auto !important;
+  width: 100% !important;
   padding: 14px 18px 18px !important;
   overflow: visible !important;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,253,244,.98)) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,253,244,.98)) !important;
   border-top: 1px solid rgba(197,219,190,.78) !important;
+  box-shadow: 0 -12px 28px rgba(15,23,42,.045) !important;
 }
 
 .chat-composer-wrap .composer-block {
   width: 100% !important;
   max-width: none !important;
+  display: block !important;
   border-radius: 24px !important;
-  border: 1px solid rgba(120,184,62,.28) !important;
-  background: rgba(255,255,255,.98) !important;
-  box-shadow: 0 18px 38px rgba(15,23,42,.07) !important;
-  overflow: visible !important;
+  border: 1px solid rgba(120,184,62,.30) !important;
+  background: #ffffff !important;
+  box-shadow: 0 18px 42px rgba(15,23,42,.075) !important;
+  overflow: hidden !important;
+}
+
+.chat-composer-wrap .composer-tabs {
+  height: 42px !important;
+  padding: 0 18px !important;
+  gap: 20px !important;
+  border-bottom: 1px solid rgba(226,232,226,.86) !important;
+  background: linear-gradient(180deg, #ffffff, #fbfdf9) !important;
+}
+
+.chat-composer-wrap .composer-tab {
+  height: 42px !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
 }
 
 .chat-composer-wrap textarea#body {
-  width: calc(100% - 32px) !important;
-  min-height: 88px !important;
-  height: 88px !important;
-  max-height: 150px !important;
-  margin: 14px 16px 12px !important;
-  padding: 16px 18px !important;
-  border-radius: 22px !important;
-  font-size: 14px !important;
-  line-height: 1.55 !important;
+  display: block !important;
+  width: calc(100% - 36px) !important;
+  min-width: 0 !important;
+  height: 104px !important;
+  min-height: 104px !important;
+  max-height: 170px !important;
+  margin: 16px 18px 14px !important;
+  padding: 18px 19px !important;
   resize: vertical !important;
+  border-radius: 24px !important;
   border: 1px solid rgba(120,184,62,.36) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.95),
-    0 10px 22px rgba(15,23,42,.035) !important;
+  background: linear-gradient(180deg, #ffffff, #fbfef9) !important;
+  color: #0f172a !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.55 !important;
+  outline: none !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.98), 0 10px 24px rgba(15,23,42,.035) !important;
+}
+
+.chat-composer-wrap textarea#body:focus,
+.chat-composer-wrap #imageCaption:focus {
+  border-color: rgba(34,197,94,.58) !important;
+  box-shadow: 0 0 0 4px rgba(34,197,94,.10), inset 0 1px 0 rgba(255,255,255,.98) !important;
 }
 
 .composer-bottom-row {
+  position: relative !important;
   display: grid !important;
-  grid-template-columns: 178px minmax(0, 1fr) 64px !important;
+  grid-template-columns: 106px minmax(0, 1fr) 62px !important;
   grid-template-rows: auto auto !important;
   grid-template-areas:
     "icons media send"
-    "icons status status" !important;
+    "status status status" !important;
   align-items: center !important;
-  column-gap: 14px !important;
-  row-gap: 8px !important;
-  padding: 0 16px 14px !important;
-  background: transparent !important;
+  gap: 10px 12px !important;
   width: 100% !important;
-  box-sizing: border-box !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 18px 16px !important;
+  background: transparent !important;
+  overflow: visible !important;
 }
 
 .composer-icon-tools {
@@ -13760,66 +13810,70 @@ app.get("/inbox", protectInbox, (req, res) => {
   justify-content: flex-start !important;
   gap: 10px !important;
   min-width: 0 !important;
+  width: 100% !important;
+  height: 56px !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
-.composer-icon-btn,
+.composer-icon-btn[title="Emoji"],
+.composer-icon-btn[title="Attach"] {
+  display: none !important;
+}
+
 .composer-image-picker,
 .composer-voice-picker {
-  width: 38px !important;
-  height: 38px !important;
-  min-width: 38px !important;
-  min-height: 38px !important;
-  border-radius: 15px !important;
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px !important;
+  min-height: 48px !important;
+  border-radius: 18px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border: 1px solid rgba(120,184,62,.32) !important;
+  padding: 0 !important;
+  border: 1px solid rgba(120,184,62,.34) !important;
   background: linear-gradient(135deg, #ffffff, #f2faee) !important;
-  color: #166534 !important;
-  font-size: 20px !important;
+  color: #14532d !important;
+  font-size: 22px !important;
   line-height: 1 !important;
   cursor: pointer !important;
-  box-shadow: 0 10px 20px rgba(15,23,42,.055) !important;
-  transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease !important;
+  box-shadow: 0 10px 22px rgba(15,23,42,.06) !important;
 }
 
-.composer-icon-btn:hover,
 .composer-image-picker:hover,
-.composer-voice-picker:hover {
-  transform: translateY(-1px) !important;
-  border-color: rgba(34,197,94,.58) !important;
-  box-shadow: 0 14px 26px rgba(34,197,94,.13) !important;
-}
-
+.composer-voice-picker:hover,
 .composer-image-picker.has-selected-image,
 .composer-voice-picker.has-selected-voice {
   color: #ffffff !important;
+  border-color: rgba(22,163,74,.64) !important;
   background: linear-gradient(135deg, #16a34a, #78b83e) !important;
-  border-color: rgba(22,163,74,.65) !important;
+  box-shadow: 0 14px 28px rgba(34,197,94,.16) !important;
 }
 
 .chat-composer-wrap .composer-tools {
   grid-area: media !important;
   width: 100% !important;
-  margin: 0 !important;
-  justify-self: stretch !important;
   min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .chat-composer-wrap .media-box {
   width: 100% !important;
+  min-width: 0 !important;
+  min-height: 58px !important;
   display: grid !important;
-  grid-template-columns: minmax(220px, 1fr) 150px 144px !important;
-  grid-auto-rows: 46px !important;
-  gap: 11px !important;
+  grid-template-columns: minmax(240px, 1fr) 150px 150px !important;
+  grid-auto-rows: 48px !important;
   align-items: center !important;
+  gap: 10px !important;
   margin: 0 !important;
-  padding: 8px !important;
-  border-radius: 20px !important;
+  padding: 5px !important;
+  border-radius: 22px !important;
   border: 1px solid rgba(120,184,62,.28) !important;
   background: linear-gradient(135deg, rgba(247,253,244,.98), rgba(255,255,255,.98)) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.95) !important;
-  box-sizing: border-box !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.96) !important;
   overflow: visible !important;
 }
 
@@ -13851,15 +13905,17 @@ app.get("/inbox", protectInbox, (req, res) => {
 .chat-composer-wrap #imageCaption {
   width: 100% !important;
   min-width: 0 !important;
-  height: 46px !important;
-  min-height: 46px !important;
-  padding: 0 15px !important;
-  border-radius: 16px !important;
-  border: 1px solid rgba(120,184,62,.32) !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  margin: 0 !important;
+  padding: 0 16px !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(120,184,62,.30) !important;
   background: #ffffff !important;
   color: #334155 !important;
   font-size: 13px !important;
   font-weight: 750 !important;
+  outline: none !important;
   box-shadow: none !important;
 }
 
@@ -13871,10 +13927,11 @@ app.get("/inbox", protectInbox, (req, res) => {
 .chat-composer-wrap .send-image-btn,
 .chat-composer-wrap .send-voice-btn {
   width: 100% !important;
-  height: 46px !important;
-  min-height: 46px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  margin: 0 !important;
   padding: 0 14px !important;
-  border-radius: 16px !important;
+  border-radius: 18px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -13892,17 +13949,20 @@ app.get("/inbox", protectInbox, (req, res) => {
 .chat-composer-wrap .send-image-btn::before {
   content: "🖼️" !important;
   font-size: 17px !important;
+  line-height: 1 !important;
 }
 
 .chat-composer-wrap .send-voice-btn::before {
   content: "🎙️" !important;
   font-size: 17px !important;
+  line-height: 1 !important;
 }
 
-.chat-composer-wrap .send-voice-btn {
-  border-color: rgba(34,197,94,.38) !important;
-  color: #128c3a !important;
-  background: linear-gradient(135deg, #ffffff, #effdf3) !important;
+.chat-composer-wrap .send-image-btn:hover,
+.chat-composer-wrap .send-voice-btn:hover {
+  border-color: rgba(34,197,94,.58) !important;
+  background: linear-gradient(135deg, #ffffff, #eafbe9) !important;
+  box-shadow: 0 14px 26px rgba(34,197,94,.12) !important;
 }
 
 .chat-composer-wrap .composer-actions {
@@ -13918,7 +13978,9 @@ app.get("/inbox", protectInbox, (req, res) => {
   max-width: 58px !important;
   height: 58px !important;
   min-height: 58px !important;
+  margin: 0 !important;
   padding: 0 !important;
+  border: 0 !important;
   border-radius: 999px !important;
   background: linear-gradient(135deg, #0f8f4f, #25d366) !important;
   color: #ffffff !important;
@@ -13927,15 +13989,27 @@ app.get("/inbox", protectInbox, (req, res) => {
   align-items: center !important;
   justify-content: center !important;
   box-shadow: 0 18px 34px rgba(37,211,102,.30) !important;
-  overflow: visible !important;
+  overflow: hidden !important;
+  cursor: pointer !important;
 }
 
 .chat-composer-wrap .send-btn::before {
   content: "➤" !important;
+  display: block !important;
   font-size: 25px !important;
   color: #ffffff !important;
   line-height: 1 !important;
   transform: translateX(2px) !important;
+}
+
+.chat-composer-wrap .send-btn::after {
+  content: none !important;
+  display: none !important;
+}
+
+.chat-composer-wrap .send-btn:hover {
+  filter: brightness(.98) !important;
+  transform: translateY(-1px) !important;
 }
 
 .chat-composer-wrap .result {
@@ -13946,11 +14020,11 @@ app.get("/inbox", protectInbox, (req, res) => {
   align-items: center !important;
   justify-content: center !important;
   width: auto !important;
-  max-width: 280px !important;
+  max-width: 360px !important;
   min-height: 30px !important;
   height: 30px !important;
-  padding: 0 12px !important;
   margin: 0 !important;
+  padding: 0 13px !important;
   border-radius: 999px !important;
   border: 1px dashed rgba(120,184,62,.32) !important;
   background: rgba(255,255,255,.88) !important;
@@ -13964,13 +14038,50 @@ app.get("/inbox", protectInbox, (req, res) => {
 }
 
 .chat-composer-wrap .composer-reply-source {
-  padding: 0 16px 14px !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(220px, 300px) !important;
+  align-items: center !important;
+  justify-content: end !important;
+  gap: 8px !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 18px 16px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }
 
-@media (min-width: 1400px) {
-  .app {
-    grid-template-columns: 340px minmax(680px, 1fr) 345px !important;
-  }
+.chat-composer-wrap .composer-reply-source label {
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  margin: 0 !important;
+}
+
+.chat-composer-wrap .composer-reply-source label::before {
+  content: "" !important;
+}
+
+.chat-composer-wrap .composer-reply-source select {
+  height: 34px !important;
+  min-height: 34px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(120,184,62,.28) !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+  padding: 0 34px 0 13px !important;
+  box-shadow: none !important;
+}
+
+.chat-composer-wrap .composer-quick-replies,
+.chat-composer-wrap .composer-mini-actions {
+  padding: 0 18px 16px !important;
+  margin: 0 !important;
+  gap: 8px !important;
 }
 
 @media (max-width: 1366px) {
@@ -13978,23 +14089,31 @@ app.get("/inbox", protectInbox, (req, res) => {
     padding: 12px 14px 15px !important;
   }
 
-  .composer-bottom-row {
-    grid-template-columns: 168px minmax(0, 1fr) 60px !important;
-    column-gap: 10px !important;
+  .chat-composer-wrap textarea#body {
+    width: calc(100% - 28px) !important;
+    height: 94px !important;
+    min-height: 94px !important;
+    margin: 14px 14px 12px !important;
+    padding: 15px 16px !important;
   }
 
-  .composer-icon-btn,
+  .composer-bottom-row {
+    grid-template-columns: 98px minmax(0, 1fr) 58px !important;
+    padding: 0 14px 14px !important;
+    gap: 9px 10px !important;
+  }
+
   .composer-image-picker,
   .composer-voice-picker {
-    width: 34px !important;
-    height: 34px !important;
-    min-width: 34px !important;
-    min-height: 34px !important;
-    font-size: 18px !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    font-size: 20px !important;
   }
 
   .chat-composer-wrap .media-box {
-    grid-template-columns: minmax(170px, 1fr) 132px 126px !important;
+    grid-template-columns: minmax(180px, 1fr) 132px 132px !important;
     gap: 8px !important;
   }
 
@@ -14005,28 +14124,27 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1120px) {
   .composer-bottom-row {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr 58px !important;
     grid-template-areas:
-      "icons"
-      "media"
-      "send"
-      "status" !important;
+      "icons send"
+      "media media"
+      "status status" !important;
   }
 
   .composer-icon-tools {
-    justify-content: flex-start !important;
+    width: auto !important;
   }
 
   .chat-composer-wrap .media-box {
     grid-template-columns: 1fr !important;
-    grid-auto-rows: 44px !important;
+    grid-auto-rows: 48px !important;
   }
 
-  .chat-composer-wrap .send-btn,
   .chat-composer-wrap .result {
-    justify-self: end !important;
+    justify-self: stretch !important;
+    max-width: none !important;
   }
 }
 
@@ -14267,8 +14385,8 @@ app.get("/inbox", protectInbox, (req, res) => {
                       <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" />
                       <input id="audioFile" class="voice-file-input" type="file" accept="audio/aac,audio/mp4,audio/mpeg,audio/amr,audio/ogg" />
                       <input id="imageCaption" placeholder="Optional image caption..." />
-                      <button type="button" class="send-image-btn" id="sendImageBtn">▧ Send image</button>
-                      <button type="button" class="send-voice-btn" id="sendVoiceBtn">🎙️ Send voice</button>
+                      <button type="button" class="send-image-btn" id="sendImageBtn">Send image</button>
+                      <button type="button" class="send-voice-btn" id="sendVoiceBtn">Send voice</button>
                       <div class="media-hint">JPG, PNG, WEBP under 5MB. Voice: AAC, M4A, MP3, AMR, or OGG under 16MB.</div>
                     </div>
                   </div>
