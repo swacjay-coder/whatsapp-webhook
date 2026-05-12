@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-1-premium-functional-sidebar";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-2-sidebar-icons-and-booking-actions-visible";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -6043,196 +6043,6 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
   
-
-
-    /* V31.5.8.60.3.7.1 - Premium functional left sidebar only.
-       Safe scope: visual + existing UI filters/actions. No message loading, Sheets, flows, audio, reminders, or backend logic changed. */
-    .main-sidebar {
-      width: 248px;
-      padding: 18px 14px !important;
-      background:
-        linear-gradient(180deg, rgba(250,255,248,.98), rgba(240,249,236,.96) 100%),
-        radial-gradient(circle at 18% 0%, rgba(120,184,62,.18), transparent 38%) !important;
-      border-right: 1px solid rgba(203,220,199,.92) !important;
-      box-shadow: 14px 0 34px rgba(15,23,42,.055) !important;
-    }
-
-    .sidebar-brand {
-      border-radius: 22px;
-      padding: 10px 10px 14px !important;
-      background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(239,248,234,.72));
-      border: 1px solid rgba(215,226,212,.80);
-      box-shadow: 0 10px 26px rgba(15,23,42,.045);
-    }
-
-    .sidebar-logo {
-      width: 52px !important;
-      height: 52px !important;
-      border-radius: 18px !important;
-      box-shadow: 0 12px 24px rgba(120,184,62,.16) !important;
-    }
-
-    .sidebar-nav {
-      gap: 7px !important;
-    }
-
-    .sidebar-item {
-      width: 100%;
-      min-height: 42px !important;
-      padding: 10px 12px !important;
-      border-radius: 17px !important;
-      background: transparent;
-      border: 1px solid transparent;
-      color: #31483f !important;
-      font-family: inherit;
-      font-size: 13px !important;
-      font-weight: 900 !important;
-      text-align: left;
-      cursor: pointer;
-      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
-      position: relative;
-    }
-
-    .sidebar-item:hover {
-      transform: translateX(2px);
-      background: rgba(255,255,255,.72);
-      border-color: rgba(120,184,62,.22);
-      box-shadow: 0 10px 22px rgba(15,23,42,.055);
-      color: #173b2b !important;
-    }
-
-    .sidebar-item.active,
-    .sidebar-item[aria-current="page"] {
-      background:
-        linear-gradient(135deg, rgba(120,184,62,.20), rgba(255,255,255,.88)),
-        linear-gradient(90deg, rgba(120,184,62,.26), rgba(18,140,126,.08)) !important;
-      color: #16352b !important;
-      border-color: rgba(120,184,62,.30) !important;
-      box-shadow: 0 12px 26px rgba(120,184,62,.13), inset 0 1px 0 rgba(255,255,255,.75) !important;
-    }
-
-    .sidebar-item.active::before,
-    .sidebar-item[aria-current="page"]::before {
-      content: "";
-      position: absolute;
-      left: 7px;
-      top: 12px;
-      bottom: 12px;
-      width: 3px;
-      border-radius: 999px;
-      background: linear-gradient(180deg, #78b83e, #128c7e);
-      box-shadow: 0 0 0 4px rgba(120,184,62,.12);
-    }
-
-    .nav-icon {
-      width: 22px !important;
-      height: 22px !important;
-      min-width: 22px !important;
-      display: inline-grid !important;
-      place-items: center !important;
-      color: #315348;
-    }
-
-    .nav-icon svg {
-      width: 18px;
-      height: 18px;
-      stroke: currentColor;
-      stroke-width: 2.15;
-      fill: none;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-
-    .sidebar-item.active .nav-icon,
-    .sidebar-item[aria-current="page"] .nav-icon {
-      color: #128c7e;
-    }
-
-    .sidebar-branches {
-      padding: 13px !important;
-      border-radius: 21px !important;
-      background: rgba(255,255,255,.86) !important;
-      border-color: rgba(203,220,199,.94) !important;
-      box-shadow: 0 12px 26px rgba(15,23,42,.055) !important;
-    }
-
-    .sidebar-branches-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 6px;
-    }
-
-    .sidebar-section-title {
-      margin-bottom: 0 !important;
-      letter-spacing: 1.05px !important;
-      color: #64748b !important;
-    }
-
-    .sidebar-branch-add {
-      width: 28px;
-      height: 26px;
-      border-radius: 9px;
-      border: 1px solid rgba(120,184,62,.30);
-      background: #fff;
-      color: #16352b;
-      cursor: pointer;
-      font-size: 15px;
-      font-weight: 950;
-      line-height: 1;
-    }
-
-    .sidebar-branch-add:hover {
-      background: #f2faee;
-      border-color: rgba(120,184,62,.58);
-    }
-
-    .branch-row {
-      width: 100%;
-      border: 0;
-      background: transparent;
-      font-family: inherit;
-      cursor: pointer;
-      border-radius: 14px;
-      padding: 9px 8px !important;
-      transition: background .14s ease, transform .14s ease;
-    }
-
-    .branch-row:hover {
-      background: #f3faef;
-      transform: translateX(1px);
-    }
-
-    .branch-row.active {
-      background: linear-gradient(135deg, rgba(120,184,62,.16), rgba(255,255,255,.86));
-      box-shadow: inset 0 0 0 1px rgba(120,184,62,.20);
-    }
-
-    .branch-row span {
-      color: #16352b;
-    }
-
-    .branch-row b {
-      background: #e5f7df !important;
-      color: #2d9b38 !important;
-      min-width: 34px !important;
-    }
-
-    .reference-hidden-filters.sidebar-settings-visible {
-      display: grid !important;
-      gap: 8px !important;
-      padding-top: 8px !important;
-      border-top: 1px solid rgba(226,232,226,.92) !important;
-    }
-
-    .sidebar-user {
-      border-radius: 20px !important;
-      background: linear-gradient(135deg, #102c27, #41612d) !important;
-      box-shadow: 0 16px 30px rgba(22,53,43,.18) !important;
-    }
-
-
 
     /* V18.3 - Chat Window UI only: visual polish, no data/send logic changes */
     .chat-panel {
@@ -14582,6 +14392,343 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 }
 
+
+
+    /* V31.5.8.60.3.7.2 - Premium sidebar icons + branches + booking actions visibility.
+       UI-only patch. Does not touch Google Sheets, /api/messages, WhatsApp flows, reminders, audio, or backend records. */
+    .main-sidebar {
+      width: 248px !important;
+      padding: 18px 14px !important;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(120,184,62,.18), transparent 34%),
+        linear-gradient(180deg, rgba(250,255,248,.99), rgba(240,249,236,.97)) !important;
+      border-right: 1px solid rgba(203,220,199,.92) !important;
+      box-shadow: 14px 0 34px rgba(15,23,42,.055) !important;
+    }
+
+    .sidebar-brand {
+      border-radius: 22px !important;
+      background: linear-gradient(135deg, rgba(255,255,255,.92), rgba(239,248,234,.78)) !important;
+      border: 1px solid rgba(215,226,212,.86) !important;
+      box-shadow: 0 12px 26px rgba(15,23,42,.045) !important;
+    }
+
+    .sidebar-nav {
+      gap: 7px !important;
+    }
+
+    .sidebar-item {
+      width: 100% !important;
+      min-height: 42px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      padding: 9px 11px !important;
+      border-radius: 16px !important;
+      border: 1px solid transparent !important;
+      background: transparent !important;
+      color: #31483f !important;
+      font-family: inherit !important;
+      font-size: 13px !important;
+      font-weight: 900 !important;
+      text-align: left !important;
+      cursor: pointer !important;
+      appearance: none !important;
+      -webkit-appearance: none !important;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease !important;
+      position: relative !important;
+    }
+
+    .sidebar-item:hover {
+      transform: translateX(2px) !important;
+      background: rgba(255,255,255,.76) !important;
+      border-color: rgba(120,184,62,.26) !important;
+      box-shadow: 0 10px 22px rgba(15,23,42,.055) !important;
+      color: #173b2b !important;
+    }
+
+    .sidebar-item.active,
+    .sidebar-item[aria-current="page"] {
+      background: linear-gradient(135deg, rgba(120,184,62,.20), rgba(255,255,255,.90)) !important;
+      border-color: rgba(120,184,62,.34) !important;
+      color: #16352b !important;
+      box-shadow: 0 12px 26px rgba(120,184,62,.13), inset 0 1px 0 rgba(255,255,255,.78) !important;
+    }
+
+    .sidebar-item.active::before,
+    .sidebar-item[aria-current="page"]::before {
+      content: "" !important;
+      position: absolute !important;
+      left: 7px !important;
+      top: 12px !important;
+      bottom: 12px !important;
+      width: 3px !important;
+      border-radius: 999px !important;
+      background: linear-gradient(180deg, #78b83e, #128c7e) !important;
+      box-shadow: 0 0 0 4px rgba(120,184,62,.12) !important;
+    }
+
+    .nav-icon {
+      width: 28px !important;
+      height: 28px !important;
+      min-width: 28px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      border-radius: 12px !important;
+      background: rgba(255,255,255,.72) !important;
+      border: 1px solid rgba(203,220,199,.86) !important;
+      color: #2c5145 !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.75) !important;
+    }
+
+    .nav-icon svg {
+      width: 17px !important;
+      height: 17px !important;
+      stroke: currentColor !important;
+      stroke-width: 2.05 !important;
+      fill: none !important;
+      stroke-linecap: round !important;
+      stroke-linejoin: round !important;
+      display: block !important;
+    }
+
+    .sidebar-item.active .nav-icon,
+    .sidebar-item[aria-current="page"] .nav-icon {
+      color: #128c7e !important;
+      border-color: rgba(18,140,126,.25) !important;
+      background: rgba(255,255,255,.90) !important;
+      box-shadow: 0 8px 16px rgba(18,140,126,.09), inset 0 1px 0 rgba(255,255,255,.85) !important;
+    }
+
+    .premium-branch-card.sidebar-branches {
+      margin-top: auto !important;
+      padding: 14px !important;
+      border-radius: 22px !important;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(120,184,62,.13), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(247,252,244,.90)) !important;
+      border: 1px solid rgba(203,220,199,.96) !important;
+      box-shadow: 0 14px 30px rgba(15,23,42,.065), inset 0 1px 0 rgba(255,255,255,.82) !important;
+    }
+
+    .sidebar-branches-head {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 10px !important;
+      margin-bottom: 10px !important;
+      padding-bottom: 10px !important;
+      border-bottom: 1px solid rgba(226,232,226,.86) !important;
+    }
+
+    .sidebar-section-kicker {
+      color: #7c8fa2 !important;
+      font-size: 9px !important;
+      line-height: 1 !important;
+      font-weight: 950 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 1.2px !important;
+      margin-bottom: 4px !important;
+    }
+
+    .sidebar-section-title {
+      color: #233e34 !important;
+      font-size: 12px !important;
+      font-weight: 950 !important;
+      text-transform: none !important;
+      letter-spacing: .2px !important;
+      margin: 0 !important;
+    }
+
+    .sidebar-branch-add {
+      min-width: 38px !important;
+      height: 28px !important;
+      padding: 0 10px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(120,184,62,.32) !important;
+      background: #fff !important;
+      color: #16352b !important;
+      cursor: pointer !important;
+      font-size: 11px !important;
+      font-weight: 950 !important;
+      line-height: 1 !important;
+      box-shadow: 0 8px 16px rgba(15,23,42,.045) !important;
+    }
+
+    .sidebar-branch-add:hover {
+      background: #f2faee !important;
+      border-color: rgba(120,184,62,.62) !important;
+    }
+
+    .branch-row.sidebar-branch-filter {
+      width: 100% !important;
+      border: 1px solid transparent !important;
+      background: transparent !important;
+      font-family: inherit !important;
+      cursor: pointer !important;
+      border-radius: 16px !important;
+      padding: 9px 8px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      transition: background .14s ease, transform .14s ease, border-color .14s ease, box-shadow .14s ease !important;
+    }
+
+    .branch-row.sidebar-branch-filter:hover {
+      background: rgba(255,255,255,.78) !important;
+      border-color: rgba(120,184,62,.20) !important;
+      transform: translateX(1px) !important;
+    }
+
+    .branch-row.sidebar-branch-filter.active {
+      background: linear-gradient(135deg, rgba(120,184,62,.16), rgba(255,255,255,.88)) !important;
+      border-color: rgba(120,184,62,.30) !important;
+      box-shadow: inset 0 0 0 1px rgba(120,184,62,.12), 0 8px 16px rgba(120,184,62,.07) !important;
+    }
+
+    .branch-left {
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      min-width: 0 !important;
+      color: #16352b !important;
+    }
+
+    .branch-left strong {
+      display: block !important;
+      font-size: 13px !important;
+      font-weight: 950 !important;
+      line-height: 1.1 !important;
+    }
+
+    .branch-left small {
+      display: block !important;
+      color: #7c8fa2 !important;
+      font-size: 9.5px !important;
+      font-weight: 850 !important;
+      margin-top: 2px !important;
+      line-height: 1 !important;
+    }
+
+    .branch-dot {
+      width: 10px !important;
+      height: 10px !important;
+      border-radius: 999px !important;
+      display: inline-block !important;
+      background: #78b83e !important;
+      box-shadow: 0 0 0 5px rgba(120,184,62,.14) !important;
+      flex: 0 0 auto !important;
+    }
+
+    .branch-dot-abu {
+      background: #128c7e !important;
+      box-shadow: 0 0 0 5px rgba(18,140,126,.12) !important;
+    }
+
+    .branch-row b {
+      min-width: 38px !important;
+      height: 26px !important;
+      display: inline-grid !important;
+      place-items: center !important;
+      padding: 0 9px !important;
+      border-radius: 999px !important;
+      background: #e9f6e4 !important;
+      color: #2d9b38 !important;
+      font-size: 12px !important;
+      font-weight: 950 !important;
+    }
+
+    .booking-request-card {
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: visible !important;
+    }
+
+    .right-reference-panel .booking-request-card .booking-card-helper { order: 1 !important; }
+    .right-reference-panel .booking-request-card .booking-actions-grid { order: 2 !important; }
+    .right-reference-panel .booking-request-card .booking-note-input { order: 3 !important; }
+    .right-reference-panel .booking-request-card .booking-send-update-btn { order: 4 !important; }
+    .right-reference-panel .booking-request-card .booking-result-text { order: 5 !important; }
+    .right-reference-panel .booking-request-card .reference-detail-list { order: 6 !important; }
+
+    .right-reference-panel .booking-actions-grid,
+    .right-reference-panel .booking-note-input,
+    .right-reference-panel .booking-send-update-btn,
+    .right-reference-panel .booking-result-text {
+      display: grid !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      position: relative !important;
+      left: auto !important;
+      right: auto !important;
+      top: auto !important;
+      bottom: auto !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      pointer-events: auto !important;
+    }
+
+    .right-reference-panel .booking-note-input {
+      display: block !important;
+      min-height: 34px !important;
+      margin-top: 8px !important;
+      padding: 8px 10px !important;
+      border-radius: 12px !important;
+      font-size: 11.5px !important;
+      font-weight: 800 !important;
+    }
+
+    .right-reference-panel .booking-actions-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 7px !important;
+      margin-top: 8px !important;
+    }
+
+    .right-reference-panel .booking-action-btn {
+      min-height: 34px !important;
+      padding: 7px 8px !important;
+      border-radius: 12px !important;
+      font-size: 10.8px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.01em !important;
+      white-space: nowrap !important;
+    }
+
+    .right-reference-panel .booking-send-update-btn {
+      width: 100% !important;
+      min-height: 36px !important;
+      margin-top: 7px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .right-reference-panel .booking-result-text {
+      min-height: 16px !important;
+      margin-top: 6px !important;
+      margin-bottom: 8px !important;
+      display: block !important;
+      font-size: 10.5px !important;
+      line-height: 1.35 !important;
+    }
+
+    .right-reference-panel .booking-request-card .reference-detail-list {
+      margin-top: 8px !important;
+      padding-top: 8px !important;
+      border-top: 1px solid rgba(226,232,226,.92) !important;
+    }
+
+    .right-reference-panel #bookingRequestMessage {
+      max-height: 88px !important;
+      overflow-y: auto !important;
+      scrollbar-width: thin !important;
+    }
+
+    .right-reference-scroll {
+      padding-bottom: 24px !important;
+    }
 </style>
 </head>
 <body>
@@ -14596,25 +14743,32 @@ app.get("/inbox", protectInbox, (req, res) => {
       </div>
 
       <nav class="sidebar-nav" aria-label="Team Inbox navigation">
-        <button type="button" class="sidebar-item active" aria-current="page" data-sidebar-action="team-inbox" title="Show all conversations"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 14h4l2 3h4l2-3h4"/></svg></span><span>Team Inbox</span></button>
-        <button type="button" class="sidebar-item" data-sidebar-action="dashboard" title="Jump to dashboard summary"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><path d="M12 13l4-4"/><path d="M5 19h14"/></svg></span><span>Dashboard</span></button>
-        <button type="button" class="sidebar-item" data-sidebar-action="conversations" title="Show conversation list"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H8l-3 3z"/><path d="M8 9h8"/><path d="M8 12h5"/></svg></span><span>Conversations</span></button>
-        <button type="button" class="sidebar-item" data-sidebar-action="team" title="Show conversations needing team attention"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0"/><path d="M3 20a7 7 0 0 1 18 0"/><path d="M18 8a3 3 0 0 1 3 3"/><path d="M3 11a3 3 0 0 1 3-3"/></svg></span><span>Team</span></button>
-        <button type="button" class="sidebar-item" data-sidebar-action="contacts" title="Show customer conversations"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4h10a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/></svg></span><span>Contacts</span></button>
-        <button type="button" class="sidebar-item" data-sidebar-action="quick-replies" title="Open quick replies"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2H19l-4.2 3.1 1.6 5.2L12 13.4 7.6 16.5l1.6-5.2L5 8.2h5.2z"/><path d="M19 19h2"/></svg></span><span>Quick Replies</span></button>
-        <button type="button" class="sidebar-item" data-sidebar-action="broadcast" title="Show follow-up conversations"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 11v2l5 2V9z"/><path d="M9 9l9-4v14l-9-4"/><path d="M5 15l1 4"/></svg></span><span>Broadcast</span></button>
-        <button type="button" class="sidebar-item" data-sidebar-action="files-media" title="Show media-request conversations"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h5"/></svg></span><span>Files & Media</span></button>
-        <button type="button" class="sidebar-item" data-sidebar-action="analytics" title="Refresh and show branch counts"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/><path d="M3 19h18"/></svg></span><span>Analytics</span></button>
-        <button type="button" class="sidebar-item" data-sidebar-action="settings" title="Toggle advanced filters"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 0 .3 2l.1.1-2.1 2.1-.1-.1a1.8 1.8 0 0 0-2-.3 1.8 1.8 0 0 0-1 1.6V21h-3v-.6a1.8 1.8 0 0 0-1-1.6 1.8 1.8 0 0 0-2 .3l-.1.1-2.1-2.1.1-.1a1.8 1.8 0 0 0 .3-2 1.8 1.8 0 0 0-1.6-1H4v-3h.6a1.8 1.8 0 0 0 1.6-1 1.8 1.8 0 0 0-.3-2l-.1-.1 2.1-2.1.1.1a1.8 1.8 0 0 0 2 .3 1.8 1.8 0 0 0 1-1.6V3h3v.6a1.8 1.8 0 0 0 1 1.6 1.8 1.8 0 0 0 2-.3l.1-.1 2.1 2.1-.1.1a1.8 1.8 0 0 0-.3 2 1.8 1.8 0 0 0 1.6 1h.6v3h-.6a1.8 1.8 0 0 0-1.6 1z"/></svg></span><span>Settings</span></button>
+        <button type="button" class="sidebar-item active" data-sidebar-action="all" aria-current="page"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-11Z"/><path d="M4 14h4.2l1.5 2h4.6l1.5-2H20"/></svg></span><span>Team Inbox</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13.5V20h6v-5h4v5h6v-6.5"/><path d="M3 12l9-8 9 8"/></svg></span><span>Dashboard</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="conversations"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v5A2.5 2.5 0 0 1 16.5 14H10l-4 4v-4.5A2.5 2.5 0 0 1 5 11.5v-5Z"/><path d="M8 8h8M8 11h5"/></svg></span><span>Conversations</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="team"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M16 10a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M3.5 20a4.5 4.5 0 0 1 9 0"/><path d="M13.5 19a3.5 3.5 0 0 1 7 0"/></svg></span><span>Team</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="contacts"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M9 4v16"/><path d="M13 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M11 15a3 3 0 0 1 6 0"/></svg></span><span>Contacts</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="quick"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z"/></svg></span><span>Quick Replies</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="broadcast"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h4l10-6v12L8 12"/><path d="M8 12v6a2 2 0 0 0 2 2h1"/><path d="M19 9.5c1.3 1.4 1.3 3.6 0 5"/></svg></span><span>Broadcast</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="files"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/><path d="M8 15l2.2-2.2a1 1 0 0 1 1.4 0L14 15l1-1a1 1 0 0 1 1.4 0L18 15.6"/></svg></span><span>Files & Media</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="analytics"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/><path d="M3 19h18"/></svg></span><span>Analytics</span></button>
+        <button type="button" class="sidebar-item" data-sidebar-action="settings"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2 .1 1.7 1.7 0 0 0-.8 1.6v.2H9.2V22a1.7 1.7 0 0 0-.8-1.6 1.7 1.7 0 0 0-2-.1l-.2.1-2-3.4.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.4-1H3v-4h.2a1.7 1.7 0 0 0 1.4-1 1.7 1.7 0 0 0-.3-1.9L4.2 7l2-3.4.2.1a1.7 1.7 0 0 0 2-.1A1.7 1.7 0 0 0 9.2 2V1.8h5.6V2a1.7 1.7 0 0 0 .8 1.6 1.7 1.7 0 0 0 2 .1l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.4 1h.2v4h-.2a1.7 1.7 0 0 0-1.4 1Z"/></svg></span><span>Settings</span></button>
       </nav>
 
-      <div class="sidebar-branches">
+      <div class="sidebar-branches premium-branch-card">
         <div class="sidebar-branches-head">
-          <div class="sidebar-section-title">Our Branches</div>
-          <button class="sidebar-branch-add" type="button" aria-label="Add branch">＋</button>
+          <div>
+            <div class="sidebar-section-kicker">Branches</div>
+            <div class="sidebar-section-title">Our Branches</div>
+          </div>
+          <button class="sidebar-branch-add" type="button" data-sidebar-branch-reset="true" aria-label="Show all branches" title="Show all branches">All</button>
         </div>
-        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Dubai"><span><i></i> Dubai</span><b id="sideDubaiCount">0</b></button>
-        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Abu Dhabi"><span><i></i> Abu Dhabi</span><b id="sideAbuCount">0</b></button>
+        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Dubai">
+          <span class="branch-left"><i class="branch-dot branch-dot-dubai"></i><span><strong>Dubai</strong><small>Main branch</small></span></span><b id="sideDubaiCount">0</b>
+        </button>
+        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Abu Dhabi">
+          <span class="branch-left"><i class="branch-dot branch-dot-abu"></i><span><strong>Abu Dhabi</strong><small>Second branch</small></span></span><b id="sideAbuCount">0</b>
+        </button>
       </div>
 
       <div class="sidebar-user">
@@ -14921,12 +15075,12 @@ app.get("/inbox", protectInbox, (req, res) => {
             </div>
             <input id="bookingStatusNote" class="booking-note-input" type="text" placeholder="Internal note for the team..." />
             <div class="booking-actions-grid">
-              <button type="button" class="booking-action-btn approve" data-booking-status-action="Approved">Confirm booking</button>
-              <button type="button" class="booking-action-btn suggest" data-booking-status-action="Suggest another time">Suggest another time</button>
-              <button type="button" class="booking-action-btn follow" data-booking-status-action="Need follow-up">Mark follow-up</button>
-              <button type="button" class="booking-action-btn cancel" data-booking-status-action="Cancelled">Cancel request</button>
+              <button type="button" class="booking-action-btn approve" data-booking-status-action="Approved">Confirm</button>
+              <button type="button" class="booking-action-btn suggest" data-booking-status-action="Suggest another time">New time</button>
+              <button type="button" class="booking-action-btn follow" data-booking-status-action="Need follow-up">Follow-up</button>
+              <button type="button" class="booking-action-btn cancel" data-booking-status-action="Cancelled">Cancel</button>
             </div>
-            <button type="button" class="booking-action-btn booking-send-update-btn" id="bookingSendCustomerUpdateBtn">Send customer update</button>
+            <button type="button" class="booking-action-btn booking-send-update-btn" id="bookingSendCustomerUpdateBtn">Send update</button>
             <div class="booking-result-text" id="bookingRequestResult">Choose an action to prepare an update.</div>
           </section>
 
@@ -15183,12 +15337,14 @@ function updateReferenceFilterUi(currentCount) {
     btn.classList.toggle("active", (branchFilter.value || "") === (btn.dataset.branch || ""));
   });
 
-  updateSidebarBranchActive();
-
   if (conversationFooterText) {
     const total = buildConversations().length;
     const shown = Number(currentCount || 0);
     conversationFooterText.textContent = shown ? "Showing 1 - " + shown + " of " + total : "Showing 0 - 0 of " + total;
+  }
+
+  if (typeof updatePremiumSidebarState === "function") {
+    updatePremiumSidebarState();
   }
 }
 
@@ -15214,184 +15370,6 @@ referenceBranchTabs.forEach(function(btn) {
 if (refreshListBtn) {
   refreshListBtn.addEventListener("click", function() {
     loadMessages();
-  });
-}
-
-/* V31.5.8.60.3.7.1 - Functional left sidebar.
-   Uses existing filters/actions only; it does not touch message storage or /api/messages. */
-const sidebarItems = Array.from(document.querySelectorAll(".sidebar-item[data-sidebar-action]"));
-const sidebarBranchButtons = Array.from(document.querySelectorAll(".sidebar-branch-filter[data-sidebar-branch]"));
-const sidebarAdvancedFilters = document.querySelector(".reference-hidden-filters");
-const sidebarBranchAddBtn = document.querySelector(".sidebar-branch-add");
-
-function setSidebarActive(action) {
-  sidebarItems.forEach(function(item) {
-    const active = (item.dataset.sidebarAction || "") === action;
-    item.classList.toggle("active", active);
-    if (active) {
-      item.setAttribute("aria-current", "page");
-    } else {
-      item.removeAttribute("aria-current");
-    }
-  });
-}
-
-function updateSidebarBranchActive() {
-  const currentBranch = branchFilter ? (branchFilter.value || "") : "";
-  sidebarBranchButtons.forEach(function(btn) {
-    btn.classList.toggle("active", currentBranch && (btn.dataset.sidebarBranch || "") === currentBranch);
-  });
-}
-
-function clearConversationFiltersForSidebar() {
-  if (searchBox) searchBox.value = "";
-  if (branchFilter) branchFilter.value = "";
-  if (statusFilter) statusFilter.value = "";
-  if (assigneeFilter) assigneeFilter.value = "";
-  if (tagFilter) tagFilter.value = "";
-  selectedConversationKey = "";
-  selectedPhone = "";
-  selectedPhoneNumberId = "";
-}
-
-function applySidebarFilters(options) {
-  options = options || {};
-  if (searchBox && Object.prototype.hasOwnProperty.call(options, "search")) searchBox.value = options.search || "";
-  if (branchFilter && Object.prototype.hasOwnProperty.call(options, "branch")) branchFilter.value = options.branch || "";
-  if (statusFilter && Object.prototype.hasOwnProperty.call(options, "status")) statusFilter.value = options.status || "";
-  if (assigneeFilter && Object.prototype.hasOwnProperty.call(options, "assignee")) assigneeFilter.value = options.assignee || "";
-  if (tagFilter && Object.prototype.hasOwnProperty.call(options, "tag")) tagFilter.value = options.tag || "";
-  selectedConversationKey = "";
-  selectedPhone = "";
-  selectedPhoneNumberId = "";
-  renderAll();
-  updateSidebarBranchActive();
-}
-
-function scrollIntoViewSoft(element) {
-  if (!element || !element.scrollIntoView) return;
-  element.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function setSidebarResult(message) {
-  if (resultBox) {
-    resultBox.textContent = message || "";
-  }
-}
-
-function runSidebarAction(action) {
-  setSidebarActive(action);
-
-  if (action === "team-inbox") {
-    clearConversationFiltersForSidebar();
-    renderAll();
-    updateSidebarBranchActive();
-    scrollIntoViewSoft(document.querySelector(".topbar") || document.querySelector(".page"));
-    setSidebarResult("Showing all Team Inbox conversations.");
-    return;
-  }
-
-  if (action === "dashboard") {
-    clearConversationFiltersForSidebar();
-    renderAll();
-    updateSidebarBranchActive();
-    scrollIntoViewSoft(document.querySelector(".topbar") || document.querySelector(".page"));
-    setSidebarResult("Dashboard summary refreshed.");
-    return;
-  }
-
-  if (action === "conversations") {
-    clearConversationFiltersForSidebar();
-    renderAll();
-    updateSidebarBranchActive();
-    scrollIntoViewSoft(conversationList);
-    if (searchBox) searchBox.focus();
-    setSidebarResult("Conversation list ready.");
-    return;
-  }
-
-  if (action === "team") {
-    applySidebarFilters({ search: "", branch: "", status: "Needs Team", assignee: "", tag: "" });
-    scrollIntoViewSoft(conversationList);
-    setSidebarResult("Showing conversations that need team attention.");
-    return;
-  }
-
-  if (action === "contacts") {
-    applySidebarFilters({ search: "", branch: "", status: "Customer Reply", assignee: "", tag: "" });
-    scrollIntoViewSoft(conversationList);
-    setSidebarResult("Showing customer conversations.");
-    return;
-  }
-
-  if (action === "quick-replies") {
-    if (topbarQuickRepliesBtn) {
-      topbarQuickRepliesBtn.click();
-      topbarQuickRepliesBtn.focus();
-      setSidebarResult("Quick replies opened.");
-    } else {
-      setSidebarResult("Quick replies are not available on this screen.");
-    }
-    return;
-  }
-
-  if (action === "broadcast") {
-    applySidebarFilters({ search: "", branch: "", status: "Follow-up", assignee: "", tag: "" });
-    scrollIntoViewSoft(conversationList);
-    setSidebarResult("Showing follow-up conversations for broadcast planning.");
-    return;
-  }
-
-  if (action === "files-media") {
-    applySidebarFilters({ search: "", branch: "", status: "", assignee: "", tag: "Media Requested" });
-    scrollIntoViewSoft(conversationList);
-    setSidebarResult("Showing media-related conversations.");
-    return;
-  }
-
-  if (action === "analytics") {
-    clearConversationFiltersForSidebar();
-    updateStats();
-    renderAll();
-    updateSidebarBranchActive();
-    scrollIntoViewSoft(document.querySelector(".reference-branch-tabs") || document.querySelector(".topbar"));
-    setSidebarResult("Analytics counts refreshed.");
-    return;
-  }
-
-  if (action === "settings") {
-    if (sidebarAdvancedFilters) {
-      sidebarAdvancedFilters.classList.toggle("sidebar-settings-visible");
-      setSidebarResult(sidebarAdvancedFilters.classList.contains("sidebar-settings-visible") ? "Advanced filters opened." : "Advanced filters hidden.");
-    } else {
-      setSidebarResult("Settings panel is not available on this screen.");
-    }
-  }
-}
-
-sidebarItems.forEach(function(item) {
-  item.addEventListener("click", function() {
-    runSidebarAction(item.dataset.sidebarAction || "team-inbox");
-  });
-});
-
-sidebarBranchButtons.forEach(function(btn) {
-  btn.addEventListener("click", function() {
-    const branch = btn.dataset.sidebarBranch || "";
-    setSidebarActive("conversations");
-    applySidebarFilters({ search: "", branch: branchFilter && branchFilter.value === branch ? "" : branch, status: "", assignee: "", tag: "" });
-    scrollIntoViewSoft(conversationList);
-    setSidebarResult(branch ? "Showing " + branch + " branch conversations." : "Showing all branches.");
-  });
-});
-
-if (sidebarBranchAddBtn) {
-  sidebarBranchAddBtn.addEventListener("click", function() {
-    setSidebarActive("team-inbox");
-    clearConversationFiltersForSidebar();
-    renderAll();
-    updateSidebarBranchActive();
-    setSidebarResult("Branch filters cleared.");
   });
 }
 
@@ -17626,6 +17604,150 @@ document.addEventListener("visibilitychange", function() {
     resetLiveAlertCounter();
   }
 });
+
+
+
+/* V31.5.8.60.3.7.2 - Functional premium sidebar actions. UI-only. */
+function setSidebarSelectValue(selectEl, value) {
+  if (!selectEl) return;
+  selectEl.value = value || "";
+}
+
+function runSidebarRender(options) {
+  options = options || {};
+  selectedConversationKey = "";
+  if (typeof renderConversationList === "function") renderConversationList();
+  if (typeof renderChat === "function") renderChat();
+  if (typeof updateStats === "function") updateStats();
+  if (typeof updatePremiumSidebarState === "function") updatePremiumSidebarState(options.action || "");
+}
+
+function updatePremiumSidebarState(forcedAction) {
+  const currentBranch = branchFilter ? (branchFilter.value || "") : "";
+  const currentStatus = statusFilter ? (statusFilter.value || "") : "";
+  const currentTag = tagFilter ? (tagFilter.value || "") : "";
+  let activeAction = forcedAction || "all";
+
+  if (currentBranch) activeAction = "";
+  else if (currentStatus === "Needs Team" || currentStatus === "Talk to Team") activeAction = "team";
+  else if (currentStatus === "Customer Reply") activeAction = "contacts";
+  else if (currentStatus === "Follow-up" || currentStatus === "Need Follow-up") activeAction = "broadcast";
+  else if (currentStatus === "Media Requested" || currentTag === "Media Requested") activeAction = "files";
+  else if (!currentStatus && !currentTag) activeAction = forcedAction || "all";
+
+  document.querySelectorAll(".sidebar-item[data-sidebar-action]").forEach(function(btn) {
+    const isActive = activeAction && (btn.dataset.sidebarAction === activeAction);
+    btn.classList.toggle("active", Boolean(isActive));
+    if (isActive) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
+  });
+
+  document.querySelectorAll(".sidebar-branch-filter[data-sidebar-branch]").forEach(function(btn) {
+    btn.classList.toggle("active", currentBranch === (btn.dataset.sidebarBranch || ""));
+  });
+}
+
+function openQuickRepliesFromSidebar() {
+  const btn = document.getElementById("topbarQuickRepliesBtn");
+  if (btn) {
+    btn.click();
+    btn.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  const quickPanel = document.getElementById("quickRepliesWrap") || document.querySelector(".composer-quick-replies");
+  if (quickPanel) quickPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function applySidebarAction(action) {
+  action = action || "all";
+
+  if (action === "all" || action === "dashboard" || action === "conversations") {
+    if (branchFilter) branchFilter.value = "";
+    if (statusFilter) statusFilter.value = "";
+    if (assigneeFilter) assigneeFilter.value = "";
+    if (tagFilter) tagFilter.value = "";
+    if (action === "all" && searchBox) searchBox.value = "";
+  }
+
+  if (action === "team") {
+    setSidebarSelectValue(statusFilter, "Needs Team");
+  }
+
+  if (action === "contacts") {
+    setSidebarSelectValue(statusFilter, "Customer Reply");
+  }
+
+  if (action === "broadcast") {
+    setSidebarSelectValue(statusFilter, "Follow-up");
+  }
+
+  if (action === "files") {
+    setSidebarSelectValue(statusFilter, "Media Requested");
+  }
+
+  if (action === "quick") {
+    openQuickRepliesFromSidebar();
+  }
+
+  if (action === "settings") {
+    const hiddenFilters = document.querySelector(".reference-hidden-filters");
+    if (hiddenFilters) {
+      hiddenFilters.classList.toggle("sidebar-settings-visible");
+      hiddenFilters.setAttribute("aria-hidden", hiddenFilters.classList.contains("sidebar-settings-visible") ? "false" : "true");
+    }
+  }
+
+  if (action === "dashboard" || action === "analytics") {
+    if (typeof updateStats === "function") updateStats();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (action === "conversations" && searchBox) {
+    searchBox.focus();
+  }
+
+  runSidebarRender({ action: action });
+}
+
+document.querySelectorAll(".sidebar-item[data-sidebar-action]").forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    applySidebarAction(btn.dataset.sidebarAction || "all");
+  });
+});
+
+document.querySelectorAll(".sidebar-branch-filter[data-sidebar-branch]").forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    const branch = btn.dataset.sidebarBranch || "";
+    if (branchFilter) branchFilter.value = (branchFilter.value === branch) ? "" : branch;
+    if (statusFilter) statusFilter.value = "";
+    if (assigneeFilter) assigneeFilter.value = "";
+    if (tagFilter) tagFilter.value = "";
+    runSidebarRender({ action: "" });
+  });
+});
+
+document.querySelectorAll("[data-sidebar-branch-reset]").forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    if (branchFilter) branchFilter.value = "";
+    runSidebarRender({ action: "all" });
+  });
+});
+
+function ensureBookingActionsVisible() {
+  const card = document.getElementById("bookingRequestCard");
+  if (!card) return;
+  const actions = card.querySelector(".booking-actions-grid");
+  const note = document.getElementById("bookingStatusNote");
+  const sendBtn = document.getElementById("bookingSendCustomerUpdateBtn");
+  const result = document.getElementById("bookingRequestResult");
+  [actions, note, sendBtn, result].forEach(function(el) {
+    if (!el) return;
+    el.style.visibility = "visible";
+    el.style.opacity = "1";
+  });
+}
+
+ensureBookingActionsVisible();
 
 updateLiveNotificationUi();
 
