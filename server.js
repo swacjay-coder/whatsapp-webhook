@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-1-6-chat-background-true-color";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-2-staff-notification-exclusion-reminder-separation";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -237,6 +237,48 @@ function normalizePhoneNumberId(value) {
 
 function normalizePhoneDigits(value) {
   return (value || "").toString().replace(/\D/g, "");
+}
+
+// V31.5.8.60.3.2 - Staff/customer separation:
+// Numbers used for staff notifications or internal tests must never be treated
+// as customer conversations, reminder opt-ins, or live customer notifications.
+const DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS = "971569979163";
+
+function splitPhoneListToDigits(value) {
+  return (value || "")
+    .toString()
+    .split(/[\s,;|]+/)
+    .map((item) => normalizePhoneDigits(item))
+    .filter(Boolean);
+}
+
+function getSuppressedCustomerNotificationNumbers() {
+  const numbers = [];
+
+  [
+    STAFF_NUMBER,
+    DUBAI_STAFF_NUMBER,
+    ABU_DHABI_STAFF_NUMBER,
+    process.env.STAFF_NOTIFICATION_NUMBER,
+    process.env.DUBAI_STAFF_NOTIFICATION_NUMBER,
+    process.env.ABU_DHABI_STAFF_NOTIFICATION_NUMBER,
+    process.env.SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS,
+    process.env.INTERNAL_NOTIFICATION_NUMBERS,
+    DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS
+  ].forEach((value) => {
+    numbers.push(...splitPhoneListToDigits(value));
+  });
+
+  return [...new Set(numbers)];
+}
+
+function isSuppressedCustomerNotificationNumber(value) {
+  const phone = normalizePhoneDigits(value);
+  if (!phone) return false;
+
+  return getSuppressedCustomerNotificationNumbers().some((number) => {
+    return phone === number || phone.endsWith(number) || number.endsWith(phone);
+  });
 }
 
 function isAbuDhabiLine(phoneNumberId, displayPhoneNumber = "") {
@@ -846,8 +888,12 @@ function compactText(value) {
 function isOptInText(text) {
   const value = compactText(text);
   return value === "yes, i agree to receive appointment reminders and service follow-ups from iconic hair care." ||
+    value === "yes, i agree to receive appointment reminders and service-follow-ups from iconic hair care." ||
+    value === "yes, i agree to receive appointment reminder and service follow-up from iconic hair care." ||
     value === "yes, i agree to receive appointment reminders and service follow-ups from iconic hair care" ||
+    value === "yes, i agree to receive appointment reminder and service follow-up from iconic hair care" ||
     value.includes("yes, i agree to receive appointment reminders and service follow-ups from iconic hair care") ||
+    value.includes("yes, i agree to receive appointment reminder and service follow-up from iconic hair care") ||
     value === "أوافق / yes" ||
     value === "اوافق / yes" ||
     value === "yes, remind me" ||
@@ -2351,19 +2397,21 @@ function getAppointmentReminderOptInButtons() {
 function isAppointmentReminderYesText(text) {
   const value = compactText(text);
   if (!value) return false;
+
+  // Do not treat a plain typed "yes" as a 1-hour appointment reminder opt-in.
+  // Plain YES can belong to the separate 20-day service follow-up consent flow.
   return value === "appointment_reminder_yes" ||
-    value === "yes | نعم" ||
-    value === "yes" ||
-    value === "نعم";
+    value === "yes | نعم";
 }
 
 function isAppointmentReminderNoText(text) {
   const value = compactText(text);
   if (!value) return false;
+
+  // Same separation rule: only the explicit appointment reminder button/title
+  // controls the 1-hour appointment reminder flow.
   return value === "appointment_reminder_no" ||
-    value === "no | لا" ||
-    value === "no" ||
-    value === "لا";
+    value === "no | لا";
 }
 
 
@@ -13711,6 +13759,10 @@ let knownCustomerMessageKeys = new Set();
 let liveAlertCount = 0;
 let liveNotificationsEnabled = localStorage.getItem("iconic_live_notifications_enabled") === "yes";
 let liveNotificationAudioContext = null;
+const INTERNAL_NOTIFICATION_PHONE_DIGITS = new Set(${JSON.stringify(getSuppressedCustomerNotificationNumbers())});
+const LIVE_TOAST_DEDUP_WINDOW_MS = 12000;
+const LIVE_TOAST_MAX_VISIBLE = 3;
+const recentLiveToastMap = new Map();
 
 let statusOverrideMap = {};
 try {
@@ -14843,6 +14895,90 @@ function markConversationRead(key) {
   saveReadMap();
 }
 
+function normalizePhoneDigitsClient(value) {
+  return (value || "").toString().replace(/\D/g, "");
+}
+
+function normalizeLiveBody(value) {
+  return (value || "").toString().toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function isInternalNotificationPhone(phone) {
+  const value = normalizePhoneDigitsClient(phone);
+  if (!value) return false;
+
+  return Array.from(INTERNAL_NOTIFICATION_PHONE_DIGITS).some(function(number) {
+    return value === number || value.endsWith(number) || number.endsWith(value);
+  });
+}
+
+function isOperationalReminderConsentMessage(message) {
+  const messageType = normalizeLiveBody(message.messageType);
+  const status = normalizeLiveBody(message.status);
+  const body = normalizeLiveBody(message.body);
+
+  if ([
+    "opt-in",
+    "opt-out",
+    "reminder opt-in declined",
+    "appointment reminder opt-in",
+    "appointment reminder declined"
+  ].includes(messageType)) {
+    return true;
+  }
+
+  if ([
+    "opted in",
+    "opted out",
+    "reminder declined",
+    "appointment reminder opt-in",
+    "appointment reminder declined"
+  ].includes(status)) {
+    return true;
+  }
+
+  return body === "stop" ||
+    body === "unsubscribe" ||
+    body.includes("yes, i agree to receive appointment reminders and service follow-ups from iconic hair care") ||
+    body.includes("yes, i agree to receive appointment reminder and service follow-up from iconic hair care") ||
+    body.includes("service follow-up reminders and special offers") ||
+    body.includes("أوافق / yes") ||
+    body.includes("اوافق / yes");
+}
+
+function shouldIncludeInLiveCustomerNotifications(message) {
+  if (!message || message.sender !== "customer") return false;
+  if (isInternalNotificationPhone(message.phone)) return false;
+  if (isOperationalReminderConsentMessage(message)) return false;
+  return true;
+}
+
+function liveToastDedupKey(message) {
+  return [
+    normalizePhoneDigitsClient(message.phone || ""),
+    message.phoneNumberId || "",
+    normalizeLiveBody(message.body || "").slice(0, 160)
+  ].join("|");
+}
+
+function shouldShowLiveToastForMessage(message) {
+  const key = liveToastDedupKey(message);
+  const now = Date.now();
+
+  Array.from(recentLiveToastMap.keys()).forEach(function(itemKey) {
+    if (now - recentLiveToastMap.get(itemKey) > LIVE_TOAST_DEDUP_WINDOW_MS) {
+      recentLiveToastMap.delete(itemKey);
+    }
+  });
+
+  if (recentLiveToastMap.has(key) && now - recentLiveToastMap.get(key) <= LIVE_TOAST_DEDUP_WINDOW_MS) {
+    return false;
+  }
+
+  recentLiveToastMap.set(key, now);
+  return true;
+}
+
 function customerNotificationKey(message) {
   return [
     message.phone || "",
@@ -14854,9 +14990,7 @@ function customerNotificationKey(message) {
 }
 
 function getCustomerNotificationKeys(messages) {
-  return new Set((messages || []).filter(function(message) {
-    return message.sender === "customer";
-  }).slice(0, 500).map(customerNotificationKey));
+  return new Set((messages || []).filter(shouldIncludeInLiveCustomerNotifications).slice(0, 500).map(customerNotificationKey));
 }
 
 function getUnreadConversationCount() {
@@ -14955,6 +15089,10 @@ function showLiveNotificationToast(message, newCount) {
   });
 
   stack.prepend(toast);
+
+  Array.from(stack.children).slice(LIVE_TOAST_MAX_VISIBLE).forEach(function(item) {
+    item.remove();
+  });
 
   window.setTimeout(function() {
     if (toast && toast.parentNode) {
@@ -15056,7 +15194,7 @@ function showBrowserLiveNotification(message, newCount) {
 function processLiveInboxNotifications(nextMessages) {
   const newKnownKeys = getCustomerNotificationKeys(nextMessages);
   const newCustomerMessages = (nextMessages || []).filter(function(message) {
-    return message.sender === "customer" && !knownCustomerMessageKeys.has(customerNotificationKey(message));
+    return shouldIncludeInLiveCustomerNotifications(message) && !knownCustomerMessageKeys.has(customerNotificationKey(message));
   });
 
   if (!liveNotificationsReady) {
@@ -15073,12 +15211,19 @@ function processLiveInboxNotifications(nextMessages) {
     return;
   }
 
-  const newestMessage = newCustomerMessages[0];
-  liveAlertCount += newCustomerMessages.length;
+  const dedupedNewCustomerMessages = newCustomerMessages.filter(shouldShowLiveToastForMessage);
 
-  showLiveNotificationToast(newestMessage, newCustomerMessages.length);
+  if (!dedupedNewCustomerMessages.length) {
+    updateLiveNotificationUi();
+    return;
+  }
+
+  const newestMessage = dedupedNewCustomerMessages[0];
+  liveAlertCount += dedupedNewCustomerMessages.length;
+
+  showLiveNotificationToast(newestMessage, dedupedNewCustomerMessages.length);
   playLiveNotificationSound();
-  showBrowserLiveNotification(newestMessage, newCustomerMessages.length);
+  showBrowserLiveNotification(newestMessage, dedupedNewCustomerMessages.length);
   updateLiveNotificationUi();
 }
 
@@ -16002,6 +16147,17 @@ app.post("/webhook", async (req, res) => {
     const incomingPhoneNumberId = getIncomingPhoneNumberId(value);
     const lineConfig = getLineConfig(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
     const profileName = getWhatsAppCustomerName(value?.contacts?.[0]);
+    const suppressedInternalText = getIncomingMessageText(message);
+
+    if (isSuppressedCustomerNotificationNumber(from)) {
+      console.log("[Internal Staff/Test Number] inbound skipped before bot/customer workflow", {
+        from,
+        incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        text: suppressedInternalText
+      });
+      return res.sendStatus(200);
+    }
 
       // V60.2.4 Services / Results / How it works premium route
       const iconicServicesRawText = (
@@ -16234,7 +16390,7 @@ No problem. We will not send a reminder for this appointment.`;
           extraFields: {
             opt_in: "yes",
             opt_in_date: optEventDate,
-            opt_in_source: "Auto-reply WhatsApp - Reminder and Offers",
+            opt_in_source: "Auto-reply WhatsApp - 20-day service follow-up and offers",
             opt_out: "",
             opt_out_date: ""
           }
@@ -16244,12 +16400,12 @@ No problem. We will not send a reminder for this appointment.`;
       const optInReply =
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "تم حفظ موافقتك بنجاح ✅\n\n" +
-        "سنستخدم هذا الرقم فقط لإرسال تذكيرات المتابعة والعروض الخاصة من Iconic Hair Care.\n\n" +
+        "سنستخدم هذا الرقم فقط لإرسال تذكيرات متابعة الخدمة كل 20 يوم تقريباً والعروض الخاصة من Iconic Hair Care.\n\n" +
         "لإيقاف التذكيرات والعروض في أي وقت، أرسل: STOP أو إيقاف\n\n" +
         "------------------------------\n\n" +
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Your opt-in has been saved successfully ✅\n\n" +
-        "We will use this number only for service follow-up reminders and occasional special offers from Iconic Hair Care.\n\n" +
+        "We will use this number only for 20-day service follow-up reminders and occasional special offers from Iconic Hair Care.\n\n" +
         "To stop reminders and offers at any time, send: STOP";
 
       await sendWhatsAppMessage(from, optInReply, incomingPhoneNumberId);
