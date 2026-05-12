@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-4-0-team-inbox-delete-links-audio";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-4-voice-button-ui-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -505,80 +505,6 @@ const inboxMessages = [];
 const conversationStatus = {};
 const conversationPhoneNumberId = {};
 
-// V31.5.8.60.4.0 - Team Inbox conversation cleanup.
-// This hides conversations from Team Inbox without deleting the Google Sheet history.
-// A new incoming customer message automatically restores the conversation.
-const TEAM_INBOX_HIDDEN_CONVERSATIONS_FILE = path.join(__dirname, "team_inbox_hidden_conversations.json");
-
-function getTeamInboxConversationHideKey(phone, phoneNumberId = "") {
-  const cleanPhone = normalizePhoneDigits(phone);
-  const cleanLine = normalizePhoneNumberId(phoneNumberId || "");
-  return cleanPhone ? `${cleanPhone}::${cleanLine}` : "";
-}
-
-function loadTeamInboxHiddenConversations() {
-  try {
-    if (!fs.existsSync(TEAM_INBOX_HIDDEN_CONVERSATIONS_FILE)) {
-      return {};
-    }
-
-    const parsed = JSON.parse(fs.readFileSync(TEAM_INBOX_HIDDEN_CONVERSATIONS_FILE, "utf8"));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch (error) {
-    console.log("Team Inbox hidden conversations load failed:");
-    console.log(error);
-    return {};
-  }
-}
-
-let teamInboxHiddenConversations = loadTeamInboxHiddenConversations();
-
-function saveTeamInboxHiddenConversations() {
-  try {
-    fs.writeFileSync(
-      TEAM_INBOX_HIDDEN_CONVERSATIONS_FILE,
-      JSON.stringify(teamInboxHiddenConversations, null, 2),
-      "utf8"
-    );
-  } catch (error) {
-    console.log("Team Inbox hidden conversations save failed:");
-    console.log(error);
-  }
-}
-
-function hideTeamInboxConversation(phone, phoneNumberId = "", hiddenBy = "Team Inbox") {
-  const key = getTeamInboxConversationHideKey(phone, phoneNumberId);
-
-  if (!key) {
-    return false;
-  }
-
-  teamInboxHiddenConversations[key] = {
-    phone: normalizePhoneDigits(phone),
-    phoneNumberId: normalizePhoneNumberId(phoneNumberId || ""),
-    hiddenAt: new Date().toISOString(),
-    hiddenBy
-  };
-  saveTeamInboxHiddenConversations();
-  clearMessagesApiSheetCache("conversation hidden");
-  return true;
-}
-
-function unhideTeamInboxConversation(phone, phoneNumberId = "") {
-  const key = getTeamInboxConversationHideKey(phone, phoneNumberId);
-
-  if (key && teamInboxHiddenConversations[key]) {
-    delete teamInboxHiddenConversations[key];
-    saveTeamInboxHiddenConversations();
-    clearMessagesApiSheetCache("conversation restored by new customer message");
-  }
-}
-
-function isTeamInboxConversationHidden(message = {}) {
-  const key = getTeamInboxConversationHideKey(message.phone || "", message.phoneNumberId || "");
-  return Boolean(key && teamInboxHiddenConversations[key]);
-}
-
 function getDefaultMessageType(sender, status) {
   if (sender === "customer") return "Customer Message";
   if (sender === "bot") return "Bot Reply";
@@ -611,10 +537,6 @@ function fixLoadedEmptyCustomerBody(message = {}) {
 function addInboxMessage(phone, sender, body, status = "Bot", phoneNumberId = null, options = {}) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || conversationPhoneNumberId[phone] || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
-
-  if (sender === "customer") {
-    unhideTeamInboxConversation(phone, finalPhoneNumberId);
-  }
 
   const item = {
     time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
@@ -858,10 +780,6 @@ function getDirectBookingChoiceButtons() {
 function buildPausedCustomerMessageBody(message, profileName = "", originalText = "") {
   if (message?.type === "image") {
     return buildIncomingCustomerImageBody(message);
-  }
-
-  if (message?.type === "audio") {
-    return buildIncomingCustomerAudioBody(message);
   }
 
   const actionText = getSmartCustomerActionText(message, originalText || "");
@@ -1298,6 +1216,25 @@ function parseImageDataUrl(imageDataUrl) {
   return { mimeType, buffer };
 }
 
+// V31.5.8.60.3.4 - Voice button fix:
+// Supports staff-sent WhatsApp audio from Team Inbox while keeping the raw file input hidden.
+function parseAudioDataUrl(audioDataUrl) {
+  const value = (audioDataUrl || "").toString().trim();
+  const match = value.match(/^data:(audio\/(?:aac|mp4|mpeg|amr|ogg|x-m4a|m4a));base64,([A-Za-z0-9+/=]+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const originalMimeType = match[1].toLowerCase();
+  const mimeType = (originalMimeType === "audio/x-m4a" || originalMimeType === "audio/m4a")
+    ? "audio/mp4"
+    : originalMimeType;
+  const buffer = Buffer.from(match[2], "base64");
+
+  return { mimeType, buffer };
+}
+
 function sanitizeMediaFilename(filename, mimeType) {
   const safeBase = (filename || "iconic-image")
     .toString()
@@ -1313,14 +1250,11 @@ function sanitizeMediaFilename(filename, mimeType) {
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/webp": ".webp",
-    "audio/ogg": ".ogg",
-    "audio/mpeg": ".mp3",
-    "audio/mp4": ".m4a",
     "audio/aac": ".aac",
+    "audio/mp4": ".m4a",
+    "audio/mpeg": ".mp3",
     "audio/amr": ".amr",
-    "audio/webm": ".webm",
-    "audio/wav": ".wav",
-    "audio/x-m4a": ".m4a"
+    "audio/ogg": ".ogg"
   };
 
   return safeBase + (extensionMap[mimeType] || ".jpg");
@@ -1429,32 +1363,17 @@ async function sendWhatsAppImageMessage(to, imageDataUrl, caption = "", filename
   };
 }
 
-function parseAudioDataUrl(audioDataUrl) {
-  const value = (audioDataUrl || "").toString().trim();
-  const match = value.match(/^data:(audio\/(?:ogg|mpeg|mp4|aac|amr|webm|wav|x-m4a));base64,([A-Za-z0-9+/=]+)$/);
-
-  if (!match) {
-    return null;
-  }
-
-  const mimeTypeMap = {
-    "audio/x-m4a": "audio/mp4"
-  };
-  const mimeType = mimeTypeMap[match[1]] || match[1];
-  const buffer = Buffer.from(match[2], "base64");
-
-  return { mimeType, buffer };
-}
 
 async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voice-note.ogg", phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const parsedAudio = parseAudioDataUrl(audioDataUrl);
+  const allowedAudioTypes = ["audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg"];
 
-  if (!parsedAudio) {
+  if (!parsedAudio || !allowedAudioTypes.includes(parsedAudio.mimeType)) {
     return {
       ok: false,
       status: 400,
-      result: { error: "Invalid audio format. Please upload MP3, M4A, OGG, AAC, AMR, WEBM, or WAV." }
+      result: { error: "Invalid voice format. Please upload AAC, M4A/MP4, MP3, AMR, or OGG audio." }
     };
   }
 
@@ -1462,7 +1381,7 @@ async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voi
     return {
       ok: false,
       status: 400,
-      result: { error: "Audio is too large. Please upload audio under 16MB." }
+      result: { error: "Voice note is too large. Please upload audio under 16MB." }
     };
   }
 
@@ -1479,6 +1398,7 @@ async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voi
 
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
+
   const payload = {
     messaging_product: "whatsapp",
     to,
@@ -1488,7 +1408,7 @@ async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voi
     }
   };
 
-  console.log(`Sending WhatsApp audio from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to}`);
+  console.log(`Sending WhatsApp voice/audio from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to}`);
 
   const response = await fetch(url, {
     method: "POST",
@@ -1502,10 +1422,10 @@ async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voi
   const result = await response.json();
 
   if (!response.ok) {
-    console.log("WhatsApp audio send failed:");
+    console.log("WhatsApp voice/audio send failed:");
     console.log(JSON.stringify(result, null, 2));
   } else {
-    console.log("WhatsApp audio sent successfully:");
+    console.log("WhatsApp voice/audio sent successfully:");
     console.log(JSON.stringify(result, null, 2));
   }
 
@@ -1513,7 +1433,6 @@ async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voi
     ok: response.ok,
     status: response.status,
     mediaId: uploadResult.mediaId,
-    mimeType: parsedAudio.mimeType,
     result
   };
 }
@@ -4331,8 +4250,7 @@ async function loadMessagesFromGoogleSheetForMessagesApi() {
   const memoryMessages = inboxMessages || [];
   const conversationStates = sheetData.conversationStates || [];
   const bookingRequests = sheetData.bookingRequests || [];
-  const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages)
-    .filter((message) => !isTeamInboxConversationHidden(message));
+  const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
   const source = sheetMessages.length > 0 && memoryMessages.length > 0
     ? "google_sheet_plus_memory"
     : (sheetMessages.length > 0 ? "google_sheet" : "memory");
@@ -4348,59 +4266,10 @@ async function loadMessagesFromGoogleSheetForMessagesApi() {
       sheetMessagesCount: sheetMessages.length,
       memoryMessagesCount: memoryMessages.length,
       returnedMessagesCount: mergedMessages.length,
-      hiddenConversationsCount: Object.keys(teamInboxHiddenConversations || {}).length,
       conversationStatesCount: conversationStates.length,
       bookingRequestsCount: bookingRequests.length
     }
   });
-});
-
-app.post("/api/conversations/delete", protectInbox, (req, res) => {
-  try {
-    const phone = (req.body?.phone || "").toString().trim();
-    const phoneNumberId = (req.body?.phoneNumberId || "").toString().trim();
-
-    if (!phone) {
-      return res.status(400).json({ ok: false, error: "Missing phone" });
-    }
-
-    const hidden = hideTeamInboxConversation(phone, phoneNumberId, "Team Inbox");
-
-    return res.json({
-      ok: hidden,
-      phone: normalizePhoneDigits(phone),
-      phoneNumberId: normalizePhoneNumberId(phoneNumberId),
-      hiddenConversationsCount: Object.keys(teamInboxHiddenConversations || {}).length
-    });
-  } catch (error) {
-    console.error("Conversation hide failed:");
-    console.error(error);
-    return res.status(500).json({ ok: false, error: "Conversation hide failed" });
-  }
-});
-
-app.delete("/api/conversations/:phone", protectInbox, (req, res) => {
-  try {
-    const phone = (req.params?.phone || "").toString().trim();
-    const phoneNumberId = (req.query?.phoneNumberId || req.body?.phoneNumberId || "").toString().trim();
-
-    if (!phone) {
-      return res.status(400).json({ ok: false, error: "Missing phone" });
-    }
-
-    const hidden = hideTeamInboxConversation(phone, phoneNumberId, "Team Inbox");
-
-    return res.json({
-      ok: hidden,
-      phone: normalizePhoneDigits(phone),
-      phoneNumberId: normalizePhoneNumberId(phoneNumberId),
-      hiddenConversationsCount: Object.keys(teamInboxHiddenConversations || {}).length
-    });
-  } catch (error) {
-    console.error("Conversation hide failed:");
-    console.error(error);
-    return res.status(500).json({ ok: false, error: "Conversation hide failed" });
-  }
 });
 
 app.get("/api/bookings", protectInbox, async (req, res) => {
@@ -4612,6 +4481,15 @@ function buildInlineImageMessageBody(mediaId, filename, caption) {
   return "[[ICONIC_INLINE_IMAGE]] " + JSON.stringify(payload);
 }
 
+function buildInlineAudioMessageBody(mediaId, filename) {
+  const payload = {
+    mediaId: (mediaId || "").toString().trim(),
+    filename: (filename || "iconic-voice-note.ogg").toString().trim()
+  };
+
+  return "[[ICONIC_INLINE_AUDIO]] " + JSON.stringify(payload);
+}
+
 function buildIncomingCustomerImageBody(message) {
   const image = message?.image || {};
   const mediaId = (image.id || "").toString().trim();
@@ -4625,32 +4503,6 @@ function buildIncomingCustomerImageBody(message) {
   const caption = (image.caption || "").toString().trim();
 
   return buildInlineImageMessageBody(mediaId, filename, caption);
-}
-
-function buildInlineAudioMessageBody(mediaId, filename, mimeType, caption = "") {
-  const payload = {
-    mediaId: (mediaId || "").toString().trim(),
-    filename: (filename || "iconic-voice-note.ogg").toString().trim(),
-    mimeType: (mimeType || "audio/ogg").toString().trim(),
-    caption: (caption || "").toString().trim()
-  };
-
-  return "[[ICONIC_INLINE_AUDIO]] " + JSON.stringify(payload);
-}
-
-function buildIncomingCustomerAudioBody(message) {
-  const audio = message?.audio || {};
-  const mediaId = (audio.id || "").toString().trim();
-
-  if (!mediaId) {
-    return "";
-  }
-
-  const mimeType = (audio.mime_type || "audio/ogg").toString().trim();
-  const filename = sanitizeMediaFilename("customer-voice-" + mediaId, mimeType);
-  const caption = audio.voice ? "Voice message" : "Audio message";
-
-  return buildInlineAudioMessageBody(mediaId, filename, mimeType, caption);
 }
 
 app.post("/api/send-image", protectInbox, async (req, res) => {
@@ -4731,7 +4583,7 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
     if (!to || !audioDataUrl) {
       return res.status(400).json({
         ok: false,
-        error: "Missing customer phone or audio"
+        error: "Missing customer phone or voice note"
       });
     }
 
@@ -4748,7 +4600,7 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
     if (!sendResult.ok) {
       return res.status(sendResult.status || 500).json({
         ok: false,
-        error: sendResult.result?.error?.message || sendResult.result?.error || "Audio send failed",
+        error: sendResult.result?.error?.message || sendResult.result?.error || "Voice send failed",
         result: sendResult.result
       });
     }
@@ -4757,16 +4609,16 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
 
     const safeAudioFilename = sanitizeMediaFilename(
       filename,
-      (sendResult.mimeType || req.body?.mimeType || "audio/ogg").toString().trim()
+      (req.body?.mimeType || "audio/ogg").toString().trim()
     );
 
     addInboxMessage(
       to,
       "staff",
-      buildInlineAudioMessageBody(sendResult.mediaId, safeAudioFilename, sendResult.mimeType || req.body?.mimeType || "audio/ogg", "Voice note"),
+      buildInlineAudioMessageBody(sendResult.mediaId, safeAudioFilename),
       "Human Reply",
       phoneNumberId,
-      { messageType: "Human Audio Reply" }
+      { messageType: "Human Voice Reply" }
     );
     await saveConversationStateToGoogleSheetFromServer({
       phone: to,
@@ -4775,19 +4627,20 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
       status: "Human Reply",
       assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
       tags: ["Human Support", "Bot Paused"],
-      updatedBy: "Team Inbox Human Audio Reply"
+      updatedBy: "Team Inbox Human Voice Reply"
     });
 
     return res.json({ ok: true, mediaId: sendResult.mediaId, result: sendResult.result });
   } catch (error) {
-    console.error("Inbox audio send failed:");
+    console.error("Inbox voice send failed:");
     console.error(error);
     return res.status(500).json({
       ok: false,
-      error: "Audio send failed"
+      error: "Voice send failed"
     });
   }
 });
+
 
 app.get("/api/media/:mediaId", protectInbox, async (req, res) => {
   try {
@@ -5797,6 +5650,24 @@ app.get("/inbox", protectInbox, (req, res) => {
     }
 
     .send-image-btn:hover {
+      border-color: var(--iconic-green);
+      background: #f7fbf5;
+    }
+
+    .send-voice-btn {
+      width: 100%;
+      padding: 13px;
+      border: 1px solid rgba(120,184,62,.34);
+      border-radius: 15px;
+      background: #ffffff;
+      color: var(--iconic-green-dark);
+      font-size: 14px;
+      font-weight: 950;
+      cursor: pointer;
+      box-shadow: 0 8px 18px rgba(15,23,42,.06);
+    }
+
+    .send-voice-btn:hover {
       border-color: var(--iconic-green);
       background: #f7fbf5;
     }
@@ -7020,10 +6891,22 @@ app.get("/inbox", protectInbox, (req, res) => {
       color: #075985 !important;
     }
 
-    .reply-panel .composer-block #imageFile {
+    .reply-panel .composer-block #imageFile,
+    .reply-panel .composer-block #audioFile {
       padding: 10px !important;
       min-height: 44px !important;
       cursor: pointer;
+    }
+
+    .reply-panel .composer-block #audioFile {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      min-height: 1px !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      overflow: hidden !important;
+      left: -9999px !important;
     }
 
     .reply-panel .composer-block #imageCaption {
@@ -7037,7 +6920,8 @@ app.get("/inbox", protectInbox, (req, res) => {
       margin-top: 12px;
     }
 
-    .reply-panel .composer-block .send-image-btn {
+    .reply-panel .composer-block .send-image-btn,
+    .reply-panel .composer-block .send-voice-btn {
       min-height: 48px !important;
       border-radius: 17px !important;
       background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(241,250,236,.96)) !important;
@@ -11608,7 +11492,9 @@ app.get("/inbox", protectInbox, (req, res) => {
       display: none !important;
     }
 
-    .chat-composer-wrap #imageFile {
+    .chat-composer-wrap #imageFile,
+    .chat-composer-wrap #audioFile,
+    .chat-composer-wrap input[type="file"][accept*="audio"] {
       position: absolute !important;
       width: 1px !important;
       height: 1px !important;
@@ -11616,6 +11502,18 @@ app.get("/inbox", protectInbox, (req, res) => {
       opacity: 0 !important;
       pointer-events: none !important;
       overflow: hidden !important;
+      left: -9999px !important;
+    }
+
+    .composer-voice-picker {
+      font-size: 15px !important;
+      color: #128c3a !important;
+    }
+
+    .composer-voice-picker.has-selected-voice,
+    .composer-image-picker.has-selected-image {
+      color: #16a34a !important;
+      background: rgba(34,197,94,.10) !important;
     }
 
     .chat-composer-wrap #imageCaption {
@@ -11631,7 +11529,8 @@ app.get("/inbox", protectInbox, (req, res) => {
       box-shadow: none !important;
     }
 
-    .chat-composer-wrap .send-image-btn {
+    .chat-composer-wrap .send-image-btn,
+    .chat-composer-wrap .send-voice-btn {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -11647,6 +11546,13 @@ app.get("/inbox", protectInbox, (req, res) => {
       font-weight: 800 !important;
       box-shadow: none !important;
       white-space: nowrap !important;
+    }
+
+    .chat-composer-wrap .send-voice-btn {
+      width: 116px !important;
+      color: #128c3a !important;
+      border-color: rgba(34,197,94,.25) !important;
+      background: #f8fff9 !important;
     }
 
     .chat-composer-wrap .composer-actions {
@@ -11742,7 +11648,8 @@ app.get("/inbox", protectInbox, (req, res) => {
         width: 160px !important;
       }
 
-      .chat-composer-wrap .send-image-btn {
+      .chat-composer-wrap .send-image-btn,
+      .chat-composer-wrap .send-voice-btn {
         width: 112px !important;
       }
     }
@@ -12215,6 +12122,33 @@ app.get("/inbox", protectInbox, (req, res) => {
       font-weight: 650 !important;
       line-height: 1.45 !important;
       white-space: pre-wrap !important;
+    }
+
+    /* V31.5.8.60.3.4 - Inline voice/audio message preview inside Team Inbox. */
+    .inline-audio-message {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 7px !important;
+      min-width: 250px !important;
+      max-width: 330px !important;
+      padding: 11px 12px !important;
+      border-radius: 16px !important;
+      background: rgba(255,255,255,.62) !important;
+      border: 1px solid rgba(148, 163, 184, .28) !important;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, .06) !important;
+    }
+
+    .inline-audio-message audio {
+      width: 100% !important;
+      min-height: 34px !important;
+    }
+
+    .inline-audio-filename {
+      color: #475569 !important;
+      font-size: 11px !important;
+      font-weight: 750 !important;
+      line-height: 1.35 !important;
+      word-break: break-word !important;
     }
 
     .reference-version-badge::after {
@@ -13760,77 +13694,6 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 }
 
-
-
-    /* V31.5.8.60.4.0 - Team Inbox cleanup, clickable links, and audio messages. */
-    .conversation-delete-btn {
-      border: 1px solid rgba(239, 68, 68, .22) !important;
-      background: rgba(254, 242, 242, .96) !important;
-      color: #b91c1c !important;
-      border-radius: 999px !important;
-      min-width: 30px !important;
-      height: 28px !important;
-      padding: 0 9px !important;
-      font-size: 12px !important;
-      font-weight: 950 !important;
-      cursor: pointer !important;
-      box-shadow: 0 8px 18px rgba(127, 29, 29, .08) !important;
-    }
-
-    .conversation-delete-btn:hover {
-      background: #fee2e2 !important;
-      border-color: rgba(220, 38, 38, .35) !important;
-      transform: translateY(-1px);
-    }
-
-    .message-text {
-      white-space: pre-wrap !important;
-      overflow-wrap: anywhere !important;
-    }
-
-    .message-link {
-      color: #047857 !important;
-      font-weight: 850 !important;
-      text-decoration: underline !important;
-      text-underline-offset: 2px !important;
-      word-break: break-all !important;
-    }
-
-    .inline-audio-message {
-      display: block !important;
-      width: min(320px, 78vw) !important;
-      padding: 10px !important;
-      border-radius: 16px !important;
-      background: rgba(255,255,255,.58) !important;
-      border: 1px solid rgba(148, 163, 184, .28) !important;
-      box-shadow: 0 10px 22px rgba(15, 23, 42, .08) !important;
-    }
-
-    .inline-audio-message audio {
-      display: block !important;
-      width: 100% !important;
-      min-width: 220px !important;
-    }
-
-    .inline-audio-caption {
-      margin-top: 7px !important;
-      color: #475569 !important;
-      font-size: 11px !important;
-      font-weight: 850 !important;
-      line-height: 1.35 !important;
-    }
-
-    .send-audio-btn {
-      border: 0 !important;
-      border-radius: 14px !important;
-      background: #0f172a !important;
-      color: #ffffff !important;
-      font-weight: 950 !important;
-      padding: 10px 12px !important;
-      cursor: pointer !important;
-      box-shadow: 0 10px 22px rgba(15, 23, 42, .14) !important;
-    }
-
 </style>
 </head>
 <body>
@@ -14059,18 +13922,18 @@ app.get("/inbox", protectInbox, (req, res) => {
                   <div class="composer-icon-tools" aria-label="Composer tools">
                     <button type="button" class="composer-icon-btn" title="Emoji">☺</button>
                     <button type="button" class="composer-icon-btn" title="Attach">⌕</button>
-                    <label class="composer-icon-btn composer-image-picker" for="imageFile" title="Choose image">▧</label>
+                    <label class="composer-icon-btn composer-image-picker" for="imageFile" title="Choose image" aria-label="Choose image">▧</label>
+                    <label class="composer-icon-btn composer-voice-picker" for="audioFile" title="Choose voice note" aria-label="Choose voice note">🎙️</label>
                   </div>
 
                   <div class="composer-tools">
                     <div class="media-box">
                       <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" />
+                      <input id="audioFile" class="voice-file-input" type="file" accept="audio/aac,audio/mp4,audio/mpeg,audio/amr,audio/ogg" />
                       <input id="imageCaption" placeholder="Optional image caption..." />
                       <button type="button" class="send-image-btn" id="sendImageBtn">▧ Send image</button>
-                      <div class="media-hint">JPG, PNG, or WEBP. Keep image under 5MB.</div>
-                      <input id="audioFile" type="file" accept="audio/*" />
-                      <button type="button" class="send-audio-btn" id="sendAudioBtn">🎙 Send audio</button>
-                      <div class="media-hint">Voice/audio file under 16MB.</div>
+                      <button type="button" class="send-voice-btn" id="sendVoiceBtn">🎙️ Send voice</button>
+                      <div class="media-hint">JPG, PNG, WEBP under 5MB. Voice: AAC, M4A, MP3, AMR, or OGG under 16MB.</div>
                     </div>
                   </div>
 
@@ -14256,73 +14119,6 @@ try {
   internalNotesMap = {};
 }
 
-let hiddenConversationMap = {};
-try {
-  hiddenConversationMap = JSON.parse(localStorage.getItem("iconic_hidden_conversation_map") || "{}");
-} catch (e) {
-  hiddenConversationMap = {};
-}
-
-function saveHiddenConversationMap() {
-  localStorage.setItem("iconic_hidden_conversation_map", JSON.stringify(hiddenConversationMap));
-}
-
-function isConversationHiddenClient(key, latestCustomerMessage) {
-  const record = key && hiddenConversationMap[key];
-  if (!record) return false;
-
-  const hiddenAt = Number(record.hiddenAt || 0);
-  const latestCustomerTime = getMessageTimeValue(latestCustomerMessage || {});
-
-  if (hiddenAt && latestCustomerTime && latestCustomerTime > hiddenAt + 1000) {
-    delete hiddenConversationMap[key];
-    saveHiddenConversationMap();
-    return false;
-  }
-
-  return true;
-}
-
-async function deleteConversationFromInbox(key) {
-  const c = buildConversations().find(function(item) { return item.key === key; });
-  if (!c) return;
-
-  const confirmed = window.confirm("مسح هذه المحادثة من Team Inbox؟
-
-This hides the conversation from the inbox list only. Google Sheet history stays safe.");
-  if (!confirmed) return;
-
-  hiddenConversationMap[c.key] = {
-    phone: c.phone,
-    phoneNumberId: c.phoneNumberId || "",
-    hiddenAt: Date.now()
-  };
-  saveHiddenConversationMap();
-
-  allMessages = (allMessages || []).filter(function(m) {
-    return conversationKey(m.phone || "unknown", m.phoneNumberId || "", m.branch || "") !== c.key;
-  });
-
-  if (selectedConversationKey === c.key) {
-    selectedConversationKey = "";
-    selectedPhone = "";
-    selectedPhoneNumberId = "";
-  }
-
-  renderAll();
-  resultBox.textContent = "Conversation hidden from Team Inbox.";
-
-  try {
-    await fetch("/api/conversations/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: c.phone, phoneNumberId: c.phoneNumberId || "" })
-    });
-  } catch (error) {
-    console.log("Server conversation hide failed", error);
-  }
-}
-
 let conversationStateMap = {};
 
 const searchBox = document.getElementById("searchBox");
@@ -14347,8 +14143,8 @@ const inputTo = document.getElementById("to");
 const inputLine = document.getElementById("phoneNumberId");
 const inputBody = document.getElementById("body");
 const imageFileInput = document.getElementById("imageFile");
-const imageCaptionInput = document.getElementById("imageCaption");
 const audioFileInput = document.getElementById("audioFile");
+const imageCaptionInput = document.getElementById("imageCaption");
 const resultBox = document.getElementById("result");
 const liveNotificationBtn = document.getElementById("liveNotificationBtn");
 const liveNotificationCount = document.getElementById("liveNotificationCount");
@@ -15253,56 +15049,36 @@ function parseInlineAudioMessage(body) {
 
     return {
       mediaId,
-      filename: (payload.filename || "WhatsApp audio").toString().trim(),
-      mimeType: (payload.mimeType || "audio/ogg").toString().trim(),
-      caption: (payload.caption || "Voice message").toString().trim()
+      filename: (payload.filename || "WhatsApp voice note").toString().trim()
     };
   } catch (error) {
     return null;
   }
 }
 
-function linkifyText(value) {
-  const escaped = escapeHtml(value || "");
-  const linked = escaped.replace(/((?:https?:\/\/|www\.)[^\s<]+)/gi, function(match) {
-    let clean = match;
-    let suffix = "";
-
-    while (/[).,!?:;]$/.test(clean)) {
-      suffix = clean.slice(-1) + suffix;
-      clean = clean.slice(0, -1);
-    }
-
-    const href = clean.toLowerCase().startsWith("www.") ? "https://" + clean : clean;
-    return '<a class="message-link" href="' + href + '" target="_blank" rel="noopener noreferrer">' + clean + '</a>' + suffix;
-  });
-
-  return linked.replace(/\n/g, "<br />");
-}
-
 function renderMessageBody(message) {
   const image = parseInlineImageMessage(message?.body || "");
   const audio = parseInlineAudioMessage(message?.body || "");
 
-  if (image) {
-    const mediaSrc = "/api/media/" + encodeURIComponent(image.mediaId);
-    return '<div class="inline-image-message">' +
-      '<a class="inline-image-link" href="' + mediaSrc + '" target="_blank" rel="noopener">' +
-        '<img src="' + mediaSrc + '" alt="' + escapeHtml(image.filename || "WhatsApp image") + '" loading="lazy" />' +
-      '</a>' +
-      (image.caption ? '<div class="inline-image-caption">' + linkifyText(image.caption) + '</div>' : '') +
-    '</div>';
-  }
-
   if (audio) {
-    const mediaSrc = "/api/media/" + encodeURIComponent(audio.mediaId);
+    const audioSrc = "/api/media/" + encodeURIComponent(audio.mediaId);
     return '<div class="inline-audio-message">' +
-      '<audio controls preload="metadata" src="' + mediaSrc + '"></audio>' +
-      '<div class="inline-audio-caption">🎙 ' + linkifyText(audio.caption || audio.filename || "Voice message") + '</div>' +
+      '<audio controls preload="none" src="' + audioSrc + '"></audio>' +
+      '<div class="inline-audio-filename">🎙️ ' + escapeHtml(audio.filename || "WhatsApp voice note") + '</div>' +
     '</div>';
   }
 
-  return '<div class="message-text">' + linkifyText(message?.body || "") + '</div>';
+  if (!image) {
+    return escapeHtml(message?.body || "");
+  }
+
+  const mediaSrc = "/api/media/" + encodeURIComponent(image.mediaId);
+  return '<div class="inline-image-message">' +
+    '<a class="inline-image-link" href="' + mediaSrc + '" target="_blank" rel="noopener">' +
+      '<img src="' + mediaSrc + '" alt="' + escapeHtml(image.filename || "WhatsApp image") + '" loading="lazy" />' +
+    '</a>' +
+    (image.caption ? '<div class="inline-image-caption">' + escapeHtml(image.caption) + '</div>' : '') +
+  '</div>';
 }
 
 function avatarText(phone) {
@@ -15448,9 +15224,6 @@ function buildConversations() {
     c.stateUpdatedAt = savedState.last_updated_at || "";
     c.stateUpdatedBy = savedState.last_updated_by || "";
     return c;
-  }).filter(function(c) {
-    const latestCustomerMessage = (c.messages || []).find(function(m) { return m.sender === "customer"; });
-    return !isConversationHiddenClient(c.key, latestCustomerMessage);
   });
 }
 
@@ -16109,14 +15882,9 @@ function formatConversationPreview(message) {
   if (!message) return "";
   const senderLabel = message.sender === "customer" ? "Customer" : message.sender === "staff" ? "Team" : message.sender === "bot" ? "Bot" : "Message";
   const image = parseInlineImageMessage(message.body || "");
-  const audio = parseInlineAudioMessage(message.body || "");
 
   if (image) {
     return senderLabel + ": 📷 Image" + (image.caption ? " — " + image.caption : "");
-  }
-
-  if (audio) {
-    return senderLabel + ": 🎙 Voice message";
   }
 
   const body = (message.body || "").toString().replace(/\s+/g, " ").trim();
@@ -16157,7 +15925,7 @@ function renderConversationList() {
       : '';
     const tagRow = (c.tags || []).length ? '<div class="conversation-tags-row">' + tagBadges(c.tags, "conversation-tag-chip", 3) + '</div>' : '';
 
-    return '<div role="button" tabindex="0" class="conversation-card reference-conversation-card' + active + unread + '" data-key="' + escapeHtml(c.key) + '" data-status="' + escapeHtml(displayStatus || '') + '">' +
+    return '<button type="button" class="conversation-card reference-conversation-card' + active + unread + '" data-key="' + escapeHtml(c.key) + '" data-status="' + escapeHtml(displayStatus || '') + '">' +
       '<div class="avatar reference-avatar">' + escapeHtml(avatarText(displayName || c.phone)) + '</div>' +
       '<div class="conversation-main reference-conversation-main">' +
         '<div class="conv-top reference-card-top">' +
@@ -16166,7 +15934,6 @@ function renderConversationList() {
             '<div class="conv-preview reference-card-preview">' + escapeHtml(shortText(preview, 76)) + '</div>' +
           '</div>' +
           '<div class="reference-card-side">' +
-            '<button type="button" class="conversation-delete-btn" data-delete-key="' + escapeHtml(c.key) + '" title="Hide conversation">مسح</button>' +
             '<div class="conv-time reference-card-time">' + escapeHtml(latest.time || "") + '</div>' +
             liveBadge +
           '</div>' +
@@ -16176,26 +15943,12 @@ function renderConversationList() {
           '<span class="message-count-badge">' + escapeHtml(String(messageCount)) + '</span>' +
         '</div>' +
       '</div>' +
-    '</div>';
+    '</button>';
   }).join("");
 
   Array.from(document.querySelectorAll(".conversation-card")).forEach(function(btn) {
     btn.addEventListener("click", function() {
       selectConversation(btn.dataset.key || "");
-    });
-    btn.addEventListener("keydown", function(event) {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        selectConversation(btn.dataset.key || "");
-      }
-    });
-  });
-
-  Array.from(document.querySelectorAll(".conversation-delete-btn")).forEach(function(btn) {
-    btn.addEventListener("click", function(event) {
-      event.preventDefault();
-      event.stopPropagation();
-      deleteConversationFromInbox(btn.dataset.deleteKey || "");
     });
   });
 
@@ -16452,6 +16205,8 @@ async function sendImage() {
     if (data.ok) {
       resultBox.textContent = "Image sent successfully.";
       imageFileInput.value = "";
+      const imagePicker = document.querySelector(".composer-image-picker");
+      if (imagePicker) imagePicker.classList.remove("has-selected-image");
       if (imageCaptionInput) imageCaptionInput.value = "";
       selectedPhone = to;
       selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
@@ -16465,16 +16220,11 @@ async function sendImage() {
   }
 }
 
-function isAllowedAudioFile(file) {
-  if (!file) return false;
-  if ((file.type || "").toLowerCase().startsWith("audio/")) return true;
-  return /\.(mp3|m4a|ogg|oga|aac|amr|wav|webm|mp4)$/i.test(file.name || "");
-}
-
-async function sendAudio() {
+async function sendVoice() {
   const to = inputTo.value.trim();
   const phoneNumberId = inputLine.value.trim();
   const file = audioFileInput && audioFileInput.files ? audioFileInput.files[0] : null;
+  const allowedAudioTypes = ["audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg", "audio/x-m4a", "audio/m4a"];
 
   if (!to) {
     resultBox.textContent = "Select a customer first.";
@@ -16482,21 +16232,21 @@ async function sendAudio() {
   }
 
   if (!file) {
-    resultBox.textContent = "Please choose an audio file first.";
+    resultBox.textContent = "Please choose a voice note first.";
     return;
   }
 
-  if (!isAllowedAudioFile(file)) {
-    resultBox.textContent = "Please use an audio file only.";
+  if (!allowedAudioTypes.includes(file.type)) {
+    resultBox.textContent = "Please use AAC, M4A/MP4, MP3, AMR, or OGG audio only.";
     return;
   }
 
   if (file.size > 16 * 1024 * 1024) {
-    resultBox.textContent = "Audio is too large. Please choose audio under 16MB.";
+    resultBox.textContent = "Voice note is too large. Please choose audio under 16MB.";
     return;
   }
 
-  resultBox.textContent = "Uploading audio...";
+  resultBox.textContent = "Uploading voice note...";
 
   try {
     const audioDataUrl = await fileToDataUrl(file);
@@ -16507,7 +16257,7 @@ async function sendAudio() {
         to,
         phoneNumberId,
         audioDataUrl,
-        filename: file.name,
+        filename: file.name || "iconic-voice-note.ogg",
         mimeType: file.type || "audio/ogg"
       })
     });
@@ -16515,17 +16265,19 @@ async function sendAudio() {
     const data = await res.json();
 
     if (data.ok) {
-      resultBox.textContent = "Audio sent successfully.";
+      resultBox.textContent = "Voice note sent successfully.";
       audioFileInput.value = "";
+      const voicePicker = document.querySelector(".composer-voice-picker");
+      if (voicePicker) voicePicker.classList.remove("has-selected-voice");
       selectedPhone = to;
       selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
       markConversationRead(selectedConversationKey);
       loadMessages();
     } else {
-      resultBox.textContent = "Failed: " + (data.error || "Audio send failed");
+      resultBox.textContent = "Failed: " + (data.error || "Voice send failed");
     }
   } catch (error) {
-    resultBox.textContent = "Failed: audio upload error.";
+    resultBox.textContent = "Failed: voice upload error.";
   }
 }
 
@@ -16568,8 +16320,26 @@ async function updateStatus(status) {
 
 document.getElementById("sendBtn").addEventListener("click", sendReply);
 document.getElementById("sendImageBtn").addEventListener("click", sendImage);
-if (document.getElementById("sendAudioBtn")) {
-  document.getElementById("sendAudioBtn").addEventListener("click", sendAudio);
+document.getElementById("sendVoiceBtn").addEventListener("click", sendVoice);
+
+if (imageFileInput) {
+  imageFileInput.addEventListener("change", function() {
+    const imagePicker = document.querySelector(".composer-image-picker");
+    if (imagePicker) imagePicker.classList.toggle("has-selected-image", Boolean(imageFileInput.files && imageFileInput.files[0]));
+    if (imageFileInput.files && imageFileInput.files[0]) {
+      resultBox.textContent = "Image selected. Press Send image.";
+    }
+  });
+}
+
+if (audioFileInput) {
+  audioFileInput.addEventListener("change", function() {
+    const voicePicker = document.querySelector(".composer-voice-picker");
+    if (voicePicker) voicePicker.classList.toggle("has-selected-voice", Boolean(audioFileInput.files && audioFileInput.files[0]));
+    if (audioFileInput.files && audioFileInput.files[0]) {
+      resultBox.textContent = "Voice selected. Press Send voice.";
+    }
+  });
 }
 
 if (bookingStatusNote) {
@@ -17426,15 +17196,12 @@ No problem. We will not send a reminder for this appointment.`;
     }
 
     const incomingCustomerImageBody = message.type === "image" ? buildIncomingCustomerImageBody(message) : "";
-    const incomingCustomerAudioBody = message.type === "audio" ? buildIncomingCustomerAudioBody(message) : "";
     const smartActionText = getSmartCustomerActionText(message, originalText || text);
-    const customerMessageBody = incomingCustomerAudioBody || incomingCustomerImageBody || buildCustomerActionBody(profileName, smartActionText);
+    const customerMessageBody = incomingCustomerImageBody || buildCustomerActionBody(profileName, smartActionText);
     const customerMessageStatus = autoIntentWorkflow?.status || "Bot";
-    const customerMessageType = incomingCustomerAudioBody
-      ? "Customer Voice Message"
-      : (incomingCustomerImageBody
-        ? "Customer Image Message"
-        : (autoIntentWorkflow?.status ? `Customer Intent - ${autoIntentWorkflow.status}` : "Customer Message"));
+    const customerMessageType = incomingCustomerImageBody
+      ? "Customer Image Message"
+      : (autoIntentWorkflow?.status ? `Customer Intent - ${autoIntentWorkflow.status}` : "Customer Message");
 
     // V31.5.8.57:
     // Show the real customer action for buttons/lists/Flow replies when possible.
