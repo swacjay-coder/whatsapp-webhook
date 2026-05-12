@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-3-luxury-composer-and-clickable-links";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-2-sidebar-icons-and-booking-actions-visible";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -14729,429 +14729,7 @@ app.get("/inbox", protectInbox, (req, res) => {
     .right-reference-scroll {
       padding-bottom: 24px !important;
     }
-
-    /* V31.5.8.60.3.7.3 - Luxury composer + visible clickable links.
-       Scope: visual composer only + chat link rendering. Does not touch Sheets, Flows, reminders, audio backend, or /api/messages. */
-    .chat-composer-wrap {
-      padding: 12px 14px 14px !important;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.92), rgba(245,252,241,.96)) !important;
-      border-top: 1px solid rgba(120,184,62,.16) !important;
-    }
-
-    .chat-composer-wrap .composer-block {
-      margin: 0 !important;
-      padding: 0 !important;
-      overflow: hidden !important;
-      border-radius: 22px !important;
-      border: 1px solid rgba(120,184,62,.24) !important;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.98), rgba(250,255,247,.98)) !important;
-      box-shadow:
-        0 18px 46px rgba(15,23,42,.08),
-        inset 0 1px 0 rgba(255,255,255,.92) !important;
-    }
-
-    .chat-composer-wrap .composer-block::before {
-      background:
-        radial-gradient(circle at 10% 0%, rgba(120,184,62,.12), transparent 34%),
-        radial-gradient(circle at 92% 0%, rgba(18,140,126,.10), transparent 32%) !important;
-    }
-
-    .chat-composer-wrap .composer-tabs {
-      display: flex !important;
-      gap: 8px !important;
-      padding: 10px 12px 0 !important;
-      background: transparent !important;
-      border: 0 !important;
-    }
-
-    .chat-composer-wrap .composer-tab {
-      min-height: 30px !important;
-      padding: 0 13px !important;
-      border-radius: 999px !important;
-      border: 1px solid rgba(120,184,62,.24) !important;
-      background: rgba(255,255,255,.78) !important;
-      color: #48635a !important;
-      font-size: 11px !important;
-      font-weight: 900 !important;
-      letter-spacing: .01em !important;
-    }
-
-    .chat-composer-wrap .composer-tab.active {
-      background: linear-gradient(135deg, #effbe9, #ffffff) !important;
-      border-color: rgba(120,184,62,.45) !important;
-      color: #0f3d2e !important;
-      box-shadow: 0 7px 16px rgba(120,184,62,.14) !important;
-    }
-
-    .chat-composer-wrap textarea#body {
-      width: calc(100% - 24px) !important;
-      height: 78px !important;
-      min-height: 78px !important;
-      max-height: 116px !important;
-      margin: 10px 12px 8px !important;
-      padding: 15px 16px !important;
-      resize: vertical !important;
-      border: 1px solid rgba(120,184,62,.25) !important;
-      border-radius: 18px !important;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,1), rgba(250,255,248,.96)) !important;
-      color: #10231d !important;
-      font-size: 13px !important;
-      line-height: 1.5 !important;
-      font-weight: 750 !important;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.96),
-        0 8px 22px rgba(15,23,42,.035) !important;
-      outline: none !important;
-    }
-
-    .chat-composer-wrap textarea#body::placeholder {
-      color: #81968e !important;
-      font-weight: 750 !important;
-    }
-
-    .chat-composer-wrap textarea#body:focus {
-      border-color: rgba(37,211,102,.52) !important;
-      box-shadow:
-        0 0 0 4px rgba(37,211,102,.10),
-        inset 0 1px 0 rgba(255,255,255,.96) !important;
-    }
-
-    .chat-composer-wrap .luxury-composer-row,
-    .chat-composer-wrap .composer-bottom-row {
-      display: grid !important;
-      grid-template-columns: auto minmax(260px, 1fr) auto !important;
-      align-items: center !important;
-      gap: 10px !important;
-      padding: 0 12px 10px !important;
-      background: transparent !important;
-    }
-
-    .chat-composer-wrap .composer-icon-tools {
-      display: inline-flex !important;
-      align-items: center !important;
-      gap: 7px !important;
-      min-width: 0 !important;
-      padding: 5px !important;
-      border: 1px solid rgba(120,184,62,.18) !important;
-      border-radius: 999px !important;
-      background: rgba(255,255,255,.78) !important;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.9) !important;
-    }
-
-    .chat-composer-wrap .composer-icon-btn {
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      gap: 6px !important;
-      width: auto !important;
-      min-width: 34px !important;
-      height: 34px !important;
-      padding: 0 10px !important;
-      border: 1px solid transparent !important;
-      border-radius: 999px !important;
-      background: transparent !important;
-      color: #24493e !important;
-      font-size: 13px !important;
-      font-weight: 950 !important;
-      line-height: 1 !important;
-      cursor: pointer !important;
-      box-shadow: none !important;
-      transition: transform .15s ease, background .15s ease, border-color .15s ease !important;
-    }
-
-    .chat-composer-wrap .composer-icon-btn:hover {
-      transform: translateY(-1px) !important;
-      border-color: rgba(120,184,62,.28) !important;
-      background: #f3faef !important;
-    }
-
-    .chat-composer-wrap .composer-tool-symbol {
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      width: 18px !important;
-      height: 18px !important;
-      font-size: 15px !important;
-      line-height: 1 !important;
-    }
-
-    .chat-composer-wrap .composer-tool-text {
-      font-size: 11px !important;
-      letter-spacing: .01em !important;
-    }
-
-    .chat-composer-wrap .composer-chip-action {
-      background: #ffffff !important;
-      border-color: rgba(120,184,62,.22) !important;
-      padding: 0 12px !important;
-    }
-
-    .chat-composer-wrap .composer-image-picker.has-selected-image,
-    .chat-composer-wrap .composer-voice-picker.has-selected-voice {
-      color: #0f6b3d !important;
-      border-color: rgba(34,197,94,.45) !important;
-      background: linear-gradient(135deg, #ecfdf3, #ffffff) !important;
-      box-shadow: 0 6px 14px rgba(34,197,94,.12) !important;
-    }
-
-    .chat-composer-wrap .composer-tools {
-      margin: 0 !important;
-      justify-self: stretch !important;
-      min-width: 0 !important;
-    }
-
-    .chat-composer-wrap .media-box {
-      display: flex !important;
-      align-items: center !important;
-      justify-content: flex-start !important;
-      gap: 8px !important;
-      min-height: 44px !important;
-      margin: 0 !important;
-      padding: 5px !important;
-      border: 1px solid rgba(120,184,62,.16) !important;
-      border-radius: 999px !important;
-      background: rgba(255,255,255,.72) !important;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.9) !important;
-      overflow: hidden !important;
-    }
-
-    .chat-composer-wrap #imageFile,
-    .chat-composer-wrap #audioFile,
-    .chat-composer-wrap input[type="file"][accept*="audio"] {
-      position: absolute !important;
-      width: 1px !important;
-      height: 1px !important;
-      min-height: 1px !important;
-      opacity: 0 !important;
-      pointer-events: none !important;
-      overflow: hidden !important;
-      left: -9999px !important;
-    }
-
-    .chat-composer-wrap .send-image-btn,
-    .chat-composer-wrap .send-voice-btn {
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      width: auto !important;
-      min-width: 98px !important;
-      height: 34px !important;
-      min-height: 34px !important;
-      padding: 0 13px !important;
-      border: 1px solid rgba(120,184,62,.22) !important;
-      border-radius: 999px !important;
-      background: #ffffff !important;
-      color: #174b38 !important;
-      font-size: 11px !important;
-      font-weight: 950 !important;
-      box-shadow: 0 6px 15px rgba(15,23,42,.04) !important;
-      white-space: nowrap !important;
-    }
-
-    .chat-composer-wrap .send-image-btn:hover,
-    .chat-composer-wrap .send-voice-btn:hover {
-      background: #f4fbef !important;
-      border-color: rgba(120,184,62,.38) !important;
-    }
-
-    .chat-composer-wrap .media-hint {
-      display: block !important;
-      flex: 1 1 auto !important;
-      min-width: 120px !important;
-      overflow: hidden !important;
-      text-overflow: ellipsis !important;
-      white-space: nowrap !important;
-      color: #7b8f87 !important;
-      font-size: 10px !important;
-      font-weight: 750 !important;
-      padding: 0 8px !important;
-    }
-
-    .chat-composer-wrap .composer-actions {
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: flex-end !important;
-      gap: 8px !important;
-      margin: 0 !important;
-      position: relative !important;
-      z-index: 10 !important;
-    }
-
-    .chat-composer-wrap .result {
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      min-width: 76px !important;
-      max-width: 150px !important;
-      height: 32px !important;
-      min-height: 32px !important;
-      margin: 0 !important;
-      padding: 0 10px !important;
-      border: 1px solid rgba(120,184,62,.18) !important;
-      border-radius: 999px !important;
-      background: rgba(255,255,255,.78) !important;
-      color: #64748b !important;
-      font-size: 10px !important;
-      font-weight: 850 !important;
-      white-space: nowrap !important;
-      overflow: hidden !important;
-      text-overflow: ellipsis !important;
-    }
-
-    .chat-composer-wrap .send-btn {
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      gap: 8px !important;
-      width: auto !important;
-      min-width: 104px !important;
-      max-width: none !important;
-      height: 42px !important;
-      min-height: 42px !important;
-      padding: 0 18px !important;
-      border: 0 !important;
-      border-radius: 999px !important;
-      background:
-        linear-gradient(135deg, #0f7a52 0%, #16a34a 52%, #25d366 100%) !important;
-      color: #ffffff !important;
-      font-size: 12px !important;
-      font-weight: 950 !important;
-      letter-spacing: .01em !important;
-      box-shadow:
-        0 12px 24px rgba(22,163,74,.22),
-        inset 0 1px 0 rgba(255,255,255,.22) !important;
-      line-height: 1 !important;
-    }
-
-    .chat-composer-wrap .send-btn:hover {
-      transform: translateY(-1px) !important;
-      filter: none !important;
-      box-shadow:
-        0 15px 28px rgba(22,163,74,.28),
-        inset 0 1px 0 rgba(255,255,255,.22) !important;
-    }
-
-    .chat-composer-wrap .send-btn-icon {
-      width: 22px !important;
-      height: 22px !important;
-      border-radius: 999px !important;
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      background: rgba(255,255,255,.22) !important;
-      font-size: 14px !important;
-    }
-
-    .chat-composer-wrap .composer-reply-source {
-      display: flex !important;
-      align-items: center !important;
-      justify-content: flex-end !important;
-      gap: 8px !important;
-      width: 100% !important;
-      min-height: 30px !important;
-      margin: 0 !important;
-      padding: 0 12px 12px !important;
-      border: 0 !important;
-      background: transparent !important;
-    }
-
-    .chat-composer-wrap .composer-reply-source label {
-      color: #6b7f77 !important;
-      font-size: 10px !important;
-      font-weight: 900 !important;
-      text-transform: none !important;
-      letter-spacing: 0 !important;
-    }
-
-    .chat-composer-wrap .composer-reply-source select {
-      width: auto !important;
-      max-width: 315px !important;
-      height: 30px !important;
-      min-height: 30px !important;
-      padding: 0 12px !important;
-      border: 1px solid rgba(120,184,62,.25) !important;
-      border-radius: 999px !important;
-      background: rgba(255,255,255,.78) !important;
-      color: #24493e !important;
-      font-size: 11px !important;
-      font-weight: 900 !important;
-      box-shadow: none !important;
-      outline: none !important;
-    }
-
-    .message-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      max-width: 100%;
-      padding: 2px 7px;
-      margin: 1px 0;
-      border-radius: 999px;
-      background: rgba(37,211,102,.12);
-      color: #08743f;
-      font-weight: 900;
-      text-decoration: none;
-      word-break: break-all;
-    }
-
-    .message-link::before {
-      content: "🔗";
-      font-size: 12px;
-    }
-
-    .bubble.staff .message-link {
-      background: rgba(255,255,255,.20);
-      color: #ffffff;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-
-    @media (max-width: 1500px) {
-      .chat-composer-wrap .luxury-composer-row,
-      .chat-composer-wrap .composer-bottom-row {
-        grid-template-columns: 1fr auto !important;
-      }
-
-      .chat-composer-wrap .composer-icon-tools {
-        grid-column: 1 / -1 !important;
-        width: 100% !important;
-      }
-
-      .chat-composer-wrap .composer-tools {
-        min-width: 0 !important;
-      }
-
-      .chat-composer-wrap .media-hint {
-        display: none !important;
-      }
-    }
-
-    @media (max-width: 900px) {
-      .chat-composer-wrap .luxury-composer-row,
-      .chat-composer-wrap .composer-bottom-row {
-        grid-template-columns: 1fr !important;
-      }
-
-      .chat-composer-wrap .composer-actions {
-        justify-content: space-between !important;
-        width: 100% !important;
-      }
-
-      .chat-composer-wrap .send-btn {
-        flex: 1 1 auto !important;
-      }
-
-      .chat-composer-wrap .composer-reply-source {
-        justify-content: flex-start !important;
-        flex-wrap: wrap !important;
-      }
-    }
-
-
-  </style>
+</style>
 </head>
 <body>
   <div class="workspace-shell">
@@ -15382,44 +14960,27 @@ app.get("/inbox", protectInbox, (req, res) => {
                 <label class="composer-message-label">Message</label>
                 <textarea id="body" rows="3" placeholder="Type your reply here..."></textarea>
 
-                <div class="composer-bottom-row luxury-composer-row">
+                <div class="composer-bottom-row">
                   <div class="composer-icon-tools" aria-label="Composer tools">
-                    <button type="button" class="composer-icon-btn composer-emoji-btn" id="insertEmojiBtn" title="Insert sparkle" aria-label="Insert sparkle">
-                      <span class="composer-tool-symbol">✦</span>
-                    </button>
-                    <button type="button" class="composer-icon-btn composer-link-btn" id="insertLinkBtn" title="Insert link" aria-label="Insert link">
-                      <span class="composer-tool-symbol">🔗</span>
-                    </button>
-                    <label class="composer-icon-btn composer-image-picker composer-chip-action" for="imageFile" title="Choose image" aria-label="Choose image">
-                      <span class="composer-tool-symbol">🖼</span>
-                      <span class="composer-tool-text">Image</span>
-                    </label>
-                    <label class="composer-icon-btn composer-voice-picker composer-chip-action" for="audioFile" title="Choose voice note" aria-label="Choose voice note">
-                      <span class="composer-tool-symbol">🎙</span>
-                      <span class="composer-tool-text">Voice</span>
-                    </label>
+                    <button type="button" class="composer-icon-btn" title="Emoji">☺</button>
+                    <button type="button" class="composer-icon-btn" title="Attach">⌕</button>
+                    <label class="composer-icon-btn composer-image-picker" for="imageFile" title="Choose image" aria-label="Choose image">▧</label>
+                    <label class="composer-icon-btn composer-voice-picker" for="audioFile" title="Choose voice note" aria-label="Choose voice note">🎙️</label>
                   </div>
 
                   <div class="composer-tools">
                     <div class="media-box">
                       <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" />
                       <input id="audioFile" class="voice-file-input" type="file" accept="audio/*,.m4a,.mp3,.ogg,.amr,.aac" capture="microphone" />
-                      <button type="button" class="send-image-btn" id="sendImageBtn" title="Send selected image">
-                        <span>Send image</span>
-                      </button>
-                      <button type="button" class="send-voice-btn" id="sendVoiceBtn" title="Send selected voice note">
-                        <span>Send voice</span>
-                      </button>
-                      <div class="media-hint" id="mediaHint">Choose Image or Voice, then press the matching send button.</div>
+                      <button type="button" class="send-image-btn" id="sendImageBtn" title="Send selected image">Image</button>
+                      <button type="button" class="send-voice-btn" id="sendVoiceBtn" title="Send selected voice note">Voice</button>
+                      <div class="media-hint">JPG, PNG, WEBP under 5MB. Voice: AAC, M4A, MP3, AMR, or OGG under 16MB.</div>
                     </div>
                   </div>
 
                   <div class="composer-actions">
+                    <button type="button" class="send-btn" id="sendBtn" aria-label="Send WhatsApp Reply">➤</button>
                     <div class="result" id="result">Ready.</div>
-                    <button type="button" class="send-btn" id="sendBtn" aria-label="Send WhatsApp Reply">
-                      <span class="send-btn-label">Send</span>
-                      <span class="send-btn-icon">➜</span>
-                    </button>
                   </div>
                 </div>
 
@@ -16483,19 +16044,6 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function linkifyMessageText(value) {
-  const raw = (value || "").toString();
-  const escaped = escapeHtml(raw);
-  const urlRegex = /((https?:\/\/|www\.)[^\s<]+)/gi;
-
-  return escaped.replace(urlRegex, function(match) {
-    const cleanMatch = match.replace(/[.,!?؛،)\]]+$/g, "");
-    const trailing = match.slice(cleanMatch.length);
-    const href = cleanMatch.toLowerCase().startsWith("http") ? cleanMatch : "https://" + cleanMatch;
-    return '<a class="message-link" href="' + href + '" target="_blank" rel="noopener noreferrer">' + cleanMatch + '</a>' + trailing;
-  }).replace(/\n/g, "<br>");
-}
-
 function shortText(value, max) {
   const t = (value || "").toString().replace(/\s+/g, " ").trim();
   return t.length <= max ? t : t.slice(0, max - 1) + "…";
@@ -16566,7 +16114,7 @@ function renderMessageBody(message) {
   }
 
   if (!image) {
-    return linkifyMessageText(message?.body || "");
+    return escapeHtml(message?.body || "");
   }
 
   const mediaSrc = "/api/media/" + encodeURIComponent(image.mediaId);
@@ -16574,7 +16122,7 @@ function renderMessageBody(message) {
     '<a class="inline-image-link" href="' + mediaSrc + '" target="_blank" rel="noopener">' +
       '<img src="' + mediaSrc + '" alt="' + escapeHtml(image.filename || "WhatsApp image") + '" loading="lazy" />' +
     '</a>' +
-    (image.caption ? '<div class="inline-image-caption">' + linkifyMessageText(image.caption) + '</div>' : '') +
+    (image.caption ? '<div class="inline-image-caption">' + escapeHtml(image.caption) + '</div>' : '') +
   '</div>';
 }
 
@@ -17608,78 +17156,6 @@ async function loadMessages() {
   }
 }
 
-function getCurrentConversationForOutgoing(phone) {
-  const normalizedPhone = (phone || "").toString().trim();
-  const conversations = buildConversations();
-
-  return conversations.find(function(item) {
-    return item.key === selectedConversationKey;
-  }) || conversations.find(function(item) {
-    return (item.phone || "").toString().trim() === normalizedPhone;
-  }) || null;
-}
-
-function getOutgoingBranch(phone, phoneNumberId) {
-  const currentConversation = getCurrentConversationForOutgoing(phone);
-
-  if (currentConversation && currentConversation.branch) {
-    return currentConversation.branch;
-  }
-
-  const selectedOption = inputLine && inputLine.options ? inputLine.options[inputLine.selectedIndex] : null;
-  const label = selectedOption ? (selectedOption.textContent || "") : "";
-  return /abu/i.test(label) ? "Abu Dhabi" : "Dubai";
-}
-
-function appendBrowserSentTextMessage(to, body, phoneNumberId) {
-  const cleanTo = (to || "").toString().trim();
-  const cleanBody = (body || "").toString().trim();
-
-  if (!cleanTo || !cleanBody) {
-    return;
-  }
-
-  const currentConversation = getCurrentConversationForOutgoing(cleanTo);
-  const finalPhoneNumberId = (phoneNumberId || (currentConversation && currentConversation.phoneNumberId) || "").toString().trim();
-  const branch = getOutgoingBranch(cleanTo, finalPhoneNumberId);
-
-  const item = {
-    time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
-    phone: cleanTo,
-    customerName: currentConversation ? (currentConversation.customerName || "") : "",
-    branch: branch,
-    sender: "staff",
-    body: cleanBody,
-    status: "Human Reply",
-    messageType: "Human Reply",
-    phoneNumberId: finalPhoneNumberId
-  };
-
-  allMessages = [item].concat(allMessages || []);
-  selectedPhone = cleanTo;
-  selectedPhoneNumberId = finalPhoneNumberId;
-  selectedConversationKey = currentConversation ? currentConversation.key : conversationKey(cleanTo, finalPhoneNumberId, branch);
-  renderAll();
-
-  if (chatBody) {
-    chatBody.scrollTop = chatBody.scrollHeight;
-  }
-}
-
-function insertTextAtCursor(target, textToInsert) {
-  if (!target || !textToInsert) return;
-
-  const start = typeof target.selectionStart === "number" ? target.selectionStart : target.value.length;
-  const end = typeof target.selectionEnd === "number" ? target.selectionEnd : target.value.length;
-  const before = target.value.slice(0, start);
-  const after = target.value.slice(end);
-
-  target.value = before + textToInsert + after;
-  const nextPosition = start + textToInsert.length;
-  target.focus();
-  target.setSelectionRange(nextPosition, nextPosition);
-}
-
 async function sendReply() {
   const to = inputTo.value.trim();
   const body = inputBody.value.trim();
@@ -17702,11 +17178,10 @@ async function sendReply() {
     const data = await res.json();
 
     if (data.ok) {
-      resultBox.textContent = body.match(/https?:\/\/|www\./i) ? "Link sent and shown in chat." : "Sent successfully.";
-      appendBrowserSentTextMessage(to, body, phoneNumberId);
+      resultBox.textContent = "Sent successfully.";
       inputBody.value = "";
       selectedPhone = to;
-      selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, getOutgoingBranch(to, phoneNumberId));
+      selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
       markConversationRead(selectedConversationKey);
       loadMessages();
     } else {
@@ -17895,32 +17370,12 @@ document.getElementById("sendBtn").addEventListener("click", sendReply);
 document.getElementById("sendImageBtn").addEventListener("click", sendImage);
 document.getElementById("sendVoiceBtn").addEventListener("click", sendVoice);
 
-const insertEmojiBtn = document.getElementById("insertEmojiBtn");
-const insertLinkBtn = document.getElementById("insertLinkBtn");
-
-if (insertEmojiBtn) {
-  insertEmojiBtn.addEventListener("click", function() {
-    insertTextAtCursor(inputBody, "✨");
-  });
-}
-
-if (insertLinkBtn) {
-  insertLinkBtn.addEventListener("click", function() {
-    const link = window.prompt("Paste the link to send:");
-    if (!link) return;
-    const cleanLink = link.toString().trim();
-    if (!cleanLink) return;
-    const prefix = inputBody.value && !/\s$/.test(inputBody.value) ? " " : "";
-    insertTextAtCursor(inputBody, prefix + cleanLink);
-  });
-}
-
 if (imageFileInput) {
   imageFileInput.addEventListener("change", function() {
     const imagePicker = document.querySelector(".composer-image-picker");
     if (imagePicker) imagePicker.classList.toggle("has-selected-image", Boolean(imageFileInput.files && imageFileInput.files[0]));
     if (imageFileInput.files && imageFileInput.files[0]) {
-      resultBox.textContent = "Image ready. Press Send image.";
+      resultBox.textContent = "Image selected. Press Send image.";
     }
   });
 }
@@ -17930,7 +17385,7 @@ if (audioFileInput) {
     const voicePicker = document.querySelector(".composer-voice-picker");
     if (voicePicker) voicePicker.classList.toggle("has-selected-voice", Boolean(audioFileInput.files && audioFileInput.files[0]));
     if (audioFileInput.files && audioFileInput.files[0]) {
-      resultBox.textContent = "Voice ready. Press Send voice.";
+      resultBox.textContent = "Voice selected. Press Send voice.";
     }
   });
 }
