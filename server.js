@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-6-professional-reply-composer-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-audio-and-composer-visibility-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -780,6 +780,10 @@ function getDirectBookingChoiceButtons() {
 function buildPausedCustomerMessageBody(message, profileName = "", originalText = "") {
   if (message?.type === "image") {
     return buildIncomingCustomerImageBody(message);
+  }
+
+  if (message?.type === "audio") {
+    return buildIncomingCustomerAudioBody(message);
   }
 
   const actionText = getSmartCustomerActionText(message, originalText || "");
@@ -4503,6 +4507,20 @@ function buildIncomingCustomerImageBody(message) {
   const caption = (image.caption || "").toString().trim();
 
   return buildInlineImageMessageBody(mediaId, filename, caption);
+}
+
+function buildIncomingCustomerAudioBody(message) {
+  const audio = message?.audio || {};
+  const mediaId = (audio.id || "").toString().trim();
+
+  if (!mediaId) {
+    return "";
+  }
+
+  const mimeType = (audio.mime_type || "audio/ogg").toString().trim();
+  const filename = sanitizeMediaFilename("customer-voice-" + mediaId, mimeType);
+
+  return buildInlineAudioMessageBody(mediaId, filename);
 }
 
 app.post("/api/send-image", protectInbox, async (req, res) => {
@@ -14148,6 +14166,187 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 }
 
+
+
+/* =========================================================
+   V31.5.8.60.3.7 - Composer Visibility + Audio Usability Fix
+   UI-only: keeps reply icons, media buttons, and send button visible above the bottom edge.
+   ========================================================= */
+.chat-panel {
+  min-height: 0 !important;
+}
+
+#chatBody,
+.chat-body {
+  min-height: 0 !important;
+  padding-bottom: 8px !important;
+}
+
+.chat-composer-wrap {
+  flex: 0 0 auto !important;
+  max-height: 214px !important;
+  padding: 7px 10px 9px !important;
+  overflow: visible !important;
+  z-index: 80 !important;
+}
+
+.chat-composer-wrap .composer-block {
+  border-radius: 18px !important;
+  overflow: visible !important;
+}
+
+.chat-composer-wrap .composer-tabs {
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 12px !important;
+}
+
+.chat-composer-wrap .composer-tab {
+  height: 30px !important;
+  font-size: 10px !important;
+}
+
+.chat-composer-wrap textarea#body {
+  height: 58px !important;
+  min-height: 58px !important;
+  max-height: 58px !important;
+  margin: 8px 12px 7px !important;
+  width: calc(100% - 24px) !important;
+  padding: 10px 12px !important;
+  resize: none !important;
+  border-radius: 14px !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+
+.composer-bottom-row {
+  grid-template-columns: 88px minmax(0, 1fr) 48px !important;
+  grid-template-rows: 42px 24px !important;
+  grid-template-areas:
+    "icons media send"
+    "status status status" !important;
+  gap: 6px 8px !important;
+  padding: 0 12px 7px !important;
+  align-items: center !important;
+  overflow: visible !important;
+}
+
+.composer-icon-tools {
+  height: 42px !important;
+  gap: 7px !important;
+}
+
+.composer-image-picker,
+.composer-voice-picker {
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  border-radius: 13px !important;
+  font-size: 18px !important;
+}
+
+.chat-composer-wrap .media-box {
+  min-height: 42px !important;
+  grid-template-columns: minmax(130px, 1fr) 104px 106px !important;
+  grid-auto-rows: 38px !important;
+  gap: 6px !important;
+  padding: 2px !important;
+  border-radius: 15px !important;
+  overflow: visible !important;
+}
+
+.chat-composer-wrap #imageCaption,
+.chat-composer-wrap .send-image-btn,
+.chat-composer-wrap .send-voice-btn {
+  height: 38px !important;
+  min-height: 38px !important;
+  border-radius: 13px !important;
+  font-size: 11px !important;
+  padding: 0 9px !important;
+}
+
+.chat-composer-wrap .send-btn {
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  box-shadow: 0 10px 18px rgba(37,211,102,.24) !important;
+}
+
+.chat-composer-wrap .send-btn::before {
+  font-size: 20px !important;
+}
+
+.chat-composer-wrap .result {
+  height: 22px !important;
+  min-height: 22px !important;
+  max-width: 100% !important;
+  font-size: 10px !important;
+  padding: 0 10px !important;
+}
+
+.chat-composer-wrap .composer-reply-source {
+  min-height: 22px !important;
+  padding: 0 12px 7px !important;
+}
+
+.chat-composer-wrap .composer-reply-source select {
+  height: 22px !important;
+  min-height: 22px !important;
+}
+
+@media (max-width: 1180px), (max-height: 760px) {
+  .chat-composer-wrap {
+    max-height: 196px !important;
+    padding: 6px 8px 8px !important;
+  }
+
+  .chat-composer-wrap textarea#body {
+    height: 46px !important;
+    min-height: 46px !important;
+    max-height: 46px !important;
+    margin: 7px 10px 6px !important;
+    width: calc(100% - 20px) !important;
+  }
+
+  .composer-bottom-row {
+    grid-template-columns: 82px minmax(0, 1fr) 44px !important;
+    grid-template-rows: 38px 22px !important;
+    padding: 0 10px 6px !important;
+  }
+
+  .composer-image-picker,
+  .composer-voice-picker {
+    width: 35px !important;
+    min-width: 35px !important;
+    height: 35px !important;
+    min-height: 35px !important;
+  }
+
+  .chat-composer-wrap .media-box {
+    grid-template-columns: minmax(110px, 1fr) 92px 96px !important;
+    grid-auto-rows: 34px !important;
+  }
+
+  .chat-composer-wrap #imageCaption,
+  .chat-composer-wrap .send-image-btn,
+  .chat-composer-wrap .send-voice-btn {
+    height: 34px !important;
+    min-height: 34px !important;
+    font-size: 10px !important;
+  }
+
+  .chat-composer-wrap .send-btn {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -14383,7 +14582,7 @@ app.get("/inbox", protectInbox, (req, res) => {
                   <div class="composer-tools">
                     <div class="media-box">
                       <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" />
-                      <input id="audioFile" class="voice-file-input" type="file" accept="audio/aac,audio/mp4,audio/mpeg,audio/amr,audio/ogg" />
+                      <input id="audioFile" class="voice-file-input" type="file" accept="audio/*,.m4a,.mp3,.ogg,.amr,.aac" capture="microphone" />
                       <input id="imageCaption" placeholder="Optional image caption..." />
                       <button type="button" class="send-image-btn" id="sendImageBtn">Send image</button>
                       <button type="button" class="send-voice-btn" id="sendVoiceBtn">Send voice</button>
@@ -16690,7 +16889,10 @@ async function sendVoice() {
     return;
   }
 
-  if (!allowedAudioTypes.includes(file.type)) {
+  const fileNameForType = (file.name || "").toLowerCase();
+  const looksLikeAudioFile = /\.(aac|m4a|mp4|mp3|amr|ogg|opus)$/i.test(fileNameForType);
+
+  if (file.type && !allowedAudioTypes.includes(file.type) && !looksLikeAudioFile) {
     resultBox.textContent = "Please use AAC, M4A/MP4, MP3, AMR, or OGG audio only.";
     return;
   }
@@ -17650,12 +17852,15 @@ No problem. We will not send a reminder for this appointment.`;
     }
 
     const incomingCustomerImageBody = message.type === "image" ? buildIncomingCustomerImageBody(message) : "";
+    const incomingCustomerAudioBody = message.type === "audio" ? buildIncomingCustomerAudioBody(message) : "";
     const smartActionText = getSmartCustomerActionText(message, originalText || text);
-    const customerMessageBody = incomingCustomerImageBody || buildCustomerActionBody(profileName, smartActionText);
+    const customerMessageBody = incomingCustomerImageBody || incomingCustomerAudioBody || buildCustomerActionBody(profileName, smartActionText);
     const customerMessageStatus = autoIntentWorkflow?.status || "Bot";
     const customerMessageType = incomingCustomerImageBody
       ? "Customer Image Message"
-      : (autoIntentWorkflow?.status ? `Customer Intent - ${autoIntentWorkflow.status}` : "Customer Message");
+      : incomingCustomerAudioBody
+        ? "Customer Voice Message"
+        : (autoIntentWorkflow?.status ? `Customer Intent - ${autoIntentWorkflow.status}` : "Customer Message");
 
     // V31.5.8.57:
     // Show the real customer action for buttons/lists/Flow replies when possible.
@@ -17672,6 +17877,14 @@ No problem. We will not send a reminder for this appointment.`;
           messageType: customerMessageType
         }
       );
+    }
+
+    // V31.5.8.60.3.7 - Incoming customer voice notes:
+    // Show the playable WhatsApp audio inside Team Inbox and avoid replying
+    // with the default menu to a pure voice note.
+    if (incomingCustomerAudioBody) {
+      console.log("Customer voice note saved to Team Inbox:", from, incomingPhoneNumberId);
+      return res.sendStatus(200);
     }
 
     if (autoIntentWorkflow?.status === "Booking Request") {
