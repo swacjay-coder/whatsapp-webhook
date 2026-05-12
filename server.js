@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-audio-and-composer-visibility-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-clean-chat-with-archive-backup";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -4247,6 +4247,134 @@ async function loadMessagesFromGoogleSheetForMessagesApi() {
 
   return messagesApiSheetCachePromise;
 }
+
+
+function cleanChatDigits(value = "") {
+  return (value || "").toString().replace(/\D/g, "");
+}
+
+function cleanChatPhoneMatches(left = "", right = "") {
+  const a = cleanChatDigits(left);
+  const b = cleanChatDigits(right);
+  if (!a || !b) return (left || "").toString().trim() === (right || "").toString().trim();
+  return a === b || a.endsWith(b) || b.endsWith(a);
+}
+
+function cleanChatMessageMatches(message = {}, phone = "", phoneNumberId = "") {
+  const messagePhoneNumberId = normalizePhoneNumberId(message.phoneNumberId || "");
+  const targetPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
+  const phoneMatches = cleanChatPhoneMatches(message.phone || "", phone);
+  const lineMatches = !targetPhoneNumberId || !messagePhoneNumberId || messagePhoneNumberId === targetPhoneNumberId;
+  return phoneMatches && lineMatches;
+}
+
+function removeCleanedChatFromMemory(phone = "", phoneNumberId = "") {
+  let removedCount = 0;
+  for (let index = inboxMessages.length - 1; index >= 0; index -= 1) {
+    if (cleanChatMessageMatches(inboxMessages[index], phone, phoneNumberId)) {
+      inboxMessages.splice(index, 1);
+      removedCount += 1;
+    }
+  }
+  return removedCount;
+}
+
+async function requestCleanChatFromGoogleSheet(phone = "", phoneNumberId = "", requestedBy = "Team Inbox") {
+  const sheetUrl = process.env.SHEET_WEBHOOK_URL;
+  const cleanChatEnabled = (process.env.ENABLE_CLEAN_CHAT || "").toString().trim().toLowerCase() === "true";
+
+  if (!cleanChatEnabled) {
+    return {
+      ok: false,
+      code: "CLEAN_CHAT_DISABLED",
+      error: "Clean Chat is disabled. Set ENABLE_CLEAN_CHAT=true only after the Google Apps Script archive patch is installed."
+    };
+  }
+
+  if (!sheetUrl) {
+    return {
+      ok: false,
+      code: "SHEET_WEBHOOK_URL_MISSING",
+      error: "SHEET_WEBHOOK_URL is missing. Active Google Sheet messages cannot be cleaned."
+    };
+  }
+
+  const response = await fetch(sheetUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      action: "clean_chat",
+      phone,
+      phoneNumberId,
+      requestedBy,
+      source: "team_inbox",
+      archiveBeforeDelete: true
+    })
+  });
+
+  const rawText = await response.text();
+  let data = null;
+
+  try {
+    data = JSON.parse(rawText);
+  } catch (error) {
+    data = null;
+  }
+
+  if (!response.ok || !data || data.ok !== true) {
+    return {
+      ok: false,
+      code: (data && data.code) || "SHEET_CLEAN_CHAT_FAILED",
+      error: (data && data.error) || rawText || "Google Sheet clean chat request failed.",
+      status: response.status
+    };
+  }
+
+  return data;
+}
+
+app.post("/api/clean-chat", protectInbox, async (req, res) => {
+  try {
+    const phone = (req.body?.phone || "").toString().trim();
+    const phoneNumberId = normalizePhoneNumberId(req.body?.phoneNumberId || "");
+    const requestedBy = (req.body?.requestedBy || "Team Inbox").toString().trim();
+
+    if (!phone) {
+      return res.status(400).json({
+        ok: false,
+        error: "Missing customer phone."
+      });
+    }
+
+    const sheetResult = await requestCleanChatFromGoogleSheet(phone, phoneNumberId, requestedBy);
+
+    if (!sheetResult.ok) {
+      return res.status(400).json(sheetResult);
+    }
+
+    const memoryRemovedCount = removeCleanedChatFromMemory(phone, phoneNumberId);
+    clearMessagesApiSheetCache("clean chat");
+
+    return res.json({
+      ok: true,
+      message: "Conversation cleaned from active Team Inbox and archived in Google Sheet backup.",
+      phone,
+      phoneNumberId,
+      archivedCount: Number(sheetResult.archivedCount || 0),
+      deletedCount: Number(sheetResult.deletedCount || 0),
+      memoryRemovedCount
+    });
+  } catch (error) {
+    console.error("Clean chat failed:");
+    console.error(error);
+    return res.status(500).json({
+      ok: false,
+      error: "Clean chat failed on server."
+    });
+  }
+});
 
   app.get("/api/messages", async (req, res) => {
   const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
@@ -14392,6 +14520,27 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 }
 
+
+/* =========================================================
+   V31.5.8.60.3.9 - Clean Chat Button UI
+   UI-only styling. Clean logic archives first, then removes active Sheet rows.
+   ========================================================= */
+.chat-actions .danger-mini-btn {
+  border-color: rgba(220,38,38,.28) !important;
+  color: #991b1b !important;
+  background: linear-gradient(180deg, #fff, #fff5f5) !important;
+}
+
+.chat-actions .danger-mini-btn:hover {
+  border-color: rgba(220,38,38,.46) !important;
+  background: linear-gradient(180deg, #fff7f7, #fee2e2) !important;
+}
+
+.chat-actions .danger-mini-btn:disabled {
+  opacity: .55 !important;
+  cursor: not-allowed !important;
+}
+
 </style>
 </head>
 <body>
@@ -14569,6 +14718,7 @@ app.get("/inbox", protectInbox, (req, res) => {
             </select>
             <button type="button" class="mini-btn" id="copyPhoneBtn">Copy phone</button>
             <button type="button" class="mini-btn" id="markReadBtn">Mark read</button>
+            <button type="button" class="mini-btn danger-mini-btn" id="cleanChatBtn" title="Archive backup then remove from active Team Inbox">Clean chat</button>
             <div class="chat-tags-menu-wrap">
               <button type="button" class="mini-btn more-btn" id="chatTagsMenuBtn" aria-label="Conversation tags">⋮</button>
               <div class="chat-tags-popover is-hidden" id="chatTagsPopover">
@@ -14836,6 +14986,7 @@ const tagPicker = document.getElementById("tagPicker");
 const tagDisplay = document.getElementById("tagDisplay");
 const chatTagsMenuBtn = document.getElementById("chatTagsMenuBtn");
 const chatTagsPopover = document.getElementById("chatTagsPopover");
+const cleanChatBtn = document.getElementById("cleanChatBtn");
 const inputTo = document.getElementById("to");
 const inputLine = document.getElementById("phoneNumberId");
 const inputBody = document.getElementById("body");
@@ -16678,6 +16829,7 @@ function renderChat() {
       conversationStatusSelect.disabled = true;
     }
     if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = true;
+    if (cleanChatBtn) cleanChatBtn.disabled = true;
     closeChatTagsPopover();
     if (assigneeSelect) {
       assigneeSelect.value = "Dubai Team";
@@ -16706,6 +16858,7 @@ function renderChat() {
     conversationStatusSelect.disabled = false;
   }
   if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = false;
+  if (cleanChatBtn) cleanChatBtn.disabled = false;
   if (assigneeSelect) {
     assigneeSelect.value = normalizeAssigneeValue(c.assignee, c.branch);
     assigneeSelect.disabled = false;
@@ -16981,6 +17134,84 @@ async function sendVoice() {
   }
 }
 
+
+function browserCleanChatDigits(value) {
+  return (value || "").toString().replace(/\D/g, "");
+}
+
+function browserCleanChatPhoneMatches(left, right) {
+  const a = browserCleanChatDigits(left);
+  const b = browserCleanChatDigits(right);
+  if (!a || !b) return (left || "").toString().trim() === (right || "").toString().trim();
+  return a === b || a.endsWith(b) || b.endsWith(a);
+}
+
+async function cleanSelectedChat() {
+  const phone = (inputTo.value.trim() || selectedPhone || "").trim();
+  const phoneNumberId = (inputLine.value.trim() || selectedPhoneNumberId || "").trim();
+  const displayName = (chatTitle.textContent || phone || "this customer").trim();
+
+  if (!phone) {
+    resultBox.textContent = "Select a customer first.";
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Clean active Team Inbox chat for " + displayName + "?\n\n" +
+    "This will archive a backup first, then remove this customer's messages from the active Team Inbox.\n\n" +
+    "It does NOT delete WhatsApp messages."
+  );
+
+  if (!confirmed) {
+    resultBox.textContent = "Clean chat cancelled.";
+    return;
+  }
+
+  resultBox.textContent = "Cleaning chat...";
+  if (cleanChatBtn) cleanChatBtn.disabled = true;
+
+  try {
+    const res = await fetch("/api/clean-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone,
+        phoneNumberId,
+        requestedBy: "Team Inbox"
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      const removedLocal = (allMessages || []).filter(function(message) {
+        const phoneMatches = browserCleanChatPhoneMatches(message.phone || "", phone);
+        const lineMatches = !phoneNumberId || !message.phoneNumberId || String(message.phoneNumberId) === String(phoneNumberId);
+        return phoneMatches && lineMatches;
+      }).length;
+
+      allMessages = (allMessages || []).filter(function(message) {
+        const phoneMatches = browserCleanChatPhoneMatches(message.phone || "", phone);
+        const lineMatches = !phoneNumberId || !message.phoneNumberId || String(message.phoneNumberId) === String(phoneNumberId);
+        return !(phoneMatches && lineMatches);
+      });
+
+      selectedPhone = "";
+      selectedPhoneNumberId = "";
+      selectedConversationKey = "";
+      inputTo.value = "";
+      resultBox.textContent = "Cleaned. Archived: " + (data.archivedCount || 0) + " / Removed: " + (data.deletedCount || removedLocal || 0);
+      await loadMessages();
+    } else {
+      resultBox.textContent = "Clean failed: " + (data.error || "Unknown error");
+    }
+  } catch (error) {
+    resultBox.textContent = "Clean failed: network or server error.";
+  } finally {
+    if (cleanChatBtn) cleanChatBtn.disabled = false;
+  }
+}
+
 async function updateStatus(status) {
   const phone = inputTo.value.trim() || selectedPhone;
   if (!phone) {
@@ -17021,6 +17252,7 @@ async function updateStatus(status) {
 document.getElementById("sendBtn").addEventListener("click", sendReply);
 document.getElementById("sendImageBtn").addEventListener("click", sendImage);
 document.getElementById("sendVoiceBtn").addEventListener("click", sendVoice);
+if (cleanChatBtn) cleanChatBtn.addEventListener("click", cleanSelectedChat);
 
 if (imageFileInput) {
   imageFileInput.addEventListener("change", function() {
