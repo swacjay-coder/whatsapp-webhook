@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-2-sidebar-icons-and-booking-actions-visible";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-4-safe-links-visible-keep-history";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -14729,6 +14729,50 @@ app.get("/inbox", protectInbox, (req, res) => {
     .right-reference-scroll {
       padding-bottom: 24px !important;
     }
+
+    /* V31.5.8.60.3.7.4 - Safe clickable links + composer polish.
+       CSS-only for composer; does not touch message loading, /api/messages, Google Sheets, or conversation history. */
+    .message-link {
+      color: #087f5b !important;
+      font-weight: 850 !important;
+      text-decoration: underline !important;
+      text-underline-offset: 3px !important;
+      word-break: break-word !important;
+    }
+
+    .message-link:hover {
+      color: #065f46 !important;
+    }
+
+    .chat-composer-wrap .composer-block {
+      border-radius: 18px !important;
+      border: 1px solid rgba(120,184,62,.28) !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,253,246,.96)) !important;
+      box-shadow: 0 14px 34px rgba(15,23,42,.075) !important;
+    }
+
+    .chat-composer-wrap textarea#body {
+      border-radius: 16px !important;
+      border-color: rgba(183,210,173,.95) !important;
+      background: rgba(255,255,255,.96) !important;
+      font-size: 13px !important;
+      font-weight: 650 !important;
+    }
+
+    .chat-composer-wrap .send-btn {
+      border-radius: 999px !important;
+      background: linear-gradient(135deg, #18a957, #0f8f47) !important;
+      box-shadow: 0 12px 24px rgba(22,163,74,.24) !important;
+    }
+
+    .chat-composer-wrap .send-image-btn,
+    .chat-composer-wrap .send-voice-btn {
+      border-radius: 999px !important;
+      border-color: rgba(120,184,62,.30) !important;
+      background: rgba(255,255,255,.96) !important;
+      box-shadow: 0 8px 18px rgba(15,23,42,.045) !important;
+    }
+
 </style>
 </head>
 <body>
@@ -16044,6 +16088,20 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+
+function linkifyMessageText(value) {
+  const raw = (value || "").toString();
+  const escaped = escapeHtml(raw);
+  const urlRegex = /((https?:\/\/|www\.)[^\s<]+)/gi;
+
+  return escaped.replace(urlRegex, function(match) {
+    const cleanMatch = match.replace(/[.,!?؛،)\]]+$/g, "");
+    const trailing = match.slice(cleanMatch.length);
+    const href = cleanMatch.toLowerCase().startsWith("http") ? cleanMatch : "https://" + cleanMatch;
+    return '<a class="message-link" href="' + href + '" target="_blank" rel="noopener noreferrer">' + cleanMatch + '</a>' + trailing;
+  });
+}
+
 function shortText(value, max) {
   const t = (value || "").toString().replace(/\s+/g, " ").trim();
   return t.length <= max ? t : t.slice(0, max - 1) + "…";
@@ -16114,7 +16172,7 @@ function renderMessageBody(message) {
   }
 
   if (!image) {
-    return escapeHtml(message?.body || "");
+    return linkifyMessageText(message?.body || "");
   }
 
   const mediaSrc = "/api/media/" + encodeURIComponent(image.mediaId);
@@ -16122,7 +16180,7 @@ function renderMessageBody(message) {
     '<a class="inline-image-link" href="' + mediaSrc + '" target="_blank" rel="noopener">' +
       '<img src="' + mediaSrc + '" alt="' + escapeHtml(image.filename || "WhatsApp image") + '" loading="lazy" />' +
     '</a>' +
-    (image.caption ? '<div class="inline-image-caption">' + escapeHtml(image.caption) + '</div>' : '') +
+    (image.caption ? '<div class="inline-image-caption">' + linkifyMessageText(image.caption) + '</div>' : '') +
   '</div>';
 }
 
