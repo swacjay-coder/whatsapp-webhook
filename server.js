@@ -96,6 +96,11 @@ const MESSENGER_PAGE_ID = (
   process.env.META_PAGE_ID ||
   ""
 ).toString().trim();
+const INSTAGRAM_ACCESS_TOKEN = (
+  process.env.INSTAGRAM_ACCESS_TOKEN ||
+  process.env.IG_ACCESS_TOKEN ||
+  ""
+).toString().trim();
 const INSTAGRAM_BUSINESS_ACCOUNT_ID = (
   process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID ||
   process.env.IG_BUSINESS_ACCOUNT_ID ||
@@ -18110,12 +18115,24 @@ function buildMetaReplyForText(text = "", hasAttachment = false) {
 }
 
 async function sendMetaPageMessage(senderId, messagePayload = {}, channel = "Messenger") {
-  if (!MESSENGER_PAGE_ACCESS_TOKEN || !MESSENGER_PAGE_ID) {
-    console.log(`[${channel}] send skipped: MESSENGER_PAGE_ACCESS_TOKEN or MESSENGER_PAGE_ID is missing`);
-    return { ok: false, skipped: true, reason: "missing_meta_page_env" };
+  const isInstagram = (channel || "").toString().toLowerCase().includes("instagram");
+  const token = isInstagram ? INSTAGRAM_ACCESS_TOKEN : MESSENGER_PAGE_ACCESS_TOKEN;
+  const accountId = isInstagram ? INSTAGRAM_BUSINESS_ACCOUNT_ID : MESSENGER_PAGE_ID;
+
+  if (!token || !accountId) {
+    console.log(`[${channel}] send skipped: required env is missing`, {
+      hasToken: Boolean(token),
+      hasAccountId: Boolean(accountId),
+      expectedTokenEnv: isInstagram ? "INSTAGRAM_ACCESS_TOKEN" : "MESSENGER_PAGE_ACCESS_TOKEN",
+      expectedAccountEnv: isInstagram ? "INSTAGRAM_BUSINESS_ACCOUNT_ID" : "MESSENGER_PAGE_ID"
+    });
+    return { ok: false, skipped: true, reason: "missing_meta_env" };
   }
 
-  const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(MESSENGER_PAGE_ID)}/messages`;
+  const url = isInstagram
+    ? `https://graph.instagram.com/v18.0/${encodeURIComponent(accountId)}/messages`
+    : `https://graph.facebook.com/v18.0/${encodeURIComponent(accountId)}/messages`;
+
   const basePayload = {
     recipient: { id: senderId },
     messaging_type: "RESPONSE",
@@ -18123,9 +18140,12 @@ async function sendMetaPageMessage(senderId, messagePayload = {}, channel = "Mes
   };
 
   async function postPayload(payload) {
-    const response = await fetch(`${url}?access_token=${encodeURIComponent(MESSENGER_PAGE_ACCESS_TOKEN)}`, {
+    const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify(payload)
     });
 
@@ -18152,7 +18172,7 @@ async function sendMetaPageMessage(senderId, messagePayload = {}, channel = "Mes
   }
 
   if (!sendResult.ok) {
-    console.log(`[${channel}] send failed:`);
+    console.log(`[${channel}] send failed:`, { urlHost: isInstagram ? "graph.instagram.com" : "graph.facebook.com" });
     console.log(JSON.stringify(sendResult.result, null, 2));
   } else {
     console.log(`[${channel}] message sent successfully to ${senderId}`);
