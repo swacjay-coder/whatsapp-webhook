@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-2-sidebar-icons-and-booking-actions-visible";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-3-messenger-live-instagram-off";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -18445,8 +18445,39 @@ async function handleMetaMessagingEvent(event = {}, channel = "Messenger") {
   }
 }
 
+function isInstagramWebhookBody(body = {}) {
+  const objectName = (body?.object || "").toString().toLowerCase();
+  if (objectName.includes("instagram")) {
+    return true;
+  }
+
+  const configuredInstagramId = (INSTAGRAM_BUSINESS_ACCOUNT_ID || "").toString().trim();
+  if (!configuredInstagramId || !Array.isArray(body?.entry)) {
+    return false;
+  }
+
+  return body.entry.some((entry) => {
+    const entryId = (entry?.id || "").toString().trim();
+    if (entryId === configuredInstagramId) {
+      return true;
+    }
+
+    const events = Array.isArray(entry?.messaging) ? entry.messaging : [];
+    return events.some((event) => {
+      const recipientId = (event?.recipient?.id || "").toString().trim();
+      return recipientId === configuredInstagramId;
+    });
+  });
+}
+
 async function handleMetaPageWebhook(req, res) {
   const channel = getMetaMessagingChannel(req.body);
+
+  if (isInstagramWebhookBody(req.body) || channel.toLowerCase().includes("instagram")) {
+    console.log("[Instagram] webhook ignored by V5 Instagram OFF mode. Returning 200 without reply, inbox log, or sheet log.");
+    return res.sendStatus(200);
+  }
+
   const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
 
   for (const entry of entries) {
@@ -18480,10 +18511,15 @@ app.get("/webhook", (req, res) => {
 
 /* استقبال الرسائل */
 app.post("/webhook", async (req, res) => {
-  console.log("New webhook payload:");
-  console.log(JSON.stringify(req.body, null, 2));
-
   try {
+    if (isInstagramWebhookBody(req.body)) {
+      console.log("[Instagram] webhook ignored by V5 Instagram OFF mode before payload logging.");
+      return res.sendStatus(200);
+    }
+
+    console.log("New webhook payload:");
+    console.log(JSON.stringify(req.body, null, 2));
+
     if (isMetaPageMessagingPayload(req.body)) {
       return await handleMetaPageWebhook(req, res);
     }
