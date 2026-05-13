@@ -84,6 +84,26 @@ const ABU_DHABI_STAFF_NUMBER = process.env.ABU_DHABI_STAFF_NUMBER || STAFF_NUMBE
 const INBOX_USER = process.env.INBOX_USER || "admin";
 const INBOX_PASS = process.env.INBOX_PASS || "123456";
 
+// Messenger / Instagram DM integration (safe add-on):
+// Keep this token separate from ACCESS_TOKEN because ACCESS_TOKEN is used for WhatsApp Cloud API.
+const MESSENGER_PAGE_ACCESS_TOKEN = (
+  process.env.MESSENGER_PAGE_ACCESS_TOKEN ||
+  process.env.META_PAGE_ACCESS_TOKEN ||
+  ""
+).toString().trim();
+const MESSENGER_PAGE_ID = (
+  process.env.MESSENGER_PAGE_ID ||
+  process.env.META_PAGE_ID ||
+  ""
+).toString().trim();
+const INSTAGRAM_BUSINESS_ACCOUNT_ID = (
+  process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID ||
+  process.env.IG_BUSINESS_ACCOUNT_ID ||
+  ""
+).toString().trim();
+const META_RESULTS_IMAGE_URL = (process.env.META_RESULTS_IMAGE_URL || "").toString().trim();
+const META_RESULTS_VIDEO_URL = (process.env.META_RESULTS_VIDEO_URL || "").toString().trim();
+
 // V31.5 Auto Video Reply:
 // Put iconic-auto-reply-video-13s.mp4 in the same GitHub/Render folder as server.js.
 // If you prefer hosting the video elsewhere, set AUTO_REPLY_VIDEO_URL to a direct public MP4 link.
@@ -17757,6 +17777,484 @@ setInterval(loadMessages, 5000);
 </body>
 </html>`);
 });
+
+// ============================================================
+// Messenger + Instagram DM safe module
+// ============================================================
+function isMetaPageMessagingPayload(body = {}) {
+  return Array.isArray(body?.entry) && body.entry.some((entry) => Array.isArray(entry?.messaging));
+}
+
+function getMetaMessagingChannel(body = {}) {
+  const objectName = (body?.object || "").toString().toLowerCase();
+  if (objectName.includes("instagram")) return "Instagram";
+  return "Messenger";
+}
+
+function getMetaConversationKey(channel = "Messenger", senderId = "") {
+  const prefix = channel.toLowerCase().includes("instagram") ? "ig" : "msgr";
+  return `${prefix}:${senderId}`;
+}
+
+function isMetaEchoOrSystemEvent(event = {}) {
+  return Boolean(
+    event?.message?.is_echo ||
+    event?.delivery ||
+    event?.read ||
+    event?.optin ||
+    event?.account_linking ||
+    event?.take_thread_control ||
+    event?.pass_thread_control ||
+    event?.request_thread_control
+  );
+}
+
+function getMetaIncomingText(event = {}) {
+  const message = event?.message || {};
+  const postback = event?.postback || {};
+
+  return (
+    message?.quick_reply?.payload ||
+    message?.text ||
+    postback?.payload ||
+    postback?.title ||
+    ""
+  ).toString().trim();
+}
+
+function hasMetaMediaAttachment(event = {}) {
+  return Array.isArray(event?.message?.attachments) && event.message.attachments.length > 0;
+}
+
+function isArabicInput(text = "") {
+  return /[\u0600-\u06FF]/.test((text || "").toString());
+}
+
+function buildMetaQuickReply(title, payload) {
+  return {
+    content_type: "text",
+    title: title.toString().slice(0, 20),
+    payload: payload.toString().slice(0, 1000)
+  };
+}
+
+function getMetaWelcomeQuickReplies(isArabic) {
+  if (isArabic) {
+    return [
+      buildMetaQuickReply("استشارة مجانية", "META_CONSULTATION"),
+      buildMetaQuickReply("حجز سيرفس", "META_SERVICE"),
+      buildMetaQuickReply("صور/فيديو", "META_RESULTS"),
+      buildMetaQuickReply("الفريق", "META_TEAM")
+    ];
+  }
+
+  return [
+    buildMetaQuickReply("Free Consult", "META_CONSULTATION"),
+    buildMetaQuickReply("Service", "META_SERVICE"),
+    buildMetaQuickReply("Photos/Video", "META_RESULTS"),
+    buildMetaQuickReply("Team", "META_TEAM")
+  ];
+}
+
+function buildMetaWelcomeBody(isArabic) {
+  if (isArabic) {
+    return "أهلاً بك 👋\n\n" +
+      "معك المساعد الذكي الخاص بـ\n" +
+      `${BUSINESS_NAME_SPACED}\n\n` +
+      "نحن متخصصون في حلول استبدال الشعر غير الجراحية، بمظهر طبيعي وخصوصية تامة.\n\n" +
+      "الاستشارة مجانية، وتساعدنا على فهم حالتك وشرح أفضل حل مناسب لك.\n\n" +
+      "هل ترغب في حجز استشارة مجانية أم حجز سيرفس؟";
+  }
+
+  return "Hello 👋\n\n" +
+    "You are chatting with the AI assistant of\n" +
+    `${BUSINESS_NAME_SPACED}\n\n` +
+    "We specialize in non-surgical hair replacement solutions with a natural look and full privacy.\n\n" +
+    "The consultation is free and helps us understand your case and explain the best suitable solution for you.\n\n" +
+    "Would you like to book a free consultation or a service appointment?";
+}
+
+function buildMetaBookingChoiceBody(isArabic) {
+  if (isArabic) {
+    return "أهلاً بك 👋\nيسعدنا مساعدتك في الحجز.\n\n" +
+      "هل ترغب في حجز استشارة مجانية أم حجز سيرفس؟";
+  }
+
+  return "Hello 👋\nWe’ll be happy to help you book an appointment.\n\n" +
+    "Would you like to book a free consultation or a service appointment?";
+}
+
+function buildMetaConsultationBody(isArabic) {
+  if (isArabic) {
+    return "أكيد، يسعدنا حجز استشارة مجانية لك.\n\n" +
+      "من فضلك أرسل لنا:\n" +
+      "• الفرع المفضل: دبي أو أبوظبي\n" +
+      "• اليوم المناسب\n" +
+      "• الوقت المناسب إذا عندك وقت مفضل\n\n" +
+      "الفريق رح يتأكد من التوفر ويرد عليك لتأكيد الموعد النهائي.";
+  }
+
+  return "Sure, we’ll be happy to book a free consultation for you.\n\n" +
+    "Please send us:\n" +
+    "• Preferred branch: Dubai or Abu Dhabi\n" +
+    "• Preferred day\n" +
+    "• Preferred time, if you have one\n\n" +
+    "Our team will check availability and confirm the final appointment.";
+}
+
+function detectMetaSpecialistBranch(text = "") {
+  const value = compactText(text);
+
+  const dubaiNames = [
+    "أحمد", "احمد", "ahmad", "ahmed",
+    "عماد", "emad", "imad",
+    "وائل", "wael",
+    "تامر", "tamer",
+    "بشير", "bashir",
+    "حمودة", "hamouda",
+    "اني", "ani",
+    "عمر", "omar"
+  ];
+
+  const abuDhabiNames = ["أسامة", "اسامة", "osama", "أدهم", "ادهم", "adham"];
+
+  if (dubaiNames.some((name) => value.includes(compactText(name)))) {
+    return "Dubai";
+  }
+
+  if (abuDhabiNames.some((name) => value.includes(compactText(name)))) {
+    return "Abu Dhabi";
+  }
+
+  return "";
+}
+
+function buildMetaServiceBody(isArabic, text = "") {
+  const branch = detectMetaSpecialistBranch(text);
+
+  if (isArabic) {
+    return "أكيد، نقدر نساعدك بحجز سيرفس.\n\n" +
+      "من فضلك أرسل لنا:\n" +
+      "• اسم المختص إذا عندك شخص مفضل\n" +
+      "• اليوم المناسب\n" +
+      "• الساعة المناسبة\n" +
+      (branch ? `\nالفرع المتوقع حسب اسم المختص: ${branch === "Abu Dhabi" ? "أبوظبي" : "دبي"}\n` : "") +
+      "\nإذا ما عندك مختص مفضل، اكتب: أي مختص متاح.\n\n" +
+      "الفريق رح يتأكد من التوفر ويرد عليك لتأكيد الموعد النهائي.";
+  }
+
+  return "Sure, we can help you book a service appointment.\n\n" +
+    "Please send us:\n" +
+    "• Specialist name, if you prefer someone specific\n" +
+    "• Preferred day\n" +
+    "• Preferred time\n" +
+    (branch ? `\nExpected branch based on specialist name: ${branch}\n` : "") +
+    "\nIf you do not have a preferred specialist, write: Any available specialist.\n\n" +
+    "Our team will check availability and confirm the final appointment.";
+}
+
+function buildMetaResultsBody(isArabic) {
+  if (isArabic) {
+    return "أكيد، فينا نرسل لك صور وفيديوهات لنتائج قبل وبعد بشكل خاص.\n\n" +
+      "تحب تشوف نتائج رجال أو نساء؟\n\n" +
+      "ملاحظة بسيطة: النتيجة تختلف حسب الحالة، والاستشارة تساعدنا نرشح لك الحل الأنسب.";
+  }
+
+  return "Sure, we can share photos and videos of before-and-after results privately.\n\n" +
+    "Would you like to see men’s results or women’s results?\n\n" +
+    "Results may vary depending on each case, and the consultation helps us recommend the best solution for you.";
+}
+
+function buildMetaPriceBody(isArabic) {
+  if (isArabic) {
+    return "السعر يختلف حسب الحالة ونوع الخدمة المطلوبة.\n\n" +
+      "الأفضل تحجز استشارة مجانية، والفريق يفحص الحالة ويعطيك السعر الصحيح بكل وضوح.";
+  }
+
+  return "The price depends on the case and the type of service needed.\n\n" +
+    "The best option is to book a free consultation so our team can check your case and give you the correct price clearly.";
+}
+
+function buildMetaTeamBody(isArabic) {
+  if (isArabic) {
+    return "أكيد، فريقنا رح يساعدك بأقرب وقت.\n\n" +
+      "من فضلك اكتب الفرع المطلوب وطلبك بشكل مختصر، وسيتم الرد عليك.";
+  }
+
+  return "Sure, our team will assist you as soon as possible.\n\n" +
+    "Please write the branch and your request briefly, and the team will reply to you.";
+}
+
+function buildMetaAfterHoursBody(isArabic) {
+  if (isArabic) {
+    return "أكيد، آخر موعد متاح هو 6:30 مساءً.\n\n" +
+      "الوقت بعد 6:30 غير متاح عادةً، لكن فيك تختار 5:00 أو 6:00 أو 6:30، أو تختار يوم ثاني.\n\n" +
+      "الفريق رح يتأكد من التوفر ويأكد لك الموعد النهائي.";
+  }
+
+  return "Sure, the latest available appointment time is 6:30 PM.\n\n" +
+    "Times after 6:30 PM are usually not available. You can choose 5:00 PM, 6:00 PM, 6:30 PM, or another day.\n\n" +
+    "Our team will check availability and confirm the final appointment.";
+}
+
+function hasMetaAfterHoursRequest(text = "") {
+  const value = compactText(text);
+  return /\b(7|8|9|10|11|12)\s*(pm|p\.m\.|مساء|المساء)?\b/.test(value) ||
+    value.includes("الساعة 7") ||
+    value.includes("الساعه 7") ||
+    value.includes("7 مساء") ||
+    value.includes("٧ مساء") ||
+    value.includes("19:00") ||
+    value.includes("20:00") ||
+    value.includes("21:00");
+}
+
+function isMetaGreetingText(text = "") {
+  const value = compactText(text);
+  return value === "hi" || value === "hello" || value === "hey" ||
+    value === "مرحبا" || value === "مرحبا." || value === "أهلا" || value === "اهلا" ||
+    value.includes("السلام عليكم");
+}
+
+function isMetaGenericBookingText(text = "") {
+  const value = compactText(text);
+  return value === "book" || value === "booking" || value === "appointment" ||
+    value === "بدي حجز" || value === "اريد حجز" || value === "أريد حجز" ||
+    value === "حجز" || value === "موعد";
+}
+
+function isMetaResultsText(text = "") {
+  const value = compactText(text);
+  return value.includes("photo") || value.includes("photos") || value.includes("video") ||
+    value.includes("results") || value.includes("before after") || value.includes("before/after") ||
+    value.includes("صور") || value.includes("صورة") || value.includes("فيديو") ||
+    value.includes("نتائج") || value.includes("قبل وبعد") || value === "meta_results";
+}
+
+function isMetaConsultationText(text = "") {
+  const value = compactText(text);
+  return value === "meta_consultation" || value.includes("consult") ||
+    value.includes("استشارة") || value.includes("استشاره");
+}
+
+function isMetaServiceText(text = "") {
+  const value = compactText(text);
+  return value === "meta_service" || value.includes("service") || value.includes("سيرفس") ||
+    value.includes("follow up") || value.includes("follow-up") || value.includes("fitting") ||
+    value.includes("adjustment") || value.includes("تركيب") || value.includes("تعديل");
+}
+
+function isMetaTeamText(text = "") {
+  const value = compactText(text);
+  return value === "meta_team" || value.includes("team") || value.includes("human") ||
+    value.includes("agent") || value.includes("staff") || value.includes("فريق") ||
+    value.includes("موظف") || value.includes("حدا") || value.includes("شخص");
+}
+
+function isMetaPriceText(text = "") {
+  const value = compactText(text);
+  return value.includes("price") || value.includes("cost") || value.includes("how much") ||
+    value.includes("سعر") || value.includes("تكلفة") || value.includes("كم");
+}
+
+function buildMetaReplyForText(text = "", hasAttachment = false) {
+  const isArabic = isArabicInput(text);
+
+  if (hasMetaAfterHoursRequest(text)) {
+    return { text: buildMetaAfterHoursBody(isArabic), quickReplies: [] };
+  }
+
+  if (isMetaGreetingText(text) || (!text && !hasAttachment)) {
+    return { text: buildMetaWelcomeBody(isArabic), quickReplies: getMetaWelcomeQuickReplies(isArabic) };
+  }
+
+  if (isMetaGenericBookingText(text)) {
+    return { text: buildMetaBookingChoiceBody(isArabic), quickReplies: getMetaWelcomeQuickReplies(isArabic).slice(0, 2) };
+  }
+
+  if (isMetaConsultationText(text)) {
+    return { text: buildMetaConsultationBody(isArabic), quickReplies: [] };
+  }
+
+  if (isMetaServiceText(text)) {
+    return { text: buildMetaServiceBody(isArabic, text), quickReplies: [] };
+  }
+
+  if (isMetaResultsText(text)) {
+    return { text: buildMetaResultsBody(isArabic), quickReplies: [] , sendResultsMedia: true };
+  }
+
+  if (isMetaPriceText(text)) {
+    return { text: buildMetaPriceBody(isArabic), quickReplies: [] };
+  }
+
+  if (isMetaTeamText(text)) {
+    return { text: buildMetaTeamBody(isArabic), quickReplies: [] };
+  }
+
+  if (hasAttachment) {
+    return {
+      text: isArabic
+        ? "وصلتنا الرسالة أو الملف ✅\nفريقنا رح يراجعها ويرد عليك بأقرب وقت."
+        : "We received your message or file ✅\nOur team will review it and reply as soon as possible.",
+      quickReplies: []
+    };
+  }
+
+  return {
+    text: isArabic
+      ? "أكيد، يسعدنا مساعدتك. هل ترغب في حجز استشارة مجانية أم حجز سيرفس؟"
+      : "Sure, we’ll be happy to help. Would you like to book a free consultation or a service appointment?",
+    quickReplies: getMetaWelcomeQuickReplies(isArabic).slice(0, 2)
+  };
+}
+
+async function sendMetaPageMessage(senderId, messagePayload = {}, channel = "Messenger") {
+  if (!MESSENGER_PAGE_ACCESS_TOKEN || !MESSENGER_PAGE_ID) {
+    console.log(`[${channel}] send skipped: MESSENGER_PAGE_ACCESS_TOKEN or MESSENGER_PAGE_ID is missing`);
+    return { ok: false, skipped: true, reason: "missing_meta_page_env" };
+  }
+
+  const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(MESSENGER_PAGE_ID)}/messages`;
+  const basePayload = {
+    recipient: { id: senderId },
+    messaging_type: "RESPONSE",
+    message: messagePayload
+  };
+
+  async function postPayload(payload) {
+    const response = await fetch(`${url}?access_token=${encodeURIComponent(MESSENGER_PAGE_ACCESS_TOKEN)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await response.text();
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (error) {
+      result = { raw: text || "" };
+    }
+
+    return { ok: response.ok, status: response.status, result };
+  }
+
+  let sendResult = await postPayload(basePayload);
+
+  // Some Instagram/Messenger configurations can reject messaging_type. Retry once without it.
+  if (!sendResult.ok) {
+    const retryPayload = { recipient: { id: senderId }, message: messagePayload };
+    const retryResult = await postPayload(retryPayload);
+    if (retryResult.ok) {
+      sendResult = retryResult;
+    }
+  }
+
+  if (!sendResult.ok) {
+    console.log(`[${channel}] send failed:`);
+    console.log(JSON.stringify(sendResult.result, null, 2));
+  } else {
+    console.log(`[${channel}] message sent successfully to ${senderId}`);
+  }
+
+  return sendResult;
+}
+
+async function sendMetaPageTextMessage(senderId, text, quickReplies = [], channel = "Messenger") {
+  const message = { text: (text || "").toString().slice(0, 2000) };
+
+  if (Array.isArray(quickReplies) && quickReplies.length) {
+    message.quick_replies = quickReplies.slice(0, 13);
+  }
+
+  return sendMetaPageMessage(senderId, message, channel);
+}
+
+async function sendMetaPageMediaMessage(senderId, mediaType, mediaUrl, channel = "Messenger") {
+  const cleanUrl = (mediaUrl || "").toString().trim();
+  if (!cleanUrl) {
+    return { ok: false, skipped: true, reason: "missing_media_url" };
+  }
+
+  const safeType = mediaType === "video" ? "video" : "image";
+  return sendMetaPageMessage(senderId, {
+    attachment: {
+      type: safeType,
+      payload: {
+        url: cleanUrl,
+        is_reusable: true
+      }
+    }
+  }, channel);
+}
+
+async function handleMetaMessagingEvent(event = {}, channel = "Messenger") {
+  if (isMetaEchoOrSystemEvent(event)) {
+    return;
+  }
+
+  const senderId = (event?.sender?.id || "").toString().trim();
+  if (!senderId) {
+    return;
+  }
+
+  const incomingText = getMetaIncomingText(event);
+  const hasAttachment = hasMetaMediaAttachment(event);
+  const conversationKey = getMetaConversationKey(channel, senderId);
+  const customerBody = incomingText || (hasAttachment ? "Customer sent media attachment" : "Customer message received");
+
+  addInboxMessage(conversationKey, "customer", customerBody, channel, DUBAI_PHONE_NUMBER_ID, {
+    customerName: "",
+    messageType: `${channel} Customer Message`
+  });
+
+  const reply = buildMetaReplyForText(incomingText, hasAttachment);
+  await sendMetaPageTextMessage(senderId, reply.text, reply.quickReplies || [], channel);
+
+  addInboxMessage(conversationKey, "bot", reply.text, channel, DUBAI_PHONE_NUMBER_ID, {
+    customerName: "",
+    messageType: `${channel} Bot Reply`
+  });
+
+  if (reply.sendResultsMedia) {
+    if (META_RESULTS_IMAGE_URL) {
+      await sendMetaPageMediaMessage(senderId, "image", META_RESULTS_IMAGE_URL, channel);
+      addInboxMessage(conversationKey, "bot", "Results image sent", channel, DUBAI_PHONE_NUMBER_ID, {
+        customerName: "",
+        messageType: `${channel} Results Image`
+      });
+    }
+
+    if (META_RESULTS_VIDEO_URL) {
+      await sendMetaPageMediaMessage(senderId, "video", META_RESULTS_VIDEO_URL, channel);
+      addInboxMessage(conversationKey, "bot", "Results video sent", channel, DUBAI_PHONE_NUMBER_ID, {
+        customerName: "",
+        messageType: `${channel} Results Video`
+      });
+    }
+  }
+}
+
+async function handleMetaPageWebhook(req, res) {
+  const channel = getMetaMessagingChannel(req.body);
+  const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
+
+  for (const entry of entries) {
+    const events = Array.isArray(entry?.messaging) ? entry.messaging : [];
+    for (const event of events) {
+      try {
+        await handleMetaMessagingEvent(event, channel);
+      } catch (error) {
+        console.log(`[${channel}] event handling failed:`);
+        console.log(error);
+      }
+    }
+  }
+
+  return res.sendStatus(200);
+}
+
 /* تحقق من Webhook */
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -17777,6 +18275,10 @@ app.post("/webhook", async (req, res) => {
   console.log(JSON.stringify(req.body, null, 2));
 
   try {
+    if (isMetaPageMessagingPayload(req.body)) {
+      return await handleMetaPageWebhook(req, res);
+    }
+
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
 
