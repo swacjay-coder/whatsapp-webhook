@@ -17784,8 +17784,10 @@ setInterval(loadMessages, 5000);
 });
 
 // ============================================================
-// Messenger + Instagram DM safe module
+// Messenger + Instagram DM safe module - V3 quick-reply flow
 // ============================================================
+const metaConversationStates = {};
+
 function isMetaPageMessagingPayload(body = {}) {
   return Array.isArray(body?.entry) && body.entry.some((entry) => Array.isArray(entry?.messaging));
 }
@@ -17843,163 +17845,252 @@ function buildMetaQuickReply(title, payload) {
   };
 }
 
-function getMetaWelcomeQuickReplies(isArabic) {
-  if (isArabic) {
-    return [
-      buildMetaQuickReply("استشارة مجانية", "META_CONSULTATION"),
-      buildMetaQuickReply("حجز سيرفس", "META_SERVICE"),
-      buildMetaQuickReply("صور/فيديو", "META_RESULTS"),
-      buildMetaQuickReply("الفريق", "META_TEAM")
-    ];
-  }
+function getMetaMainQuickReplies(isArabic) {
+  return isArabic
+    ? [
+        buildMetaQuickReply("استشارة مجانية", "META_CONSULTATION"),
+        buildMetaQuickReply("حجز سيرفس", "META_SERVICE"),
+        buildMetaQuickReply("صور/فيديو", "META_RESULTS"),
+        buildMetaQuickReply("الفريق", "META_TEAM")
+      ]
+    : [
+        buildMetaQuickReply("Free Consult", "META_CONSULTATION"),
+        buildMetaQuickReply("Service", "META_SERVICE"),
+        buildMetaQuickReply("Photos/Video", "META_RESULTS"),
+        buildMetaQuickReply("Team", "META_TEAM")
+      ];
+}
 
-  return [
-    buildMetaQuickReply("Free Consult", "META_CONSULTATION"),
-    buildMetaQuickReply("Service", "META_SERVICE"),
-    buildMetaQuickReply("Photos/Video", "META_RESULTS"),
-    buildMetaQuickReply("Team", "META_TEAM")
-  ];
+function getMetaBranchQuickReplies(isArabic) {
+  return isArabic
+    ? [buildMetaQuickReply("دبي", "META_BRANCH_DUBAI"), buildMetaQuickReply("أبوظبي", "META_BRANCH_ABUDHABI")]
+    : [buildMetaQuickReply("Dubai", "META_BRANCH_DUBAI"), buildMetaQuickReply("Abu Dhabi", "META_BRANCH_ABUDHABI")];
+}
+
+function getMetaDayQuickReplies(isArabic) {
+  return isArabic
+    ? [
+        buildMetaQuickReply("اليوم", "META_DAY_TODAY"),
+        buildMetaQuickReply("بكرا", "META_DAY_TOMORROW"),
+        buildMetaQuickReply("هذا الأسبوع", "META_DAY_THIS_WEEK")
+      ]
+    : [
+        buildMetaQuickReply("Today", "META_DAY_TODAY"),
+        buildMetaQuickReply("Tomorrow", "META_DAY_TOMORROW"),
+        buildMetaQuickReply("This week", "META_DAY_THIS_WEEK")
+      ];
+}
+
+function getMetaTimeQuickReplies(isArabic) {
+  return isArabic
+    ? [
+        buildMetaQuickReply("5:00", "META_TIME_5"),
+        buildMetaQuickReply("6:00", "META_TIME_6"),
+        buildMetaQuickReply("6:30", "META_TIME_630")
+      ]
+    : [
+        buildMetaQuickReply("5:00 PM", "META_TIME_5"),
+        buildMetaQuickReply("6:00 PM", "META_TIME_6"),
+        buildMetaQuickReply("6:30 PM", "META_TIME_630")
+      ];
+}
+
+function getMetaServiceSpecialistQuickReplies(isArabic) {
+  return isArabic
+    ? [
+        buildMetaQuickReply("أحمد", "META_SPEC_AHMAD"),
+        buildMetaQuickReply("عماد", "META_SPEC_EMAD"),
+        buildMetaQuickReply("وائل", "META_SPEC_WAEL"),
+        buildMetaQuickReply("تامر", "META_SPEC_TAMER"),
+        buildMetaQuickReply("بشير", "META_SPEC_BASHIR"),
+        buildMetaQuickReply("حمودة", "META_SPEC_HAMOUDA"),
+        buildMetaQuickReply("اني", "META_SPEC_ANI"),
+        buildMetaQuickReply("عمر", "META_SPEC_OMAR"),
+        buildMetaQuickReply("أسامة", "META_SPEC_OSAMA"),
+        buildMetaQuickReply("أدهم", "META_SPEC_ADHAM"),
+        buildMetaQuickReply("أي مختص", "META_SPEC_ANY")
+      ]
+    : [
+        buildMetaQuickReply("Ahmad", "META_SPEC_AHMAD"),
+        buildMetaQuickReply("Emad", "META_SPEC_EMAD"),
+        buildMetaQuickReply("Wael", "META_SPEC_WAEL"),
+        buildMetaQuickReply("Tamer", "META_SPEC_TAMER"),
+        buildMetaQuickReply("Bashir", "META_SPEC_BASHIR"),
+        buildMetaQuickReply("Hamouda", "META_SPEC_HAMOUDA"),
+        buildMetaQuickReply("Ani", "META_SPEC_ANI"),
+        buildMetaQuickReply("Omar", "META_SPEC_OMAR"),
+        buildMetaQuickReply("Osama", "META_SPEC_OSAMA"),
+        buildMetaQuickReply("Adham", "META_SPEC_ADHAM"),
+        buildMetaQuickReply("Any specialist", "META_SPEC_ANY")
+      ];
+}
+
+function getMetaResultsGenderQuickReplies(isArabic) {
+  return isArabic
+    ? [buildMetaQuickReply("نتائج رجال", "META_RESULTS_MEN"), buildMetaQuickReply("نتائج نساء", "META_RESULTS_WOMEN")]
+    : [buildMetaQuickReply("Men results", "META_RESULTS_MEN"), buildMetaQuickReply("Women results", "META_RESULTS_WOMEN")];
+}
+
+function getMetaSpecialistFromPayload(payload = "") {
+  const map = {
+    META_SPEC_AHMAD: { nameAr: "أحمد", nameEn: "Ahmad", branch: "Dubai" },
+    META_SPEC_EMAD: { nameAr: "عماد", nameEn: "Emad", branch: "Dubai" },
+    META_SPEC_WAEL: { nameAr: "وائل", nameEn: "Wael", branch: "Dubai" },
+    META_SPEC_TAMER: { nameAr: "تامر", nameEn: "Tamer", branch: "Dubai" },
+    META_SPEC_BASHIR: { nameAr: "بشير", nameEn: "Bashir", branch: "Dubai" },
+    META_SPEC_HAMOUDA: { nameAr: "حمودة", nameEn: "Hamouda", branch: "Dubai" },
+    META_SPEC_ANI: { nameAr: "اني", nameEn: "Ani", branch: "Dubai" },
+    META_SPEC_OMAR: { nameAr: "عمر", nameEn: "Omar", branch: "Dubai" },
+    META_SPEC_OSAMA: { nameAr: "أسامة", nameEn: "Osama", branch: "Abu Dhabi" },
+    META_SPEC_ADHAM: { nameAr: "أدهم", nameEn: "Adham", branch: "Abu Dhabi" },
+    META_SPEC_ANY: { nameAr: "أي مختص متاح", nameEn: "Any available specialist", branch: "" }
+  };
+  return map[(payload || "").toString().trim()] || null;
+}
+
+function getMetaDayFromPayload(payload = "", isArabic = false) {
+  const map = {
+    META_DAY_TODAY: isArabic ? "اليوم" : "Today",
+    META_DAY_TOMORROW: isArabic ? "بكرا" : "Tomorrow",
+    META_DAY_THIS_WEEK: isArabic ? "هذا الأسبوع" : "This week"
+  };
+  return map[(payload || "").toString().trim()] || "";
+}
+
+function getMetaTimeFromPayload(payload = "") {
+  const map = {
+    META_TIME_5: "5:00 PM",
+    META_TIME_6: "6:00 PM",
+    META_TIME_630: "6:30 PM"
+  };
+  return map[(payload || "").toString().trim()] || "";
 }
 
 function buildMetaWelcomeBody(isArabic) {
   if (isArabic) {
     return "أهلاً بك 👋\n\n" +
-      "معك المساعد الذكي الخاص بـ\n" +
-      `${BUSINESS_NAME_SPACED}\n\n` +
-      "نحن متخصصون في حلول استبدال الشعر غير الجراحية، بمظهر طبيعي وخصوصية تامة.\n\n" +
-      "الاستشارة مجانية، وتساعدنا على فهم حالتك وشرح أفضل حل مناسب لك.\n\n" +
-      "هل ترغب في حجز استشارة مجانية أم حجز سيرفس؟";
+      `معك ${BUSINESS_NAME_SPACED}\n\n` +
+      "كيف فينا نساعدك؟ اختر من الأزرار:";
   }
 
   return "Hello 👋\n\n" +
-    "You are chatting with the AI assistant of\n" +
-    `${BUSINESS_NAME_SPACED}\n\n` +
-    "We specialize in non-surgical hair replacement solutions with a natural look and full privacy.\n\n" +
-    "The consultation is free and helps us understand your case and explain the best suitable solution for you.\n\n" +
-    "Would you like to book a free consultation or a service appointment?";
+    `You are chatting with ${BUSINESS_NAME_SPACED}.\n\n` +
+    "How can we help you? Please choose one option:";
 }
 
 function buildMetaBookingChoiceBody(isArabic) {
-  if (isArabic) {
-    return "أهلاً بك 👋\nيسعدنا مساعدتك في الحجز.\n\n" +
-      "هل ترغب في حجز استشارة مجانية أم حجز سيرفس؟";
-  }
-
-  return "Hello 👋\nWe’ll be happy to help you book an appointment.\n\n" +
-    "Would you like to book a free consultation or a service appointment?";
+  return isArabic
+    ? "أكيد، اختر نوع الحجز:"
+    : "Sure, please choose the booking type:";
 }
 
-function buildMetaConsultationBody(isArabic) {
-  if (isArabic) {
-    return "أكيد، يسعدنا حجز استشارة مجانية لك.\n\n" +
-      "من فضلك أرسل لنا:\n" +
-      "• الفرع المفضل: دبي أو أبوظبي\n" +
-      "• اليوم المناسب\n" +
-      "• الوقت المناسب إذا عندك وقت مفضل\n\n" +
-      "الفريق رح يتأكد من التوفر ويرد عليك لتأكيد الموعد النهائي.";
-  }
-
-  return "Sure, we’ll be happy to book a free consultation for you.\n\n" +
-    "Please send us:\n" +
-    "• Preferred branch: Dubai or Abu Dhabi\n" +
-    "• Preferred day\n" +
-    "• Preferred time, if you have one\n\n" +
-    "Our team will check availability and confirm the final appointment.";
+function buildMetaConsultationStartBody(isArabic) {
+  return isArabic
+    ? "تمام، الاستشارة مجانية ومناسبة للعميل الجديد.\n\nاختر الفرع المناسب:"
+    : "Great, the consultation is free and suitable for new customers.\n\nPlease choose the branch:";
 }
 
-function detectMetaSpecialistBranch(text = "") {
+function buildMetaServiceStartBody(isArabic) {
+  return isArabic
+    ? "تمام، حجز السيرفس للعميل الحالي.\n\nاختر المختص المفضل، أو اختر أي مختص:"
+    : "Great, service booking is for existing customers.\n\nChoose your preferred specialist, or choose any specialist:";
+}
+
+function buildMetaAskDayBody(isArabic) {
+  return isArabic ? "اختر اليوم المناسب:" : "Please choose the preferred day:";
+}
+
+function buildMetaAskTimeBody(isArabic) {
+  return isArabic ? "اختر الوقت المناسب:" : "Please choose the preferred time:";
+}
+
+function buildMetaFinalSummaryBody(state = {}, isArabic = false) {
+  const intent = state.intent || "booking";
+  const branch = state.branch || "";
+  const day = state.day || "";
+  const time = state.time || "";
+  const specialist = state.specialist || "";
+  const branchAr = branch === "Abu Dhabi" ? "أبوظبي" : branch === "Dubai" ? "دبي" : branch;
+  const typeAr = intent === "service" ? "حجز سيرفس" : "استشارة مجانية";
+  const typeEn = intent === "service" ? "Service booking" : "Free consultation";
+
+  if (isArabic) {
+    const lines = [
+      "تمام، وصلنا طلبك ✅",
+      "",
+      `نوع الحجز: ${typeAr}`,
+      branch ? `الفرع: ${branchAr}` : "",
+      specialist ? `المختص: ${specialist}` : "",
+      day ? `اليوم: ${day}` : "",
+      time ? `الوقت: ${time}` : "",
+      "",
+      "الفريق رح يتأكد من التوفر ويرد عليك لتأكيد الموعد النهائي."
+    ].filter((line) => line !== "");
+    return lines.join("\n");
+  }
+
+  const lines = [
+    "Your request has been received ✅",
+    "",
+    `Booking type: ${typeEn}`,
+    branch ? `Branch: ${branch}` : "",
+    specialist ? `Specialist: ${specialist}` : "",
+    day ? `Day: ${day}` : "",
+    time ? `Time: ${time}` : "",
+    "",
+    "Our team will check availability and confirm the final appointment."
+  ].filter((line) => line !== "");
+  return lines.join("\n");
+}
+
+function detectMetaSpecialistInfo(text = "") {
   const value = compactText(text);
-
-  const dubaiNames = [
-    "أحمد", "احمد", "ahmad", "ahmed",
-    "عماد", "emad", "imad",
-    "وائل", "wael",
-    "تامر", "tamer",
-    "بشير", "bashir",
-    "حمودة", "hamouda",
-    "اني", "ani",
-    "عمر", "omar"
+  const pairs = [
+    { names: ["أحمد", "احمد", "ahmad", "ahmed"], ar: "أحمد", en: "Ahmad", branch: "Dubai" },
+    { names: ["عماد", "emad", "imad"], ar: "عماد", en: "Emad", branch: "Dubai" },
+    { names: ["وائل", "wael"], ar: "وائل", en: "Wael", branch: "Dubai" },
+    { names: ["تامر", "tamer"], ar: "تامر", en: "Tamer", branch: "Dubai" },
+    { names: ["بشير", "bashir"], ar: "بشير", en: "Bashir", branch: "Dubai" },
+    { names: ["حمودة", "hamouda"], ar: "حمودة", en: "Hamouda", branch: "Dubai" },
+    { names: ["اني", "ani"], ar: "اني", en: "Ani", branch: "Dubai" },
+    { names: ["عمر", "omar"], ar: "عمر", en: "Omar", branch: "Dubai" },
+    { names: ["أسامة", "اسامة", "osama"], ar: "أسامة", en: "Osama", branch: "Abu Dhabi" },
+    { names: ["أدهم", "ادهم", "adham"], ar: "أدهم", en: "Adham", branch: "Abu Dhabi" }
   ];
 
-  const abuDhabiNames = ["أسامة", "اسامة", "osama", "أدهم", "ادهم", "adham"];
-
-  if (dubaiNames.some((name) => value.includes(compactText(name)))) {
-    return "Dubai";
+  for (const item of pairs) {
+    if (item.names.some((name) => value.includes(compactText(name)))) {
+      return item;
+    }
   }
 
-  if (abuDhabiNames.some((name) => value.includes(compactText(name)))) {
-    return "Abu Dhabi";
-  }
+  return null;
+}
 
+function detectMetaBranch(text = "") {
+  const value = compactText(text);
+  if (value.includes("dubai") || value.includes("دبي")) return "Dubai";
+  if (value.includes("abu dhabi") || value.includes("abudhabi") || value.includes("أبوظبي") || value.includes("ابوظبي")) return "Abu Dhabi";
+  const specialist = detectMetaSpecialistInfo(text);
+  return specialist?.branch || "";
+}
+
+function detectMetaDay(text = "", isArabic = false) {
+  const value = compactText(text);
+  if (value.includes("today") || value.includes("اليوم")) return isArabic ? "اليوم" : "Today";
+  if (value.includes("tomorrow") || value.includes("بكرا") || value.includes("غدا") || value.includes("غداً")) return isArabic ? "بكرا" : "Tomorrow";
+  if (value.includes("week") || value.includes("الأسبوع") || value.includes("الاسبوع")) return isArabic ? "هذا الأسبوع" : "This week";
+  const days = ["السبت", "الأحد", "الاحد", "الإثنين", "الاثنين", "الثلاثاء", "الأربعاء", "الاربعاء", "الخميس", "الجمعة", "friday", "saturday", "sunday", "monday", "tuesday", "wednesday", "thursday"];
+  const found = days.find((day) => value.includes(compactText(day)));
+  return found || "";
+}
+
+function detectMetaTime(text = "") {
+  const value = compactText(text);
+  if (value.includes("6:30") || value.includes("٦:٣٠") || value.includes("6.30")) return "6:30 PM";
+  if (value.includes("6") || value.includes("٦")) return "6:00 PM";
+  if (value.includes("5") || value.includes("٥")) return "5:00 PM";
   return "";
-}
-
-function buildMetaServiceBody(isArabic, text = "") {
-  const branch = detectMetaSpecialistBranch(text);
-
-  if (isArabic) {
-    return "أكيد، نقدر نساعدك بحجز سيرفس.\n\n" +
-      "من فضلك أرسل لنا:\n" +
-      "• اسم المختص إذا عندك شخص مفضل\n" +
-      "• اليوم المناسب\n" +
-      "• الساعة المناسبة\n" +
-      (branch ? `\nالفرع المتوقع حسب اسم المختص: ${branch === "Abu Dhabi" ? "أبوظبي" : "دبي"}\n` : "") +
-      "\nإذا ما عندك مختص مفضل، اكتب: أي مختص متاح.\n\n" +
-      "الفريق رح يتأكد من التوفر ويرد عليك لتأكيد الموعد النهائي.";
-  }
-
-  return "Sure, we can help you book a service appointment.\n\n" +
-    "Please send us:\n" +
-    "• Specialist name, if you prefer someone specific\n" +
-    "• Preferred day\n" +
-    "• Preferred time\n" +
-    (branch ? `\nExpected branch based on specialist name: ${branch}\n` : "") +
-    "\nIf you do not have a preferred specialist, write: Any available specialist.\n\n" +
-    "Our team will check availability and confirm the final appointment.";
-}
-
-function buildMetaResultsBody(isArabic) {
-  if (isArabic) {
-    return "أكيد، فينا نرسل لك صور وفيديوهات لنتائج قبل وبعد بشكل خاص.\n\n" +
-      "تحب تشوف نتائج رجال أو نساء؟\n\n" +
-      "ملاحظة بسيطة: النتيجة تختلف حسب الحالة، والاستشارة تساعدنا نرشح لك الحل الأنسب.";
-  }
-
-  return "Sure, we can share photos and videos of before-and-after results privately.\n\n" +
-    "Would you like to see men’s results or women’s results?\n\n" +
-    "Results may vary depending on each case, and the consultation helps us recommend the best solution for you.";
-}
-
-function buildMetaPriceBody(isArabic) {
-  if (isArabic) {
-    return "السعر يختلف حسب الحالة ونوع الخدمة المطلوبة.\n\n" +
-      "الأفضل تحجز استشارة مجانية، والفريق يفحص الحالة ويعطيك السعر الصحيح بكل وضوح.";
-  }
-
-  return "The price depends on the case and the type of service needed.\n\n" +
-    "The best option is to book a free consultation so our team can check your case and give you the correct price clearly.";
-}
-
-function buildMetaTeamBody(isArabic) {
-  if (isArabic) {
-    return "أكيد، فريقنا رح يساعدك بأقرب وقت.\n\n" +
-      "من فضلك اكتب الفرع المطلوب وطلبك بشكل مختصر، وسيتم الرد عليك.";
-  }
-
-  return "Sure, our team will assist you as soon as possible.\n\n" +
-    "Please write the branch and your request briefly, and the team will reply to you.";
-}
-
-function buildMetaAfterHoursBody(isArabic) {
-  if (isArabic) {
-    return "أكيد، آخر موعد متاح هو 6:30 مساءً.\n\n" +
-      "الوقت بعد 6:30 غير متاح عادةً، لكن فيك تختار 5:00 أو 6:00 أو 6:30، أو تختار يوم ثاني.\n\n" +
-      "الفريق رح يتأكد من التوفر ويأكد لك الموعد النهائي.";
-  }
-
-  return "Sure, the latest available appointment time is 6:30 PM.\n\n" +
-    "Times after 6:30 PM are usually not available. You can choose 5:00 PM, 6:00 PM, 6:30 PM, or another day.\n\n" +
-    "Our team will check availability and confirm the final appointment.";
 }
 
 function hasMetaAfterHoursRequest(text = "") {
@@ -18012,6 +18103,30 @@ function hasMetaAfterHoursRequest(text = "") {
     value.includes("19:00") ||
     value.includes("20:00") ||
     value.includes("21:00");
+}
+
+function buildMetaAfterHoursBody(isArabic) {
+  return isArabic
+    ? "آخر موعد متاح هو 6:30 مساءً.\n\nاختر وقت ثاني من الأزرار:"
+    : "The latest available appointment time is 6:30 PM.\n\nPlease choose another time:";
+}
+
+function buildMetaResultsBody(isArabic) {
+  return isArabic
+    ? "أكيد، فينا نرسل لك صور وفيديوهات لنتائج قبل وبعد بشكل خاص.\n\nتحب تشوف نتائج رجال أو نساء؟"
+    : "Sure, we can share before-and-after photos and videos privately.\n\nWould you like to see men’s or women’s results?";
+}
+
+function buildMetaPriceBody(isArabic) {
+  return isArabic
+    ? "السعر يختلف حسب الحالة ونوع الخدمة.\n\nالأفضل تحجز استشارة مجانية حتى الفريق يعطيك السعر الصحيح."
+    : "The price depends on the case and service type.\n\nThe best option is to book a free consultation so our team can give you the correct price.";
+}
+
+function buildMetaTeamBody(isArabic) {
+  return isArabic
+    ? "أكيد، سيتم تحويل طلبك للفريق. اكتب طلبك باختصار وسنرد عليك بأقرب وقت."
+    : "Sure, your request will be forwarded to the team. Please write your request briefly and we will reply as soon as possible.";
 }
 
 function isMetaGreetingText(text = "") {
@@ -18033,7 +18148,8 @@ function isMetaResultsText(text = "") {
   return value.includes("photo") || value.includes("photos") || value.includes("video") ||
     value.includes("results") || value.includes("before after") || value.includes("before/after") ||
     value.includes("صور") || value.includes("صورة") || value.includes("فيديو") ||
-    value.includes("نتائج") || value.includes("قبل وبعد") || value === "meta_results";
+    value.includes("نتائج") || value.includes("قبل وبعد") || value === "meta_results" ||
+    value === "meta_results_men" || value === "meta_results_women";
 }
 
 function isMetaConsultationText(text = "") {
@@ -18062,39 +18178,101 @@ function isMetaPriceText(text = "") {
     value.includes("سعر") || value.includes("تكلفة") || value.includes("كم");
 }
 
-function buildMetaReplyForText(text = "", hasAttachment = false) {
+function resetMetaState(conversationKey = "") {
+  if (conversationKey) {
+    delete metaConversationStates[conversationKey];
+  }
+}
+
+function ensureMetaState(conversationKey = "") {
+  if (!metaConversationStates[conversationKey]) {
+    metaConversationStates[conversationKey] = {};
+  }
+  return metaConversationStates[conversationKey];
+}
+
+function buildMetaReplyForText(text = "", hasAttachment = false, conversationKey = "") {
   const isArabic = isArabicInput(text);
+  const value = compactText(text);
+  const state = ensureMetaState(conversationKey);
 
   if (hasMetaAfterHoursRequest(text)) {
-    return { text: buildMetaAfterHoursBody(isArabic), quickReplies: [] };
+    return { text: buildMetaAfterHoursBody(isArabic), quickReplies: getMetaTimeQuickReplies(isArabic) };
   }
 
-  if (isMetaGreetingText(text) || (!text && !hasAttachment)) {
-    return { text: buildMetaWelcomeBody(isArabic), quickReplies: getMetaWelcomeQuickReplies(isArabic) };
+  if (value === "meta_consultation" || isMetaConsultationText(text)) {
+    metaConversationStates[conversationKey] = { intent: "consultation" };
+    return { text: buildMetaConsultationStartBody(isArabic), quickReplies: getMetaBranchQuickReplies(isArabic) };
   }
 
-  if (isMetaGenericBookingText(text)) {
-    return { text: buildMetaBookingChoiceBody(isArabic), quickReplies: getMetaWelcomeQuickReplies(isArabic).slice(0, 2) };
+  if (value === "meta_service" || isMetaServiceText(text)) {
+    const specialist = detectMetaSpecialistInfo(text);
+    const day = detectMetaDay(text, isArabic);
+    const time = detectMetaTime(text);
+    if (specialist && day && time) {
+      resetMetaState(conversationKey);
+      return {
+        text: buildMetaFinalSummaryBody({
+          intent: "service",
+          branch: specialist.branch,
+          specialist: isArabic ? specialist.ar : specialist.en,
+          day,
+          time
+        }, isArabic),
+        quickReplies: []
+      };
+    }
+    metaConversationStates[conversationKey] = { intent: "service" };
+    return { text: buildMetaServiceStartBody(isArabic), quickReplies: getMetaServiceSpecialistQuickReplies(isArabic) };
   }
 
-  if (isMetaConsultationText(text)) {
-    return { text: buildMetaConsultationBody(isArabic), quickReplies: [] };
+  const specialistFromPayload = getMetaSpecialistFromPayload(text);
+  if (specialistFromPayload && state.intent === "service") {
+    state.specialist = isArabic ? specialistFromPayload.nameAr : specialistFromPayload.nameEn;
+    if (specialistFromPayload.branch) state.branch = specialistFromPayload.branch;
+    return { text: buildMetaAskDayBody(isArabic), quickReplies: getMetaDayQuickReplies(isArabic) };
   }
 
-  if (isMetaServiceText(text)) {
-    return { text: buildMetaServiceBody(isArabic, text), quickReplies: [] };
+  if (value === "meta_branch_dubai" || value === "meta_branch_abudhabi") {
+    state.branch = value === "meta_branch_abudhabi" ? "Abu Dhabi" : "Dubai";
+    return { text: buildMetaAskDayBody(isArabic), quickReplies: getMetaDayQuickReplies(isArabic) };
+  }
+
+  const dayFromPayload = getMetaDayFromPayload(text, isArabic);
+  if (dayFromPayload) {
+    state.day = dayFromPayload;
+    return { text: buildMetaAskTimeBody(isArabic), quickReplies: getMetaTimeQuickReplies(isArabic) };
+  }
+
+  const timeFromPayload = getMetaTimeFromPayload(text);
+  if (timeFromPayload) {
+    state.time = timeFromPayload;
+    const finalState = { ...state };
+    resetMetaState(conversationKey);
+    return { text: buildMetaFinalSummaryBody(finalState, isArabic), quickReplies: [] };
   }
 
   if (isMetaResultsText(text)) {
-    return { text: buildMetaResultsBody(isArabic), quickReplies: [] , sendResultsMedia: true };
+    return { text: buildMetaResultsBody(isArabic), quickReplies: getMetaResultsGenderQuickReplies(isArabic), sendResultsMedia: true };
   }
 
   if (isMetaPriceText(text)) {
-    return { text: buildMetaPriceBody(isArabic), quickReplies: [] };
+    return { text: buildMetaPriceBody(isArabic), quickReplies: getMetaMainQuickReplies(isArabic).slice(0, 2) };
   }
 
   if (isMetaTeamText(text)) {
+    resetMetaState(conversationKey);
     return { text: buildMetaTeamBody(isArabic), quickReplies: [] };
+  }
+
+  if (isMetaGenericBookingText(text)) {
+    metaConversationStates[conversationKey] = {};
+    return { text: buildMetaBookingChoiceBody(isArabic), quickReplies: getMetaMainQuickReplies(isArabic).slice(0, 2) };
+  }
+
+  if (isMetaGreetingText(text) || (!text && !hasAttachment)) {
+    metaConversationStates[conversationKey] = {};
+    return { text: buildMetaWelcomeBody(isArabic), quickReplies: getMetaMainQuickReplies(isArabic) };
   }
 
   if (hasAttachment) {
@@ -18102,15 +18280,13 @@ function buildMetaReplyForText(text = "", hasAttachment = false) {
       text: isArabic
         ? "وصلتنا الرسالة أو الملف ✅\nفريقنا رح يراجعها ويرد عليك بأقرب وقت."
         : "We received your message or file ✅\nOur team will review it and reply as soon as possible.",
-      quickReplies: []
+      quickReplies: getMetaMainQuickReplies(isArabic)
     };
   }
 
   return {
-    text: isArabic
-      ? "أكيد، يسعدنا مساعدتك. هل ترغب في حجز استشارة مجانية أم حجز سيرفس؟"
-      : "Sure, we’ll be happy to help. Would you like to book a free consultation or a service appointment?",
-    quickReplies: getMetaWelcomeQuickReplies(isArabic).slice(0, 2)
+    text: isArabic ? "اختر كيف فينا نساعدك:" : "Please choose how we can help:",
+    quickReplies: getMetaMainQuickReplies(isArabic)
   };
 }
 
@@ -18224,34 +18400,47 @@ async function handleMetaMessagingEvent(event = {}, channel = "Messenger") {
   const conversationKey = getMetaConversationKey(channel, senderId);
   const customerBody = incomingText || (hasAttachment ? "Customer sent media attachment" : "Customer message received");
 
-  addInboxMessage(conversationKey, "customer", customerBody, channel, DUBAI_PHONE_NUMBER_ID, {
-    customerName: "",
-    messageType: `${channel} Customer Message`
-  });
+  // V4: Do not log Instagram DM conversations into Team Inbox / Google Sheet.
+  // Instagram replies still work normally inside Instagram DM, but the chat will not create
+  // inbox notifications or rows in the Team Inbox message log. Messenger remains logged.
+  const shouldLogMetaConversationToInbox = !((channel || "").toString().toLowerCase().includes("instagram"));
 
-  const reply = buildMetaReplyForText(incomingText, hasAttachment);
+  if (shouldLogMetaConversationToInbox) {
+    addInboxMessage(conversationKey, "customer", customerBody, channel, DUBAI_PHONE_NUMBER_ID, {
+      customerName: "",
+      messageType: `${channel} Customer Message`
+    });
+  }
+
+  const reply = buildMetaReplyForText(incomingText, hasAttachment, conversationKey);
   await sendMetaPageTextMessage(senderId, reply.text, reply.quickReplies || [], channel);
 
-  addInboxMessage(conversationKey, "bot", reply.text, channel, DUBAI_PHONE_NUMBER_ID, {
-    customerName: "",
-    messageType: `${channel} Bot Reply`
-  });
+  if (shouldLogMetaConversationToInbox) {
+    addInboxMessage(conversationKey, "bot", reply.text, channel, DUBAI_PHONE_NUMBER_ID, {
+      customerName: "",
+      messageType: `${channel} Bot Reply`
+    });
+  }
 
   if (reply.sendResultsMedia) {
     if (META_RESULTS_IMAGE_URL) {
       await sendMetaPageMediaMessage(senderId, "image", META_RESULTS_IMAGE_URL, channel);
-      addInboxMessage(conversationKey, "bot", "Results image sent", channel, DUBAI_PHONE_NUMBER_ID, {
-        customerName: "",
-        messageType: `${channel} Results Image`
-      });
+      if (shouldLogMetaConversationToInbox) {
+        addInboxMessage(conversationKey, "bot", "Results image sent", channel, DUBAI_PHONE_NUMBER_ID, {
+          customerName: "",
+          messageType: `${channel} Results Image`
+        });
+      }
     }
 
     if (META_RESULTS_VIDEO_URL) {
       await sendMetaPageMediaMessage(senderId, "video", META_RESULTS_VIDEO_URL, channel);
-      addInboxMessage(conversationKey, "bot", "Results video sent", channel, DUBAI_PHONE_NUMBER_ID, {
-        customerName: "",
-        messageType: `${channel} Results Video`
-      });
+      if (shouldLogMetaConversationToInbox) {
+        addInboxMessage(conversationKey, "bot", "Results video sent", channel, DUBAI_PHONE_NUMBER_ID, {
+          customerName: "",
+          messageType: `${channel} Results Video`
+        });
+      }
     }
   }
 }
