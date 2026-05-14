@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-smart-faq-intent-layer-phase1-instagram-page-sender-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-smart-faq-phase1-name-channel-service-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -334,8 +334,8 @@ function isConsult(text) {
 function isService(text) {
   const value = normalizeText(text);
   return value === "service" || value === "service | سيرفس" || value === "سيرفس" || value === "خدمة" ||
-    value.includes("صيانة") || value.includes("متابعة") || value.includes("تعديل") ||
-    value.includes("fitting") || value.includes("follow up") || value.includes("adjustment") || value.includes("maintenance");
+    value.includes("متابعة") || value.includes("تعديل") ||
+    value.includes("fitting") || value.includes("follow up") || value.includes("adjustment");
 }
 
 function isServices(text) {
@@ -442,20 +442,56 @@ function payloadToStaff(payload) {
   return names[payload] || "";
 }
 
-function welcomeBody(lang = "en") {
-  if (isAr(lang)) {
-    return `مرحبا 👋\n\nمعك المساعد الذكي الخاص بـ\n\n${BUSINESS_NAME}\n\nنقدر نساعدك في:\nحجز استشارة للعميل الجديد\nخدمة أو متابعة للعميل الحالي\nمشاهدة النتائج\nأو التواصل مع الفريق`;
+function cleanCustomerName(value) {
+  const name = (value || "").toString().trim().replace(/\s+/g, " ");
+  if (!name) return "";
+  if (/^\d+$/.test(name)) return "";
+  if (name.length > 60) return "";
+  return name;
+}
+
+function getCustomerNameFromEvent(event) {
+  const candidates = [
+    event?.sender?.name,
+    event?.sender?.username,
+    event?.from?.name,
+    event?.from?.username,
+    event?.message?.from?.name,
+    event?.message?.sender?.name,
+    event?.user?.name
+  ];
+
+  for (const candidate of candidates) {
+    const name = cleanCustomerName(candidate);
+    if (name) return name;
   }
 
-  return `Hello 👋\n\nYou are chatting with the smart assistant of\n\n${BUSINESS_NAME}\n\nWe can help you with:\nbooking a consultation for new clients\nservice or follow-up for existing clients\nviewing results\nor connecting with our team`;
+  return "";
+}
+
+function displayCustomerName(customerName) {
+  const name = cleanCustomerName(customerName);
+  if (!name) return "";
+  return name.split(" ").filter(Boolean).slice(0, 2).join(" ");
+}
+
+function welcomeBody(lang = "en", customerName = "") {
+  const name = displayCustomerName(customerName);
+  const namePart = name ? ` ${name}` : "";
+
+  if (isAr(lang)) {
+    return `مرحبا${namePart} 👋\n\nمعك المساعد الذكي الخاص بـ\n\n${BUSINESS_NAME}\n\nنقدر نساعدك في:\nحجز استشارة للعميل الجديد\nخدمة أو متابعة للعميل الحالي\nمشاهدة النتائج\nأو التواصل مع الفريق`;
+  }
+
+  return `Hello${namePart} 👋\n\nYou are chatting with the smart assistant of\n\n${BUSINESS_NAME}\n\nWe can help you with:\nbooking a consultation for new clients\nservice or follow-up for existing clients\nviewing results\nor connecting with our team`;
 }
 
 function bookingBody(lang = "en") {
   if (isAr(lang)) {
-    return `تمام، اختر نوع الحجز المناسب لك:\n\nاستشارة: إذا كنت عميل جديد وتريد معرفة الحل الأنسب لك.\nسيرفس: إذا كنت عميل حالي وتحتاج متابعة، تركيب، تعديل، أو صيانة.`;
+    return `تمام، اختر نوع الحجز المناسب لك:\n\nاستشارة: إذا كنت عميل جديد وتريد معرفة الحل الأنسب لك.\nسيرفس: إذا كنت عميل حالي وتحتاج متابعة، تركيب، تعديل، أو سيرفس.`;
   }
 
-  return `Sure, please choose the right booking type:\n\nConsultation: for new clients who want the best solution.\nService: for existing clients who need follow-up, fitting, adjustment, or maintenance.`;
+  return `Sure, please choose the right booking type:\n\nConsultation: for new clients who want the best solution.\nService: for existing clients who need follow-up, fitting, adjustment, or service.`;
 }
 
 function servicesBody(lang = "en") {
@@ -482,27 +518,30 @@ function detailsBody(lang = "en") {
   return `The idea is simple:\n\nWe choose the right solution for your case, then apply it professionally to give a natural look without surgery.\n\nEverything is done in the center with privacy.\n\nIf the video does not open directly, we will also send you the video link.`;
 }
 
-function smartIntentBody(intent, lang = "en") {
+function smartIntentBody(intent, lang = "en", customerName = "") {
+  const name = displayCustomerName(customerName);
+  const namePart = name ? ` ${name}` : "";
+
   const ar = {
-    price: `أكيد 👋\n\nالسعر يختلف حسب الحالة، والمساحة المطلوبة، ونوع الخدمة المناسبة لك.\n\nالأفضل نعمل لك استشارة بسيطة حتى نحدد الحل الأنسب والسعر بشكل واضح، بدون أي التزام.`,
+    price: `أكيد${namePart} 👋\n\nالسعر يختلف حسب الحالة، والمساحة المطلوبة، ونوع الخدمة المناسبة لك.\n\nالأفضل نعمل لك استشارة بسيطة حتى نحدد الحل الأنسب والسعر بشكل واضح، بدون أي التزام.`,
     surgery: `لا، الخدمة بدون جراحة وبدون عملية.\n\nهي حل غير جراحي يعطي مظهر طبيعي، ويتم داخل المركز بدون تدخل طبي جراحي.`,
     natural: `نعم، هدفنا الأساسي أن يكون الشكل طبيعي جدًا ومناسب لملامحك.\n\nنختار الكثافة، اللون، والتصميم حسب شكل الوجه حتى ما يعطي مظهر صناعي.`,
     duration: `مدة الجلسة تختلف حسب الحالة والخدمة المطلوبة.\n\nعادة يتم توضيح الوقت بعد الاستشارة، لأن كل حالة تختلف حسب المساحة والتفاصيل المطلوبة.`,
     pain: `لا، الخدمة غير جراحية ولا تحتاج عملية.\n\nعادة تكون مريحة، والفريق يشرح لك كل خطوة قبل البدء.`,
-    booking: `أكيد 👋\n\nفينا نساعدك بحجز استشارة أو موعد خدمة.\n\nاختار نوع الحجز المناسب لك، والفريق يتابع معك التفاصيل.`,
+    booking: `أكيد${namePart} 👋\n\nفينا نساعدك بحجز استشارة أو موعد خدمة.\n\nاختار نوع الحجز المناسب لك، والفريق يتابع معك التفاصيل.`,
     location: `عندنا فرعين:\n\nDubai branch\nAbu Dhabi branch\n\nاختار الفرع المناسب لك حتى نرسل لك الموقع الصحيح.`,
-    team: `أكيد، رح نخلي أحد أعضاء الفريق يتابع معك.\n\nاكتب لنا سؤالك أو اختار الفرع المناسب حتى نوجهك بشكل أسرع.`
+    team: `أكيد${namePart}، رح نخلي أحد أعضاء الفريق يتابع معك.\n\nاكتب لنا سؤالك أو اختار الفرع المناسب حتى نوجهك بشكل أسرع.`
   };
 
   const en = {
-    price: `Of course 👋\n\nThe price depends on your case, the area needed, and the best service option for you.\n\nThe best step is a quick consultation so we can recommend the right solution and give you a clear price with no obligation.`,
+    price: `Of course${namePart} 👋\n\nThe price depends on your case, the area needed, and the best service option for you.\n\nThe best step is a quick consultation so we can recommend the right solution and give you a clear price with no obligation.`,
     surgery: `No, it does not require surgery.\n\nIt is a non-surgical solution designed to give a natural look, done inside the center without a surgical procedure.`,
     natural: `Yes, the main goal is a very natural look that suits your features.\n\nWe choose the density, color, and design based on your face shape so it does not look artificial.`,
     duration: `The session duration depends on the case and the service needed.\n\nUsually, we confirm the time after the consultation because every case is different depending on the area and details required.`,
     pain: `No, the service is non-surgical and does not require an operation.\n\nIt is usually comfortable, and the team explains every step before starting.`,
-    booking: `Sure 👋\n\nWe can help you book a consultation or a service appointment.\n\nChoose the right booking type, and the team will follow up with the details.`,
+    booking: `Sure${namePart} 👋\n\nWe can help you book a consultation or a service appointment.\n\nChoose the right booking type, and the team will follow up with the details.`,
     location: `We have two branches:\n\nDubai branch\nAbu Dhabi branch\n\nChoose the branch that suits you so we can send the correct location.`,
-    team: `Sure, one of our team members will follow up with you.\n\nPlease write your question or choose the right branch so we can guide you faster.`
+    team: `Sure${namePart}, one of our team members will follow up with you.\n\nPlease write your question or choose the right branch so we can guide you faster.`
   };
 
   return isAr(lang) ? ar[intent] : en[intent];
@@ -685,6 +724,13 @@ async function sendMetaMessage(channel, recipientId, message) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const errorCode = data?.error?.code;
+      const errorSubcode = data?.error?.error_subcode;
+      if (channel === "messenger" && errorCode === 100 && errorSubcode === 2018001) {
+        console.log(`[Meta Send] skipped messenger no matching user`, response.status, JSON.stringify(data));
+        return { ok: false, skipped: true, status: response.status, data };
+      }
+
       console.log(`[Meta Send] failed ${channel}`, response.status, JSON.stringify(data));
       return { ok: false, status: response.status, data };
     }
@@ -738,7 +784,7 @@ async function sendDetailsContent(channel, recipientId, lang) {
 async function handlePayload({ channel, senderId, payload, state, lang }) {
   if (payload === "MAIN_MENU") {
     resetState(senderId);
-    await sendText(channel, senderId, welcomeBody(lang), mainReplies(lang));
+    await sendText(channel, senderId, welcomeBody(lang, state.customerName), mainReplies(lang));
     return true;
   }
 
@@ -877,23 +923,23 @@ async function handleSmartIntent({ channel, senderId, text, state, lang }) {
 
   if (intent === "booking") {
     state.intent = "booking";
-    await sendText(channel, senderId, smartIntentBody("booking", lang), bookingReplies(lang));
+    await sendText(channel, senderId, smartIntentBody("booking", lang, state.customerName), bookingReplies(lang));
     return true;
   }
 
   if (intent === "location") {
     state.intent = "location";
-    await sendText(channel, senderId, smartIntentBody("location", lang), intentReplies("location", lang));
+    await sendText(channel, senderId, smartIntentBody("location", lang, state.customerName), intentReplies("location", lang));
     return true;
   }
 
   if (intent === "team") {
     state.intent = "team";
-    await sendText(channel, senderId, smartIntentBody("team", lang), intentReplies("team", lang));
+    await sendText(channel, senderId, smartIntentBody("team", lang, state.customerName), intentReplies("team", lang));
     return true;
   }
 
-  await sendText(channel, senderId, smartIntentBody(intent, lang), intentReplies(intent, lang));
+  await sendText(channel, senderId, smartIntentBody(intent, lang, state.customerName), intentReplies(intent, lang));
   return true;
 }
 
@@ -923,6 +969,9 @@ async function handleIncomingEvent(entry, event) {
   const channel = getChannelFromEntry(entry, event);
   const text = getMessageText(event);
   const state = getState(senderId);
+  const customerName = getCustomerNameFromEvent(event);
+  if (customerName) state.customerName = customerName;
+
   const lang = getTurnLanguage(text, state);
   state.lang = lang;
 
@@ -933,7 +982,7 @@ async function handleIncomingEvent(entry, event) {
   }
 
   if (isGreeting(text)) {
-    await sendText(channel, senderId, welcomeBody(lang), mainReplies(lang));
+    await sendText(channel, senderId, welcomeBody(lang, state.customerName), mainReplies(lang));
     return;
   }
 
@@ -990,31 +1039,73 @@ async function handleIncomingEvent(entry, event) {
 }
 
 function collectMessagingEvents(body) {
-  const events = [];
+  const rawEvents = [];
   const entries = Array.isArray(body?.entry) ? body.entry : [];
 
   for (const entry of entries) {
     const messaging = Array.isArray(entry.messaging) ? entry.messaging : [];
-    for (const event of messaging) events.push({ entry, event });
+    for (const event of messaging) rawEvents.push({ entry, event });
 
     const changes = Array.isArray(entry.changes) ? entry.changes : [];
     for (const change of changes) {
-      const messages = Array.isArray(change?.value?.messages) ? change.value.messages : [];
+      const value = change?.value || {};
+      const messages = Array.isArray(value?.messages) ? value.messages : [];
+      const contacts = Array.isArray(value?.contacts) ? value.contacts : [];
+      const contactById = new Map();
+
+      for (const contact of contacts) {
+        const id = contact?.wa_id || contact?.id || contact?.profile?.id || "";
+        if (id) contactById.set(id.toString(), contact);
+      }
+
       for (const message of messages) {
-        events.push({
-          entry: { ...entry, object: body?.object || entry?.object || "instagram" },
+        const senderId = message.from || message.sender?.id || "";
+        const contact = contactById.get(senderId.toString()) || {};
+        rawEvents.push({
+          entry: { ...entry, object: body?.object || entry?.object || value?.messaging_product || "instagram" },
           event: {
-            sender: { id: message.from || message.sender?.id },
-            message: { text: message.text?.body || message.text || "" }
+            sender: {
+              id: senderId,
+              name: contact?.profile?.name || message?.sender?.name || "",
+              username: contact?.profile?.username || ""
+            },
+            message: {
+              mid: message.id || message.mid || "",
+              text: message.text?.body || message.text || ""
+            }
           }
         });
       }
     }
   }
 
-  return events;
-}
+  const deduped = [];
+  const seen = new Map();
 
+  for (const item of rawEvents) {
+    const senderId = getSenderId(item.event);
+    const text = getMessageText(item.event);
+    const mid = item.event?.message?.mid || item.event?.mid || "";
+    const key = `${senderId}:${mid || text}`;
+    const channel = getChannelFromEntry(item.entry, item.event);
+
+    if (!seen.has(key)) {
+      seen.set(key, deduped.length);
+      deduped.push(item);
+      continue;
+    }
+
+    const existingIndex = seen.get(key);
+    const existing = deduped[existingIndex];
+    const existingChannel = getChannelFromEntry(existing.entry, existing.event);
+
+    if (channel === "instagram" && existingChannel !== "instagram") {
+      deduped[existingIndex] = item;
+    }
+  }
+
+  return deduped;
+}
 app.get("/", (req, res) => {
   res.status(200).json({ ok: true, service: "iconic-meta-dm", version: BOT_VERSION });
 });
