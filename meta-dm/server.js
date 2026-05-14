@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing";
+const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-dm-inbox-log";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -57,7 +57,154 @@ const DUBAI_LOCATION_URL = process.env.DUBAI_LOCATION_URL || "https://maps.app.g
 const ABU_DHABI_LOCATION_URL = process.env.ABU_DHABI_LOCATION_URL || "https://maps.app.goo.gl/twg5JEuP6JgKWP1s7";
 const BUSINESS_NAME = "I C O N I C   H A I R   C A R E";
 
+const META_DM_INBOX_USER = (
+  process.env.META_DM_INBOX_USER ||
+  process.env.INBOX_USER ||
+  ""
+).toString().trim();
+
+const META_DM_INBOX_PASS = (
+  process.env.META_DM_INBOX_PASS ||
+  process.env.INBOX_PASS ||
+  ""
+).toString();
+
+const META_DM_INBOX_LIMIT = Math.max(
+  50,
+  Math.min(1000, Number.parseInt(process.env.META_DM_INBOX_LIMIT || "300", 10) || 300)
+);
+
 const conversationState = new Map();
+const dmInbox = [];
+
+
+function escapeHtml(value) {
+  return (value || "").toString().replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[char]));
+}
+
+function requireMetaDmInboxAuth(req, res, next) {
+  if (!META_DM_INBOX_USER || !META_DM_INBOX_PASS) {
+    return res.status(503).send("Meta DM Inbox auth is not configured. Set META_DM_INBOX_USER and META_DM_INBOX_PASS in Render.");
+  }
+
+  const header = (req.headers.authorization || "").toString();
+  const [scheme, encoded] = header.split(" ");
+
+  if (scheme === "Basic" && encoded) {
+    const decoded = Buffer.from(encoded, "base64").toString("utf8");
+    const separatorIndex = decoded.indexOf(":");
+    const user = separatorIndex >= 0 ? decoded.slice(0, separatorIndex) : decoded;
+    const pass = separatorIndex >= 0 ? decoded.slice(separatorIndex + 1) : "";
+
+    if (user === META_DM_INBOX_USER && pass === META_DM_INBOX_PASS) {
+      return next();
+    }
+  }
+
+  res.set("WWW-Authenticate", 'Basic realm="Iconic Meta DM Inbox"');
+  return res.status(401).send("Authentication required.");
+}
+
+function recordDmInbox(item) {
+  const saved = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    at: item.at || new Date().toISOString(),
+    channel: item.channel || "Unknown",
+    direction: item.direction || "unknown",
+    senderId: item.senderId || "",
+    messageType: item.messageType || "",
+    text: item.text || "",
+    quickReplies: Array.isArray(item.quickReplies) ? item.quickReplies : [],
+    hasAttachment: Boolean(item.hasAttachment),
+    sendOk: typeof item.sendOk === "boolean" ? item.sendOk : null,
+    status: item.status || null
+  };
+
+  dmInbox.unshift(saved);
+
+  if (dmInbox.length > META_DM_INBOX_LIMIT) {
+    dmInbox.splice(META_DM_INBOX_LIMIT);
+  }
+
+  return saved;
+}
+
+function getMessageType(event) {
+  if (event?.message?.quick_reply?.payload) return "quick_reply";
+  if (event?.postback?.payload || event?.postback?.title) return "postback";
+  if (hasAttachment(event)) return "attachment";
+  return "text";
+}
+
+function buildDmInboxHtml() {
+  const rows = dmInbox.map((item) => {
+    const directionLabel = item.direction === "customer" ? "Customer" : item.direction === "bot" ? "Bot" : item.direction;
+    const quickReplies = item.quickReplies.length ? `<div class="quick">Buttons: ${escapeHtml(item.quickReplies.join(", "))}</div>` : "";
+    const status = item.sendOk === null ? "" : item.sendOk ? "Sent" : `Failed${item.status ? " / " + item.status : ""}`;
+
+    return `<tr>
+      <td>${escapeHtml(new Date(item.at).toLocaleString("en-GB", { timeZone: "Asia/Dubai" }))}</td>
+      <td><span class="badge">${escapeHtml(item.channel)}</span></td>
+      <td>${escapeHtml(directionLabel)}</td>
+      <td>${escapeHtml(item.senderId)}</td>
+      <td>${escapeHtml(item.messageType)}${item.hasAttachment ? " 📎" : ""}</td>
+      <td><div class="msg">${escapeHtml(item.text)}</div>${quickReplies}</td>
+      <td>${escapeHtml(status)}</td>
+    </tr>`;
+  }).join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="refresh" content="15" />
+  <title>Iconic Meta DM Inbox</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f6f7f9; color: #111827; }
+    header { background: #111827; color: #fff; padding: 18px 22px; }
+    h1 { margin: 0; font-size: 20px; }
+    .sub { margin-top: 6px; opacity: .8; font-size: 13px; }
+    main { padding: 18px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; vertical-align: top; font-size: 13px; }
+    th { background: #f3f4f6; font-weight: 700; position: sticky; top: 0; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #e5e7eb; font-size: 12px; }
+    .msg { white-space: pre-wrap; line-height: 1.35; max-width: 520px; }
+    .quick { margin-top: 6px; font-size: 12px; color: #4b5563; }
+    .empty { background: #fff; padding: 24px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Iconic Hair Care — Meta DM Inbox</h1>
+    <div class="sub">Instagram + Messenger messages. Auto-refresh every 15 seconds. Stored in memory since last deploy/restart.</div>
+  </header>
+  <main>
+    ${dmInbox.length ? `<table>
+      <thead>
+        <tr>
+          <th>Dubai Time</th>
+          <th>Channel</th>
+          <th>Direction</th>
+          <th>Sender ID</th>
+          <th>Type</th>
+          <th>Message</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>` : `<div class="empty">No Meta DM messages logged yet.</div>`}
+  </main>
+</body>
+</html>`;
+}
 
 function normalizeText(value) {
   return (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
@@ -498,18 +645,72 @@ async function handleEvent(event, channel) {
   if (!senderId) return;
 
   const incomingText = getIncomingText(event);
+  const attachmentFlag = hasAttachment(event);
+  const messageType = getMessageType(event);
+
+  recordDmInbox({
+    channel,
+    direction: "customer",
+    senderId,
+    messageType,
+    text: incomingText || (attachmentFlag ? "[attachment]" : ""),
+    hasAttachment: attachmentFlag
+  });
+
   const key = `${channel}:${senderId}`;
-  const reply = buildReply(incomingText, key, hasAttachment(event));
+  const reply = buildReply(incomingText, key, attachmentFlag);
 
   if (reply.mediaUrl) {
-    await sendMedia(senderId, reply.mediaType || "image", reply.mediaUrl, channel);
+    const mediaResult = await sendMedia(senderId, reply.mediaType || "image", reply.mediaUrl, channel);
+    recordDmInbox({
+      channel,
+      direction: "bot",
+      senderId,
+      messageType: reply.mediaType || "image",
+      text: reply.mediaUrl,
+      sendOk: mediaResult.ok,
+      status: mediaResult.status
+    });
   }
 
-  await sendText(senderId, reply.text, reply.quickReplies || [], channel);
+  const textResult = await sendText(senderId, reply.text, reply.quickReplies || [], channel);
+  recordDmInbox({
+    channel,
+    direction: "bot",
+    senderId,
+    messageType: "text",
+    text: reply.text,
+    quickReplies: (reply.quickReplies || []).map((item) => item.title),
+    sendOk: textResult.ok,
+    status: textResult.status
+  });
 
   if (reply.sendResultsMedia) {
-    if (META_RESULTS_IMAGE_URL) await sendMedia(senderId, "image", META_RESULTS_IMAGE_URL, channel);
-    if (META_RESULTS_VIDEO_URL) await sendMedia(senderId, "video", META_RESULTS_VIDEO_URL, channel);
+    if (META_RESULTS_IMAGE_URL) {
+      const imageResult = await sendMedia(senderId, "image", META_RESULTS_IMAGE_URL, channel);
+      recordDmInbox({
+        channel,
+        direction: "bot",
+        senderId,
+        messageType: "image",
+        text: META_RESULTS_IMAGE_URL,
+        sendOk: imageResult.ok,
+        status: imageResult.status
+      });
+    }
+
+    if (META_RESULTS_VIDEO_URL) {
+      const videoResult = await sendMedia(senderId, "video", META_RESULTS_VIDEO_URL, channel);
+      recordDmInbox({
+        channel,
+        direction: "bot",
+        senderId,
+        messageType: "video",
+        text: META_RESULTS_VIDEO_URL,
+        sendOk: videoResult.ok,
+        status: videoResult.status
+      });
+    }
   }
 }
 
@@ -521,15 +722,33 @@ app.get("/api/version", (req, res) => {
   res.json({
     ok: true,
     version: BOT_VERSION,
-    routes: ["GET /webhook", "POST /webhook", "GET /api/version"],
+    routes: ["GET /webhook", "POST /webhook", "GET /api/version", "GET /dm-inbox", "GET /api/dm-inbox"],
     messengerConfigured: Boolean(MESSENGER_PAGE_ACCESS_TOKEN && MESSENGER_PAGE_ID),
     instagramConfigured: Boolean(INSTAGRAM_ACCESS_TOKEN && INSTAGRAM_BUSINESS_ACCOUNT_ID),
     resultsImageConfigured: Boolean(META_RESULTS_IMAGE_URL),
     resultsVideoConfigured: Boolean(META_RESULTS_VIDEO_URL),
     facebookGraphVersion: FACEBOOK_GRAPH_VERSION,
     instagramGraphVersion: INSTAGRAM_GRAPH_VERSION,
-    instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`
+    instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`,
+    dmInboxEnabled: true,
+    dmInboxItems: dmInbox.length,
+    dmInboxAuthConfigured: Boolean(META_DM_INBOX_USER && META_DM_INBOX_PASS)
   });
+});
+
+
+app.get("/api/dm-inbox", requireMetaDmInboxAuth, (req, res) => {
+  res.json({
+    ok: true,
+    version: BOT_VERSION,
+    total: dmInbox.length,
+    limit: META_DM_INBOX_LIMIT,
+    items: dmInbox
+  });
+});
+
+app.get("/dm-inbox", requireMetaDmInboxAuth, (req, res) => {
+  res.status(200).send(buildDmInboxHtml());
 });
 
 app.get("/webhook", (req, res) => {
