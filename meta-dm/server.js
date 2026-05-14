@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-channel-cleanup-safe-name-first-message";
+const BOT_VERSION = "iconic-meta-dm-v1-stable-channel-no-name-lookup";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -773,8 +773,8 @@ async function sendMetaMessage(channel, recipientId, message) {
     if (!response.ok) {
       const errorCode = data?.error?.code;
       const errorSubcode = data?.error?.error_subcode;
-      if (channel === "messenger" && errorCode === 100 && errorSubcode === 2018001) {
-        console.log(`[Meta Send] skipped messenger no matching user`, response.status, JSON.stringify(data));
+      if (errorCode === 100 && errorSubcode === 2018001) {
+        console.log(`[Meta Send] skipped ${channel} no matching user`, response.status, JSON.stringify(data));
         return { ok: false, skipped: true, status: response.status, data };
       }
 
@@ -1024,11 +1024,6 @@ async function handleIncomingEvent(entry, event) {
   const state = getState(senderId);
   const customerName = getCustomerNameFromEvent(event);
   if (customerName) state.customerName = customerName;
-
-  if (!state.customerName) {
-    const profileName = await getCustomerNameFromProfile(channel, senderId);
-    if (profileName) state.customerName = profileName;
-  }
 
   const lang = getTurnLanguage(text, state);
   state.lang = lang;
