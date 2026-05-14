@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-no-team-inbox";
+const BOT_VERSION = "iconic-meta-dm-v1-main-message-bilingual-buttons";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -75,10 +75,12 @@ function quickReply(title, payload) {
   };
 }
 
-function mainReplies(ar) {
-  return ar
-    ? [quickReply("حجز", "BOOKING"), quickReply("خدماتنا", "SERVICES"), quickReply("فريقنا", "TEAM")]
-    : [quickReply("Booking", "BOOKING"), quickReply("Services", "SERVICES"), quickReply("Team", "TEAM")];
+function mainReplies() {
+  return [
+    quickReply("Booking | حجز", "BOOKING"),
+    quickReply("Services | خدمات", "SERVICES"),
+    quickReply("Team | فريقنا", "TEAM")
+  ];
 }
 
 function bookingReplies(ar) {
@@ -233,10 +235,28 @@ function payloadToStaff(payload) {
   return names[payload] || "";
 }
 
-function welcomeBody(ar) {
-  return ar
-    ? `Hello 👋\n\nمعك ${BUSINESS_NAME}\n\nكيف فينا نساعدك؟`
-    : `Hello 👋\n\nYou are chatting with ${BUSINESS_NAME}.\n\nHow can we help you?`;
+function welcomeBody() {
+  return `Hello 👋
+
+معك المساعد الذكي الخاص بـ
+
+${BUSINESS_NAME}
+
+نقدر نساعدك في:
+حجز استشارة للعميل الجديد
+خدمة أو متابعة للعميل الحالي
+مشاهدة النتائج
+أو التواصل مع الفريق
+
+You are chatting with the smart assistant of
+
+${BUSINESS_NAME}
+
+We can help you with:
+booking a consultation for new clients
+service or follow-up for existing clients
+viewing results
+or connecting with our team`;
 }
 
 function bookingBody(ar) {
@@ -359,7 +379,7 @@ function buildReply(text, key, hasAttachment) {
   }
 
   if (upper === "LOCATION" || isLocation(cleanText)) {
-    return { text: locationBody(ar, state.branch || "Dubai"), quickReplies: mainReplies(ar) };
+    return { text: locationBody(ar, state.branch || "Dubai"), quickReplies: mainReplies() };
   }
 
   if (upper === "SERVICES" || isServices(cleanText)) {
@@ -369,18 +389,18 @@ function buildReply(text, key, hasAttachment) {
   if (hasAttachment) {
     return {
       text: ar ? "وصلتنا الرسالة أو الملف ✅\nفريقنا رح يراجعها ويرد عليك بأقرب وقت." : "We received your message or file ✅\nOur team will review it and reply as soon as possible.",
-      quickReplies: mainReplies(ar)
+      quickReplies: mainReplies()
     };
   }
 
   if (isGreeting(cleanText)) {
     conversationState.set(key, {});
-    return { text: welcomeBody(ar), quickReplies: mainReplies(ar), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
+    return { text: welcomeBody(), quickReplies: mainReplies(), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
   }
 
   return {
     text: ar ? "اختر كيف فينا نساعدك:" : "Please choose how we can help:",
-    quickReplies: mainReplies(ar)
+    quickReplies: mainReplies()
   };
 }
 
