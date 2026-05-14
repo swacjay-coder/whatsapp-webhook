@@ -48,6 +48,12 @@ Before any future change:
 - Instagram Business Account ID: `17841405436149878`
 - Webhook callback: `https://iconic-meta-dm.onrender.com/webhook`
 
+## Pending Meta DM work
+- Improve Instagram/Messenger auto-replies step by step, starting from the current clean working base.
+- Do not reintroduce `smart-name` customer profile lookup until it is redesigned safely; the previous smart-name attempt stopped replies.
+- Do not reintroduce Meta DM Team Inbox unless explicitly requested.
+- Pending staff notification feature: when a Meta DM booking request is completed, notify Dubai staff number ending `811` for Dubai branch and Abu Dhabi staff number ending `616` for Abu Dhabi branch. This is postponed and must be implemented later as a separate change, not mixed with reply-copy improvements.
+
 ## Future assistant behavior
 - Always proceed step by step.
 - Avoid many options at once.
