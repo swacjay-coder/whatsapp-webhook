@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-smart-faq-intent-layer-phase1-instagram-page-sender-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-smart-faq-phase1-fallback-message-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -569,8 +569,10 @@ function locationBody(branch = "Dubai", lang = "en") {
 
 function fallbackBody(lang = "en") {
   return isAr(lang)
-    ? `ممكن تساعدني أوجهك بشكل أسرع؟ اختر من القائمة:`
-    : `Let me guide you faster. Please choose from the menu:`;
+    ? `أنا هون لمساعدتك 👋
+اختار أحد الخيارات من القائمة:`
+    : `I’m here to help 👋
+Please choose one of the options below:`;
 }
 
 function getStaffNumberForBranch(branch) {
