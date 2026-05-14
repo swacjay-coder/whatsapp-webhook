@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-main-message-bilingual-buttons";
+const BOT_VERSION = "iconic-meta-dm-v1-main-message-staff-notify-v1";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -56,6 +56,37 @@ const DETAILS_VIDEO_URL = (
 const DUBAI_LOCATION_URL = process.env.DUBAI_LOCATION_URL || "https://maps.app.goo.gl/KyyhbpVVZJ2ixEEBA";
 const ABU_DHABI_LOCATION_URL = process.env.ABU_DHABI_LOCATION_URL || "https://maps.app.goo.gl/twg5JEuP6JgKWP1s7";
 const BUSINESS_NAME = "I C O N I C   H A I R   C A R E";
+
+const STAFF_NOTIFY_ENABLED = (process.env.STAFF_NOTIFY_ENABLED || "true").toString().toLowerCase() !== "false";
+
+const STAFF_WHATSAPP_TOKEN = (
+  process.env.STAFF_WHATSAPP_TOKEN ||
+  process.env.WHATSAPP_ACCESS_TOKEN ||
+  process.env.WHATSAPP_TOKEN ||
+  process.env.META_WA_TOKEN ||
+  process.env.WHATSAPP_CLOUD_API_TOKEN ||
+  ""
+).toString().trim();
+
+const STAFF_WHATSAPP_PHONE_NUMBER_ID = (
+  process.env.STAFF_WHATSAPP_PHONE_NUMBER_ID ||
+  process.env.WHATSAPP_PHONE_NUMBER_ID ||
+  process.env.META_WA_PHONE_NUMBER_ID ||
+  process.env.PHONE_NUMBER_ID ||
+  ""
+).toString().trim();
+
+const DUBAI_STAFF_NUMBER = (
+  process.env.DUBAI_STAFF_NUMBER ||
+  "971503424811"
+).toString().replace(/\D/g, "");
+
+const ABU_DHABI_STAFF_NUMBER = (
+  process.env.ABU_DHABI_STAFF_NUMBER ||
+  process.env.ABUDHABI_STAFF_NUMBER ||
+  process.env.ABU_DHABI_STAFF_WHATSAPP ||
+  ""
+).toString().replace(/\D/g, "");
 
 const conversationState = new Map();
 
@@ -322,6 +353,91 @@ function locationBody(ar, branch = "Dubai") {
     : `This is our ${branch} branch location:\n\n${locationUrl}`;
 }
 
+
+function getStaffNumberForBranch(branch) {
+  return branch === "Abu Dhabi" ? ABU_DHABI_STAFF_NUMBER : DUBAI_STAFF_NUMBER;
+}
+
+function buildStaffBookingAlert(state, channel, senderId) {
+  const requestType = state.intent === "service"
+    ? "Service Appointment | موعد سيرفس"
+    : "Consultation Booking | حجز استشارة";
+
+  const branchAr = state.branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
+
+  return `🔔 New Meta DM Booking Request
+
+القناة: ${channel}
+نوع الطلب: ${requestType}
+الفرع: ${state.branch || "Dubai"} | ${branchAr}
+اليوم: ${state.day || "Not selected"}
+الوقت: ${state.time || "Flexible"}${state.staff ? `\nالمختص: ${state.staff}` : ""}
+
+Customer sender ID:
+${senderId}
+
+الرجاء متابعة العميل من Instagram / Meta Inbox.`;
+}
+
+async function sendStaffWhatsAppText(to, body) {
+  if (!STAFF_NOTIFY_ENABLED) {
+    console.log("[Staff Notify] skipped because STAFF_NOTIFY_ENABLED=false");
+    return { ok: false, skipped: true };
+  }
+
+  if (!to) {
+    console.log("[Staff Notify] skipped: staff number missing");
+    return { ok: false, skipped: true, reason: "missing_staff_number" };
+  }
+
+  if (!STAFF_WHATSAPP_TOKEN || !STAFF_WHATSAPP_PHONE_NUMBER_ID) {
+    console.log("[Staff Notify] skipped: WhatsApp token or phone number ID missing");
+    return { ok: false, skipped: true, reason: "missing_whatsapp_env" };
+  }
+
+  const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(STAFF_WHATSAPP_PHONE_NUMBER_ID)}/messages`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${STAFF_WHATSAPP_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: {
+        preview_url: false,
+        body: body.toString().slice(0, 4000)
+      }
+    })
+  });
+
+  const text = await response.text();
+  let result;
+  try {
+    result = JSON.parse(text);
+  } catch (error) {
+    result = { raw: text };
+  }
+
+  if (!response.ok) {
+    console.log(`[Staff Notify] failed status=${response.status}`);
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`[Staff Notify] sent to ${to}`);
+  }
+
+  return { ok: response.ok, status: response.status, result };
+}
+
+async function notifyStaffBooking(state, channel, senderId) {
+  const staffNumber = getStaffNumberForBranch(state.branch || "Dubai");
+  const alertText = buildStaffBookingAlert(state, channel, senderId);
+  return sendStaffWhatsAppText(staffNumber, alertText);
+}
+
 function buildReply(text, key, hasAttachment) {
   const ar = isArabic(text);
   const state = getState(key);
@@ -371,7 +487,7 @@ function buildReply(text, key, hasAttachment) {
     state.time = time;
     const done = { ...state };
     resetState(key);
-    return { text: finalSummaryBody(done, ar), quickReplies: [] };
+    return { text: finalSummaryBody(done, ar), quickReplies: [], staffNotification: done };
   }
 
   if (upper === "RESULTS" || isResults(cleanText)) {
@@ -527,6 +643,10 @@ async function handleEvent(event, channel) {
 
   await sendText(senderId, reply.text, reply.quickReplies || [], channel);
 
+  if (reply.staffNotification) {
+    await notifyStaffBooking(reply.staffNotification, channel, senderId);
+  }
+
   if (reply.sendResultsMedia) {
     if (META_RESULTS_IMAGE_URL) await sendMedia(senderId, "image", META_RESULTS_IMAGE_URL, channel);
     if (META_RESULTS_VIDEO_URL) await sendMedia(senderId, "video", META_RESULTS_VIDEO_URL, channel);
@@ -548,7 +668,11 @@ app.get("/api/version", (req, res) => {
     resultsVideoConfigured: Boolean(META_RESULTS_VIDEO_URL),
     facebookGraphVersion: FACEBOOK_GRAPH_VERSION,
     instagramGraphVersion: INSTAGRAM_GRAPH_VERSION,
-    instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`
+    instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`,
+    staffNotifyEnabled: STAFF_NOTIFY_ENABLED,
+    staffWhatsAppConfigured: Boolean(STAFF_WHATSAPP_TOKEN && STAFF_WHATSAPP_PHONE_NUMBER_ID),
+    dubaiStaffConfigured: Boolean(DUBAI_STAFF_NUMBER),
+    abuDhabiStaffConfigured: Boolean(ABU_DHABI_STAFF_NUMBER)
   });
 });
 
