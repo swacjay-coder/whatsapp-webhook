@@ -11,10 +11,11 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-video-details-staff-alert-v1";
+const BOT_VERSION = "iconic-meta-dm-v1-video-details-staff-alert-typing-v1";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
+const TYPING_DELAY_MS = Math.max(300, Math.min(2500, Number.parseInt(process.env.TYPING_DELAY_MS || "900", 10) || 900));
 
 const MESSENGER_PAGE_ACCESS_TOKEN = (
   process.env.MESSENGER_PAGE_ACCESS_TOKEN ||
@@ -840,6 +841,62 @@ function getGraphBaseUrl(channel) {
   return `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}`;
 }
 
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendTypingOn(senderId, channel) {
+  const config = getSendConfig(channel);
+  if (!config.accountId || !config.token) {
+    return { ok: false, skipped: true };
+  }
+
+  const graphBaseUrl = getGraphBaseUrl(channel);
+  const url = `${graphBaseUrl}/${encodeURIComponent(config.accountId)}/messages`;
+
+  const payload = {
+    recipient: { id: senderId },
+    sender_action: "typing_on"
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (error) {
+        result = { raw: text };
+      }
+
+      console.log(`[Typing] failed channel=${channel} status=${response.status}`);
+      console.log(JSON.stringify(result, null, 2));
+      return { ok: false, status: response.status, result };
+    }
+
+    return { ok: true, status: response.status };
+  } catch (error) {
+    console.log(`[Typing] error channel=${channel}`);
+    console.log(error);
+    return { ok: false, error: true };
+  }
+}
+
+async function showTypingBeforeReply(senderId, channel) {
+  await sendTypingOn(senderId, channel);
+  await sleep(TYPING_DELAY_MS);
+}
+
 async function sendMetaMessage(senderId, messagePayload, channel) {
   const config = getSendConfig(channel);
   if (!config.accountId || !config.token) {
@@ -927,6 +984,7 @@ async function handleEvent(event, channel) {
     await sendMedia(senderId, reply.mediaType || "image", reply.mediaUrl, channel);
   }
 
+  await showTypingBeforeReply(senderId, channel);
   await sendText(senderId, reply.text, reply.quickReplies || [], channel);
 
   if (reply.staffNotification) {
@@ -964,6 +1022,7 @@ app.get("/api/version", (req, res) => {
     facebookGraphVersion: FACEBOOK_GRAPH_VERSION,
     instagramGraphVersion: INSTAGRAM_GRAPH_VERSION,
     instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`,
+    typingDelayMs: TYPING_DELAY_MS,
     staffNotifyEnabled: STAFF_NOTIFY_ENABLED,
     staffWhatsAppConfigured: Boolean(STAFF_WHATSAPP_TOKEN && STAFF_WHATSAPP_PHONE_NUMBER_ID),
     dubaiStaffConfigured: Boolean(DUBAI_STAFF_NUMBER),
