@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-dm-inbox-log";
+const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-better-replies-v2-smart-name";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -57,157 +57,59 @@ const DUBAI_LOCATION_URL = process.env.DUBAI_LOCATION_URL || "https://maps.app.g
 const ABU_DHABI_LOCATION_URL = process.env.ABU_DHABI_LOCATION_URL || "https://maps.app.goo.gl/twg5JEuP6JgKWP1s7";
 const BUSINESS_NAME = "I C O N I C   H A I R   C A R E";
 
-const META_DM_INBOX_USER = (
-  process.env.META_DM_INBOX_USER ||
-  process.env.INBOX_USER ||
-  ""
-).toString().trim();
-
-const META_DM_INBOX_PASS = (
-  process.env.META_DM_INBOX_PASS ||
-  process.env.INBOX_PASS ||
-  ""
-).toString();
-
-const META_DM_INBOX_LIMIT = Math.max(
-  50,
-  Math.min(1000, Number.parseInt(process.env.META_DM_INBOX_LIMIT || "300", 10) || 300)
-);
-
 const conversationState = new Map();
-const dmInbox = [];
-
-
-function escapeHtml(value) {
-  return (value || "").toString().replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[char]));
-}
-
-function requireMetaDmInboxAuth(req, res, next) {
-  if (!META_DM_INBOX_USER || !META_DM_INBOX_PASS) {
-    return res.status(503).send("Meta DM Inbox auth is not configured. Set META_DM_INBOX_USER and META_DM_INBOX_PASS in Render.");
-  }
-
-  const header = (req.headers.authorization || "").toString();
-  const [scheme, encoded] = header.split(" ");
-
-  if (scheme === "Basic" && encoded) {
-    const decoded = Buffer.from(encoded, "base64").toString("utf8");
-    const separatorIndex = decoded.indexOf(":");
-    const user = separatorIndex >= 0 ? decoded.slice(0, separatorIndex) : decoded;
-    const pass = separatorIndex >= 0 ? decoded.slice(separatorIndex + 1) : "";
-
-    if (user === META_DM_INBOX_USER && pass === META_DM_INBOX_PASS) {
-      return next();
-    }
-  }
-
-  res.set("WWW-Authenticate", 'Basic realm="Iconic Meta DM Inbox"');
-  return res.status(401).send("Authentication required.");
-}
-
-function recordDmInbox(item) {
-  const saved = {
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    at: item.at || new Date().toISOString(),
-    channel: item.channel || "Unknown",
-    direction: item.direction || "unknown",
-    senderId: item.senderId || "",
-    messageType: item.messageType || "",
-    text: item.text || "",
-    quickReplies: Array.isArray(item.quickReplies) ? item.quickReplies : [],
-    hasAttachment: Boolean(item.hasAttachment),
-    sendOk: typeof item.sendOk === "boolean" ? item.sendOk : null,
-    status: item.status || null
-  };
-
-  dmInbox.unshift(saved);
-
-  if (dmInbox.length > META_DM_INBOX_LIMIT) {
-    dmInbox.splice(META_DM_INBOX_LIMIT);
-  }
-
-  return saved;
-}
-
-function getMessageType(event) {
-  if (event?.message?.quick_reply?.payload) return "quick_reply";
-  if (event?.postback?.payload || event?.postback?.title) return "postback";
-  if (hasAttachment(event)) return "attachment";
-  return "text";
-}
-
-function buildDmInboxHtml() {
-  const rows = dmInbox.map((item) => {
-    const directionLabel = item.direction === "customer" ? "Customer" : item.direction === "bot" ? "Bot" : item.direction;
-    const quickReplies = item.quickReplies.length ? `<div class="quick">Buttons: ${escapeHtml(item.quickReplies.join(", "))}</div>` : "";
-    const status = item.sendOk === null ? "" : item.sendOk ? "Sent" : `Failed${item.status ? " / " + item.status : ""}`;
-
-    return `<tr>
-      <td>${escapeHtml(new Date(item.at).toLocaleString("en-GB", { timeZone: "Asia/Dubai" }))}</td>
-      <td><span class="badge">${escapeHtml(item.channel)}</span></td>
-      <td>${escapeHtml(directionLabel)}</td>
-      <td>${escapeHtml(item.senderId)}</td>
-      <td>${escapeHtml(item.messageType)}${item.hasAttachment ? " 📎" : ""}</td>
-      <td><div class="msg">${escapeHtml(item.text)}</div>${quickReplies}</td>
-      <td>${escapeHtml(status)}</td>
-    </tr>`;
-  }).join("");
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="refresh" content="15" />
-  <title>Iconic Meta DM Inbox</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f6f7f9; color: #111827; }
-    header { background: #111827; color: #fff; padding: 18px 22px; }
-    h1 { margin: 0; font-size: 20px; }
-    .sub { margin-top: 6px; opacity: .8; font-size: 13px; }
-    main { padding: 18px; }
-    table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-    th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; vertical-align: top; font-size: 13px; }
-    th { background: #f3f4f6; font-weight: 700; position: sticky; top: 0; }
-    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #e5e7eb; font-size: 12px; }
-    .msg { white-space: pre-wrap; line-height: 1.35; max-width: 520px; }
-    .quick { margin-top: 6px; font-size: 12px; color: #4b5563; }
-    .empty { background: #fff; padding: 24px; border-radius: 8px; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Iconic Hair Care — Meta DM Inbox</h1>
-    <div class="sub">Instagram + Messenger messages. Auto-refresh every 15 seconds. Stored in memory since last deploy/restart.</div>
-  </header>
-  <main>
-    ${dmInbox.length ? `<table>
-      <thead>
-        <tr>
-          <th>Dubai Time</th>
-          <th>Channel</th>
-          <th>Direction</th>
-          <th>Sender ID</th>
-          <th>Type</th>
-          <th>Message</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>` : `<div class="empty">No Meta DM messages logged yet.</div>`}
-  </main>
-</body>
-</html>`;
-}
+const profileCache = new Map();
 
 function normalizeText(value) {
   return (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function getDubaiDateParts() {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Dubai",
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short"
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
+  const weekday = parts.find((part) => part.type === "weekday")?.value || "";
+
+  return { hour, minute, minutes: hour * 60 + minute, weekday };
+}
+
+function isTodayPayload(payload) {
+  return payload === "DAY_TODAY";
+}
+
+function getAvailableTimeSlots(dayPayload) {
+  const allSlots = [
+    { title: "10:00 AM", payload: "TIME_1000", minutes: 10 * 60 },
+    { title: "11:00 AM", payload: "TIME_1100", minutes: 11 * 60 },
+    { title: "12:00 PM", payload: "TIME_1200", minutes: 12 * 60 },
+    { title: "1:00 PM", payload: "TIME_1300", minutes: 13 * 60 },
+    { title: "2:00 PM", payload: "TIME_1400", minutes: 14 * 60 },
+    { title: "3:00 PM", payload: "TIME_1500", minutes: 15 * 60 },
+    { title: "4:00 PM", payload: "TIME_1600", minutes: 16 * 60 },
+    { title: "5:00 PM", payload: "TIME_1700", minutes: 17 * 60 },
+    { title: "6:00 PM", payload: "TIME_1800", minutes: 18 * 60 },
+    { title: "6:30 PM", payload: "TIME_1830", minutes: 18 * 60 + 30 }
+  ];
+
+  if (!isTodayPayload(dayPayload)) return allSlots;
+
+  const now = getDubaiDateParts();
+  const bufferMinutes = 30;
+  return allSlots.filter((slot) => slot.minutes >= now.minutes + bufferMinutes);
+}
+
+function getPreferredLanguage(text, state) {
+  if (isArabic(text)) return "ar";
+  if (state?.lang) return state.lang;
+  return "en";
 }
 
 function isArabic(text) {
@@ -222,46 +124,57 @@ function quickReply(title, payload) {
   };
 }
 
-function mainReplies(ar) {
-  return ar
-    ? [quickReply("حجز", "BOOKING"), quickReply("خدماتنا", "SERVICES"), quickReply("فريقنا", "TEAM")]
-    : [quickReply("Booking", "BOOKING"), quickReply("Services", "SERVICES"), quickReply("Team", "TEAM")];
+function mainReplies() {
+  return [
+    quickReply("Booking | حجز", "BOOKING"),
+    quickReply("Services | خدمات", "SERVICES"),
+    quickReply("Team | فريقنا", "TEAM")
+  ];
 }
 
-function bookingReplies(ar) {
-  return ar
-    ? [quickReply("استشارة", "CONSULT"), quickReply("سيرفس", "SERVICE"), quickReply("ساعدني", "TEAM")]
-    : [quickReply("Consult", "CONSULT"), quickReply("Service", "SERVICE"), quickReply("Help", "TEAM")];
+function bookingReplies() {
+  return [
+    quickReply("Consult | استشارة", "CONSULT"),
+    quickReply("Service | سيرفس", "SERVICE"),
+    quickReply("Help | فريقنا", "TEAM")
+  ];
 }
 
-function servicesReplies(ar) {
-  return ar
-    ? [quickReply("نتائج", "RESULTS"), quickReply("موقعنا", "LOCATION"), quickReply("استشارة", "CONSULT")]
-    : [quickReply("Results", "RESULTS"), quickReply("Location", "LOCATION"), quickReply("Consult", "CONSULT")];
+function servicesReplies() {
+  return [
+    quickReply("Results | نتائج", "RESULTS"),
+    quickReply("Location | موقع", "LOCATION"),
+    quickReply("Consult | استشارة", "CONSULT")
+  ];
 }
 
-function resultsReplies(ar) {
-  return ar
-    ? [quickReply("استشارة", "CONSULT"), quickReply("فريقنا", "TEAM")]
-    : [quickReply("Consult", "CONSULT"), quickReply("Team", "TEAM")];
+function resultsReplies() {
+  return [
+    quickReply("Consult | استشارة", "CONSULT"),
+    quickReply("Location | موقع", "LOCATION"),
+    quickReply("Team | فريقنا", "TEAM")
+  ];
 }
 
-function branchReplies(ar) {
-  return ar
-    ? [quickReply("دبي", "BRANCH_DUBAI"), quickReply("أبوظبي", "BRANCH_ABUDHABI")]
-    : [quickReply("Dubai", "BRANCH_DUBAI"), quickReply("Abu Dhabi", "BRANCH_ABUDHABI")];
+function branchReplies() {
+  return [
+    quickReply("Dubai | دبي", "BRANCH_DUBAI"),
+    quickReply("Abu Dhabi | أبوظبي", "BRANCH_ABUDHABI")
+  ];
 }
 
-function dayReplies(ar) {
-  return ar
-    ? [quickReply("اليوم", "DAY_TODAY"), quickReply("بكرا", "DAY_TOMORROW"), quickReply("هذا الأسبوع", "DAY_WEEK")]
-    : [quickReply("Today", "DAY_TODAY"), quickReply("Tomorrow", "DAY_TOMORROW"), quickReply("This week", "DAY_WEEK")];
+function dayReplies() {
+  return [
+    quickReply("Today | اليوم", "DAY_TODAY"),
+    quickReply("Tomorrow | بكرا", "DAY_TOMORROW"),
+    quickReply("This week | أسبوع", "DAY_WEEK")
+  ];
 }
 
-function timeReplies(ar) {
-  return ar
-    ? [quickReply("5:00", "TIME_5"), quickReply("6:00", "TIME_6"), quickReply("6:30", "TIME_630")]
-    : [quickReply("5:00 PM", "TIME_5"), quickReply("6:00 PM", "TIME_6"), quickReply("6:30 PM", "TIME_630")];
+function timeReplies(dayPayload) {
+  const slots = getAvailableTimeSlots(dayPayload).map((slot) => quickReply(slot.title, slot.payload));
+  slots.push(quickReply("Flexible | مرن", "TIME_FLEXIBLE"));
+  return slots.slice(0, 13);
 }
 
 function staffReplies(ar) {
@@ -349,18 +262,31 @@ function payloadToBranch(payload) {
   return "";
 }
 
-function payloadToDay(payload, ar) {
-  if (payload === "DAY_TODAY") return ar ? "اليوم" : "Today";
-  if (payload === "DAY_TOMORROW") return ar ? "بكرا" : "Tomorrow";
-  if (payload === "DAY_WEEK") return ar ? "هذا الأسبوع" : "This week";
+function payloadToDay(payload) {
+  if (payload === "DAY_TODAY") return "Today | اليوم";
+  if (payload === "DAY_TOMORROW") return "Tomorrow | بكرا";
+  if (payload === "DAY_WEEK") return "This week | هذا الأسبوع";
   return "";
 }
 
 function payloadToTime(payload) {
-  if (payload === "TIME_5") return "5:00 PM";
-  if (payload === "TIME_6") return "6:00 PM";
-  if (payload === "TIME_630") return "6:30 PM";
-  return "";
+  const times = {
+    TIME_1000: "10:00 AM",
+    TIME_1100: "11:00 AM",
+    TIME_1200: "12:00 PM",
+    TIME_1300: "1:00 PM",
+    TIME_1400: "2:00 PM",
+    TIME_1500: "3:00 PM",
+    TIME_1600: "4:00 PM",
+    TIME_1700: "5:00 PM",
+    TIME_1800: "6:00 PM",
+    TIME_1830: "6:30 PM",
+    TIME_FLEXIBLE: "Flexible | مرن",
+    TIME_5: "5:00 PM",
+    TIME_6: "6:00 PM",
+    TIME_630: "6:30 PM"
+  };
+  return times[payload] || "";
 }
 
 function payloadToStaff(payload) {
@@ -380,117 +306,266 @@ function payloadToStaff(payload) {
   return names[payload] || "";
 }
 
-function welcomeBody(ar) {
-  return ar
-    ? `Hello 👋\n\nمعك ${BUSINESS_NAME}\n\nكيف فينا نساعدك؟`
-    : `Hello 👋\n\nYou are chatting with ${BUSINESS_NAME}.\n\nHow can we help you?`;
+function welcomeBody(customerName = "") {
+  const safeName = (customerName || "").toString().trim();
+  const greeting = safeName ? `Hello ${safeName} 👋` : "Hello 👋";
+
+  return `${greeting}
+
+معك المساعد الذكي الخاص بـ
+
+${BUSINESS_NAME}
+
+نساعدك بحجز استشارة، خدمة للعميل الحالي، مشاهدة النتائج، أو التواصل مع الفريق.
+
+You are chatting with the smart assistant of
+
+${BUSINESS_NAME}
+
+We can help with consultation booking, existing-client service, viewing results, or connecting you with the team.`;
 }
 
-function bookingBody(ar) {
-  return ar
-    ? "أكيد، اختر نوع الحجز المناسب لك:\n\nإذا كنت عميل حالي وتريد خدمة / متابعة / تركيب / تعديل، اختر سيرفس.\n\nإذا كنت عميل جديد وتريد معرفة الحل الأنسب، اختر استشارة.\n\n------------------------------\n\nSure, please choose the right booking type."
-    : "Sure, please choose the right booking type:\n\nIf you are an existing client and need service / follow-up / fitting / adjustment, choose Service.\n\nIf you are a new client and want to know the best solution, choose Consultation.";
+function bookingBody() {
+  return `أكيد، اختر نوع الحجز المناسب لك:
+
+استشارة: للعميل الجديد لمعرفة الحل الأنسب.
+سيرفس: للعميل الحالي للمتابعة، التركيب، التعديل، أو الصيانة.
+
+Sure, please choose the right booking type:
+
+Consultation: for new clients who want the best solution.
+Service: for existing clients who need follow-up, fitting, adjustment, or maintenance.`;
 }
 
-function servicesBody(ar) {
-  return ar
-    ? "أكيد ✨\n\nفي Iconic Hair Care نقدم حلول Hair Replacement بمظهر طبيعي 100%، بدون جراحة.\n\nشو تحب تشوف أولاً؟"
-    : "Sure ✨\n\nAt Iconic Hair Care, we provide Hair Replacement solutions with a 100% natural look, without surgery.\n\nWhat would you like to check first?";
+function servicesBody() {
+  return `أكيد ✨
+
+في Iconic Hair Care نقدم حلول Hair Replacement بمظهر طبيعي 100%، بدون جراحة، وبخصوصية عالية.
+
+At Iconic Hair Care, we provide non-surgical Hair Replacement with a 100% natural look and high privacy.
+
+شو تحب تشوف أولاً؟ / What would you like to check first?`;
 }
 
-function resultsBody(ar) {
-  return ar
-    ? "هذه بعض النتائج الحقيقية من Iconic Hair Care.\n\nمظهر طبيعي، بدون جراحة، وبشكل يناسبك تماماً.\n\nشو تحب تعمل بعد ما شفت النتائج؟"
-    : "Here are some real results from Iconic Hair Care.\n\nNatural look, non-surgical, and designed to suit you.\n\nWhat would you like to do next?";
+function resultsBody() {
+  return `هذه بعض النتائج من Iconic Hair Care.
+
+المظهر طبيعي، بدون جراحة، ويتم اختيار الشكل حسب الوجه والستايل المناسب لك.
+
+Here are some Iconic Hair Care results.
+Natural look, non-surgical, and customized to your face shape and style.
+
+الخطوة التالية؟ / Next step?`;
 }
 
-function askBranchBody(ar, intent) {
-  const label = intent === "service" ? "Service" : "Consultation";
-  return ar
-    ? `تمام، اختر الفرع المناسب لـ ${label}:`
-    : `Great, please choose the branch for your ${label}:`;
+function askBranchBody(intent) {
+  const label = intent === "service" ? "Service | سيرفس" : intent === "location" ? "Location | الموقع" : "Consultation | استشارة";
+  return `تمام، اختر الفرع المناسب لـ ${label}:
+
+Great, please choose the branch for ${label}:`;
 }
 
-function askStaffBody(ar) {
-  return ar
-    ? "اختر المختص المفضل للسيرفس، أو اختر أي مختص متاح:"
-    : "Choose your preferred service specialist, or choose any available specialist:";
+function askStaffBody() {
+  return `اختر المختص المفضل للسيرفس، أو اختر أي مختص متاح.
+
+Choose your preferred service specialist, or choose any available specialist.`;
 }
 
-function askDayBody(ar) {
-  return ar ? "تمام، اختر اليوم المناسب:" : "Great, please choose your preferred day:";
+function askDayBody() {
+  return `تمام، اختر اليوم المناسب:
+
+Great, please choose your preferred day:`;
 }
 
-function askTimeBody(ar) {
-  return ar ? "تمام، اختر الوقت المفضل:" : "Great, please choose your preferred time:";
+function askTimeBody(dayPayload) {
+  if (isTodayPayload(dayPayload) && getAvailableTimeSlots(dayPayload).length === 0) {
+    return `مواعيد اليوم خلصت حسب توقيت دبي.
+
+Today's available slots are finished based on Dubai time.
+
+اختر بكرا أو هذا الأسبوع. / Please choose Tomorrow or This week.`;
+  }
+
+  return `تمام، اختر الوقت المفضل حسب توقيت دبي:
+
+Great, please choose your preferred time based on Dubai time:`;
 }
 
-function finalSummaryBody(state, ar) {
+function finalSummaryBody(state) {
   const branch = state.branch || "Dubai";
-  const day = state.day || (ar ? "غير محدد" : "Not selected");
-  const time = state.time || "Flexible";
+  const day = state.day || "Not selected | غير محدد";
+  const time = state.time || "Flexible | مرن";
   const staff = state.staff || "";
-  const requestType = state.intent === "service" ? "Service Appointment" : "Consultation Booking";
-  return ar
-    ? `تم استلام طلبك ✅\n\nنوع الطلب: ${requestType}\nالفرع: ${branch}\nاليوم: ${day}\nالوقت: ${time}${staff ? `\nالمختص: ${staff}` : ""}\n\nالفريق سيراجع الطلب ويرد عليك قريباً للتأكيد.\n\n------------------------------\n\nYour request has been received ✅\nOur team will confirm shortly.`
-    : `Your request has been received ✅\n\nRequest type: ${requestType}\nBranch: ${branch}\nDay: ${day}\nTime: ${time}${staff ? `\nSpecialist: ${staff}` : ""}\n\nOur team will review the request and confirm shortly.`;
+  const requestType = state.intent === "service" ? "Service Appointment | موعد سيرفس" : "Consultation Booking | حجز استشارة";
+
+  return `تم استلام طلبك ✅
+
+نوع الطلب: ${requestType}
+الفرع: ${branch}
+اليوم: ${day}
+الوقت: ${time}${staff ? `
+المختص: ${staff}` : ""}
+
+الفريق سيراجع الطلب ويرد عليك قريباً لتأكيد الموعد.
+
+Your request has been received ✅
+Our team will review it and confirm your appointment shortly.`;
 }
 
-function teamBody(ar) {
-  return ar
-    ? "تمام 👌\n\nتم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.\n\nملاحظة: تم إيقاف الردود التلقائية مؤقتاً لهذه المحادثة."
-    : "Done 👌\n\nYour conversation has been forwarded to our team. One of our specialists will assist you shortly.\n\nNote: Automatic replies have been paused for this conversation.";
+function teamBody() {
+  return `تمام 👌
+
+تم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.
+
+Done 👌
+Your conversation has been forwarded to our team. One of our specialists will assist you shortly.`;
 }
 
-function locationBody(ar, branch = "Dubai") {
+function locationBody(branch = "Dubai") {
   const locationUrl = branch === "Abu Dhabi" ? ABU_DHABI_LOCATION_URL : DUBAI_LOCATION_URL;
-  return ar
-    ? `هذا هو موقع فرع ${branch === "Abu Dhabi" ? "أبوظبي" : "دبي"}:\n\n${locationUrl}`
-    : `This is our ${branch} branch location:\n\n${locationUrl}`;
+  const branchAr = branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
+
+  return `هذا هو موقع فرع ${branchAr}:
+
+${locationUrl}
+
+This is our ${branch} branch location:
+
+${locationUrl}`;
 }
 
-function buildReply(text, key, hasAttachment) {
-  const ar = isArabic(text);
+
+function pickDisplayName(profile) {
+  const rawName =
+    profile?.name ||
+    profile?.first_name ||
+    profile?.username ||
+    profile?.user_name ||
+    "";
+
+  return rawName.toString().trim().slice(0, 40);
+}
+
+async function getCustomerDisplayName(senderId, channel) {
+  const cacheKey = `${channel}:${senderId}`;
+  const cached = profileCache.get(cacheKey);
+
+  if (cached && Date.now() - cached.at < 24 * 60 * 60 * 1000) {
+    return cached.name;
+  }
+
+  const config = getSendConfig(channel);
+  if (!senderId || !config?.token) {
+    return "";
+  }
+
+  const fields = channel === "Instagram"
+    ? "name,username,profile_pic"
+    : "first_name,last_name,profile_pic";
+
+  const graphBaseUrl = getGraphBaseUrl(channel);
+  const url = `${graphBaseUrl}/${encodeURIComponent(senderId)}?fields=${encodeURIComponent(fields)}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${config.token}`
+      }
+    });
+
+    const text = await response.text();
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (error) {
+      result = {};
+    }
+
+    let name = "";
+    if (channel === "Messenger") {
+      name = [result.first_name, result.last_name].filter(Boolean).join(" ").trim();
+    } else {
+      name = pickDisplayName(result);
+    }
+
+    profileCache.set(cacheKey, { name, at: Date.now() });
+    return name;
+  } catch (error) {
+    profileCache.set(cacheKey, { name: "", at: Date.now() });
+    return "";
+  }
+}
+
+function buildReply(text, key, hasAttachment, customerName = "") {
   const state = getState(key);
+  const lang = getPreferredLanguage(text, state);
+  const ar = lang === "ar";
+  state.lang = lang;
+
   const cleanText = (text || "").toString().trim();
   const upper = cleanText.toUpperCase();
 
   if (upper === "TEAM" || isTeam(cleanText)) {
     resetState(key);
-    return { text: teamBody(ar), quickReplies: [] };
+    return { text: teamBody(), quickReplies: [] };
   }
 
   if (upper === "BOOKING" || isBooking(cleanText)) {
-    conversationState.set(key, { intent: "booking" });
-    return { text: bookingBody(ar), quickReplies: bookingReplies(ar) };
+    conversationState.set(key, { intent: "booking", lang });
+    return { text: bookingBody(), quickReplies: bookingReplies() };
   }
 
   if (upper === "CONSULT" || isConsult(cleanText)) {
-    conversationState.set(key, { intent: "consult" });
-    return { text: askBranchBody(ar, "consult"), quickReplies: branchReplies(ar) };
+    conversationState.set(key, { intent: "consult", lang });
+    return { text: askBranchBody("consult"), quickReplies: branchReplies() };
   }
 
   if (upper === "SERVICE" || isService(cleanText)) {
-    conversationState.set(key, { intent: "service" });
-    return { text: askStaffBody(ar), quickReplies: staffReplies(ar) };
+    conversationState.set(key, { intent: "service", lang });
+    return { text: askStaffBody(), quickReplies: staffReplies(ar) };
+  }
+
+  if (upper === "LOCATION" || isLocation(cleanText)) {
+    conversationState.set(key, { intent: "location", lang });
+    return { text: askBranchBody("location"), quickReplies: branchReplies() };
+  }
+
+  if (upper === "SERVICES" || isServices(cleanText)) {
+    return { text: servicesBody(), quickReplies: servicesReplies(), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
+  }
+
+  if (upper === "RESULTS" || isResults(cleanText)) {
+    return { text: resultsBody(), quickReplies: resultsReplies(), sendResultsMedia: true };
   }
 
   const staff = payloadToStaff(upper);
   if (staff && state.intent === "service") {
     state.staff = staff;
-    return { text: askBranchBody(ar, "service"), quickReplies: branchReplies(ar) };
+    return { text: askBranchBody("service"), quickReplies: branchReplies() };
   }
 
   const branch = payloadToBranch(upper);
-  if (branch && state.intent) {
-    state.branch = branch;
-    return { text: askDayBody(ar), quickReplies: dayReplies(ar) };
+  if (branch && state.intent === "location") {
+    resetState(key);
+    return { text: locationBody(branch), quickReplies: mainReplies() };
   }
 
-  const day = payloadToDay(upper, ar);
+  if (branch && state.intent) {
+    state.branch = branch;
+    return { text: askDayBody(), quickReplies: dayReplies() };
+  }
+
+  const day = payloadToDay(upper);
   if (day && state.intent) {
     state.day = day;
-    return { text: askTimeBody(ar), quickReplies: timeReplies(ar) };
+    state.dayPayload = upper;
+
+    if (isTodayPayload(upper) && getAvailableTimeSlots(upper).length === 0) {
+      return { text: askTimeBody(upper), quickReplies: [quickReply("Tomorrow | بكرا", "DAY_TOMORROW"), quickReply("This week | أسبوع", "DAY_WEEK")] };
+    }
+
+    return { text: askTimeBody(upper), quickReplies: timeReplies(upper) };
   }
 
   const time = payloadToTime(upper);
@@ -498,36 +573,30 @@ function buildReply(text, key, hasAttachment) {
     state.time = time;
     const done = { ...state };
     resetState(key);
-    return { text: finalSummaryBody(done, ar), quickReplies: [] };
-  }
-
-  if (upper === "RESULTS" || isResults(cleanText)) {
-    return { text: resultsBody(ar), quickReplies: resultsReplies(ar), sendResultsMedia: true };
-  }
-
-  if (upper === "LOCATION" || isLocation(cleanText)) {
-    return { text: locationBody(ar, state.branch || "Dubai"), quickReplies: mainReplies(ar) };
-  }
-
-  if (upper === "SERVICES" || isServices(cleanText)) {
-    return { text: servicesBody(ar), quickReplies: servicesReplies(ar), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
+    return { text: finalSummaryBody(done), quickReplies: [] };
   }
 
   if (hasAttachment) {
     return {
-      text: ar ? "وصلتنا الرسالة أو الملف ✅\nفريقنا رح يراجعها ويرد عليك بأقرب وقت." : "We received your message or file ✅\nOur team will review it and reply as soon as possible.",
-      quickReplies: mainReplies(ar)
+      text: `وصلتنا الرسالة أو الملف ✅
+فريقنا رح يراجعها ويرد عليك بأقرب وقت.
+
+We received your message or file ✅
+Our team will review it and reply as soon as possible.`,
+      quickReplies: mainReplies()
     };
   }
 
   if (isGreeting(cleanText)) {
-    conversationState.set(key, {});
-    return { text: welcomeBody(ar), quickReplies: mainReplies(ar), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
+    conversationState.set(key, { lang });
+    return { text: welcomeBody(customerName), quickReplies: mainReplies(), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
   }
 
   return {
-    text: ar ? "اختر كيف فينا نساعدك:" : "Please choose how we can help:",
-    quickReplies: mainReplies(ar)
+    text: `اختر كيف فينا نساعدك:
+
+Please choose how we can help:`,
+    quickReplies: mainReplies()
   };
 }
 
@@ -645,72 +714,19 @@ async function handleEvent(event, channel) {
   if (!senderId) return;
 
   const incomingText = getIncomingText(event);
-  const attachmentFlag = hasAttachment(event);
-  const messageType = getMessageType(event);
-
-  recordDmInbox({
-    channel,
-    direction: "customer",
-    senderId,
-    messageType,
-    text: incomingText || (attachmentFlag ? "[attachment]" : ""),
-    hasAttachment: attachmentFlag
-  });
-
+  const customerName = await getCustomerDisplayName(senderId, channel);
   const key = `${channel}:${senderId}`;
-  const reply = buildReply(incomingText, key, attachmentFlag);
+  const reply = buildReply(incomingText, key, hasAttachment(event), customerName);
 
   if (reply.mediaUrl) {
-    const mediaResult = await sendMedia(senderId, reply.mediaType || "image", reply.mediaUrl, channel);
-    recordDmInbox({
-      channel,
-      direction: "bot",
-      senderId,
-      messageType: reply.mediaType || "image",
-      text: reply.mediaUrl,
-      sendOk: mediaResult.ok,
-      status: mediaResult.status
-    });
+    await sendMedia(senderId, reply.mediaType || "image", reply.mediaUrl, channel);
   }
 
-  const textResult = await sendText(senderId, reply.text, reply.quickReplies || [], channel);
-  recordDmInbox({
-    channel,
-    direction: "bot",
-    senderId,
-    messageType: "text",
-    text: reply.text,
-    quickReplies: (reply.quickReplies || []).map((item) => item.title),
-    sendOk: textResult.ok,
-    status: textResult.status
-  });
+  await sendText(senderId, reply.text, reply.quickReplies || [], channel);
 
   if (reply.sendResultsMedia) {
-    if (META_RESULTS_IMAGE_URL) {
-      const imageResult = await sendMedia(senderId, "image", META_RESULTS_IMAGE_URL, channel);
-      recordDmInbox({
-        channel,
-        direction: "bot",
-        senderId,
-        messageType: "image",
-        text: META_RESULTS_IMAGE_URL,
-        sendOk: imageResult.ok,
-        status: imageResult.status
-      });
-    }
-
-    if (META_RESULTS_VIDEO_URL) {
-      const videoResult = await sendMedia(senderId, "video", META_RESULTS_VIDEO_URL, channel);
-      recordDmInbox({
-        channel,
-        direction: "bot",
-        senderId,
-        messageType: "video",
-        text: META_RESULTS_VIDEO_URL,
-        sendOk: videoResult.ok,
-        status: videoResult.status
-      });
-    }
+    if (META_RESULTS_IMAGE_URL) await sendMedia(senderId, "image", META_RESULTS_IMAGE_URL, channel);
+    if (META_RESULTS_VIDEO_URL) await sendMedia(senderId, "video", META_RESULTS_VIDEO_URL, channel);
   }
 }
 
@@ -722,33 +738,15 @@ app.get("/api/version", (req, res) => {
   res.json({
     ok: true,
     version: BOT_VERSION,
-    routes: ["GET /webhook", "POST /webhook", "GET /api/version", "GET /dm-inbox", "GET /api/dm-inbox"],
+    routes: ["GET /webhook", "POST /webhook", "GET /api/version"],
     messengerConfigured: Boolean(MESSENGER_PAGE_ACCESS_TOKEN && MESSENGER_PAGE_ID),
     instagramConfigured: Boolean(INSTAGRAM_ACCESS_TOKEN && INSTAGRAM_BUSINESS_ACCOUNT_ID),
     resultsImageConfigured: Boolean(META_RESULTS_IMAGE_URL),
     resultsVideoConfigured: Boolean(META_RESULTS_VIDEO_URL),
     facebookGraphVersion: FACEBOOK_GRAPH_VERSION,
     instagramGraphVersion: INSTAGRAM_GRAPH_VERSION,
-    instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`,
-    dmInboxEnabled: true,
-    dmInboxItems: dmInbox.length,
-    dmInboxAuthConfigured: Boolean(META_DM_INBOX_USER && META_DM_INBOX_PASS)
+    instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`
   });
-});
-
-
-app.get("/api/dm-inbox", requireMetaDmInboxAuth, (req, res) => {
-  res.json({
-    ok: true,
-    version: BOT_VERSION,
-    total: dmInbox.length,
-    limit: META_DM_INBOX_LIMIT,
-    items: dmInbox
-  });
-});
-
-app.get("/dm-inbox", requireMetaDmInboxAuth, (req, res) => {
-  res.status(200).send(buildDmInboxHtml());
 });
 
 app.get("/webhook", (req, res) => {
