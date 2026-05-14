@@ -27,12 +27,13 @@ Before any future change:
 - Render service: `iconic-meta-dm`
 - URL: `https://iconic-meta-dm.onrender.com`
 - Version endpoint: `https://iconic-meta-dm.onrender.com/api/version`
-- Current working version: `iconic-meta-dm-independent-v1-ig-graph-routing`
+- Current working version should be confirmed from `/api/version` after every deploy.
 
 ## Confirmed Meta DM working state
 - Instagram DM is confirmed working.
 - Messenger is configured and working.
 - WhatsApp Team Inbox was not touched during Meta DM work.
+- If Instagram Test webhook reaches Render but real Instagram DMs do not reach Logs, the issue may be a stale Instagram account webhook subscription. The confirmed fix was: in Instagram API setup, toggle the Instagram account Webhook Subscription OFF, wait about 10 seconds, then turn it ON again. After that, real Instagram DM events reached Render again.
 
 ## Important Meta DM routing
 - Instagram sends use `graph.instagram.com`.
