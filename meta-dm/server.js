@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-smart-language-branch-sender-v1";
+const BOT_VERSION = "iconic-meta-dm-v1-smart-faq-intent-layer-phase1";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -106,7 +106,7 @@ const ABU_DHABI_STAFF_NUMBER = (
   process.env.ABU_DHABI_STAFF_NUMBER ||
   process.env.ABUDHABI_STAFF_NUMBER ||
   process.env.ABU_DHABI_STAFF_WHATSAPP ||
-  ""
+  "971503750616"
 ).toString().replace(/\D/g, "");
 
 const conversationState = new Map();
@@ -139,7 +139,13 @@ function getTurnLanguage(text, state) {
     value.includes("results") ||
     value.includes("details") ||
     value.includes("location") ||
-    value.includes("team")
+    value.includes("team") ||
+    value.includes("price") ||
+    value.includes("cost") ||
+    value.includes("surgery") ||
+    value.includes("natural") ||
+    value.includes("pain") ||
+    value.includes("duration")
   ) {
     return "en";
   }
@@ -161,100 +167,63 @@ function quickReply(title, payload) {
 
 function mainReplies(lang = "en") {
   return isAr(lang)
-    ? [
-        quickReply("حجز", "BOOKING"),
-        quickReply("خدمات", "SERVICES"),
-        quickReply("فريقنا", "TEAM")
-      ]
-    : [
-        quickReply("Booking", "BOOKING"),
-        quickReply("Services", "SERVICES"),
-        quickReply("Team", "TEAM")
-      ];
+    ? [quickReply("حجز", "BOOKING"), quickReply("خدمات", "SERVICES"), quickReply("فريقنا", "TEAM")]
+    : [quickReply("Booking", "BOOKING"), quickReply("Services", "SERVICES"), quickReply("Team", "TEAM")];
 }
 
 function bookingReplies(lang = "en") {
   return isAr(lang)
-    ? [
-        quickReply("استشارة", "CONSULT"),
-        quickReply("سيرفس", "SERVICE"),
-        quickReply("فريقنا", "TEAM")
-      ]
-    : [
-        quickReply("Consult", "CONSULT"),
-        quickReply("Service", "SERVICE"),
-        quickReply("Team", "TEAM")
-      ];
+    ? [quickReply("استشارة", "CONSULT"), quickReply("سيرفس", "SERVICE"), quickReply("فريقنا", "TEAM")]
+    : [quickReply("Consult", "CONSULT"), quickReply("Service", "SERVICE"), quickReply("Team", "TEAM")];
 }
 
 function servicesReplies(lang = "en") {
   return isAr(lang)
-    ? [
-        quickReply("نتائج", "RESULTS"),
-        quickReply("تفاصيل", "DETAILS"),
-        quickReply("الموقع", "LOCATION"),
-        quickReply("استشارة", "CONSULT")
-      ]
-    : [
-        quickReply("Results", "RESULTS"),
-        quickReply("Details", "DETAILS"),
-        quickReply("Location", "LOCATION"),
-        quickReply("Consult", "CONSULT")
-      ];
+    ? [quickReply("نتائج", "RESULTS"), quickReply("تفاصيل", "DETAILS"), quickReply("الموقع", "LOCATION"), quickReply("استشارة", "CONSULT")]
+    : [quickReply("Results", "RESULTS"), quickReply("Details", "DETAILS"), quickReply("Location", "LOCATION"), quickReply("Consult", "CONSULT")];
 }
 
 function resultsReplies(lang = "en") {
   return isAr(lang)
-    ? [
-        quickReply("تفاصيل", "DETAILS"),
-        quickReply("حجز", "BOOKING"),
-        quickReply("فريقنا", "TEAM")
-      ]
-    : [
-        quickReply("Details", "DETAILS"),
-        quickReply("Booking", "BOOKING"),
-        quickReply("Team", "TEAM")
-      ];
+    ? [quickReply("تفاصيل", "DETAILS"), quickReply("حجز", "BOOKING"), quickReply("فريقنا", "TEAM")]
+    : [quickReply("Details", "DETAILS"), quickReply("Booking", "BOOKING"), quickReply("Team", "TEAM")];
 }
 
 function detailsReplies(lang = "en") {
   return isAr(lang)
-    ? [
-        quickReply("نتائج", "RESULTS"),
-        quickReply("حجز", "BOOKING"),
-        quickReply("فريقنا", "TEAM")
-      ]
-    : [
-        quickReply("Results", "RESULTS"),
-        quickReply("Booking", "BOOKING"),
-        quickReply("Team", "TEAM")
-      ];
+    ? [quickReply("نتائج", "RESULTS"), quickReply("حجز", "BOOKING"), quickReply("فريقنا", "TEAM")]
+    : [quickReply("Results", "RESULTS"), quickReply("Booking", "BOOKING"), quickReply("Team", "TEAM")];
+}
+
+function intentReplies(intent, lang = "en") {
+  if (intent === "booking") return bookingReplies(lang);
+  if (intent === "location") {
+    return isAr(lang)
+      ? [quickReply("دبي", "BRANCH_DUBAI"), quickReply("أبوظبي", "BRANCH_ABUDHABI"), quickReply("حجز", "BOOKING")]
+      : [quickReply("Dubai", "BRANCH_DUBAI"), quickReply("Abu Dhabi", "BRANCH_ABUDHABI"), quickReply("Booking", "BOOKING")];
+  }
+  if (intent === "team") {
+    return isAr(lang)
+      ? [quickReply("دبي", "BRANCH_DUBAI"), quickReply("أبوظبي", "BRANCH_ABUDHABI"), quickReply("القائمة", "MAIN_MENU")]
+      : [quickReply("Dubai", "BRANCH_DUBAI"), quickReply("Abu Dhabi", "BRANCH_ABUDHABI"), quickReply("Main Menu", "MAIN_MENU")];
+  }
+  if (intent === "details") return detailsReplies(lang);
+  if (intent === "results") return resultsReplies(lang);
+  return isAr(lang)
+    ? [quickReply("حجز", "BOOKING"), quickReply("نتائج", "RESULTS"), quickReply("فريقنا", "TEAM")]
+    : [quickReply("Booking", "BOOKING"), quickReply("Results", "RESULTS"), quickReply("Team", "TEAM")];
 }
 
 function branchReplies(lang = "en") {
   return isAr(lang)
-    ? [
-        quickReply("دبي", "BRANCH_DUBAI"),
-        quickReply("أبوظبي", "BRANCH_ABUDHABI")
-      ]
-    : [
-        quickReply("Dubai", "BRANCH_DUBAI"),
-        quickReply("Abu Dhabi", "BRANCH_ABUDHABI")
-      ];
+    ? [quickReply("دبي", "BRANCH_DUBAI"), quickReply("أبوظبي", "BRANCH_ABUDHABI")]
+    : [quickReply("Dubai", "BRANCH_DUBAI"), quickReply("Abu Dhabi", "BRANCH_ABUDHABI")];
 }
 
 function dayReplies(lang = "en") {
   return isAr(lang)
-    ? [
-        quickReply("اليوم", "DAY_TODAY"),
-        quickReply("بكرا", "DAY_TOMORROW"),
-        quickReply("هذا الأسبوع", "DAY_WEEK")
-      ]
-    : [
-        quickReply("Today", "DAY_TODAY"),
-        quickReply("Tomorrow", "DAY_TOMORROW"),
-        quickReply("This week", "DAY_WEEK")
-      ];
+    ? [quickReply("اليوم", "DAY_TODAY"), quickReply("بكرا", "DAY_TOMORROW"), quickReply("هذا الأسبوع", "DAY_WEEK")]
+    : [quickReply("Today", "DAY_TODAY"), quickReply("Tomorrow", "DAY_TOMORROW"), quickReply("This week", "DAY_WEEK")];
 }
 
 function getDubaiMinutesNow() {
@@ -291,7 +260,6 @@ function allTimeSlots() {
 
 function getAvailableTimeSlots(dayPayload) {
   if (!isTodayPayload(dayPayload)) return allTimeSlots();
-
   const now = getDubaiMinutesNow();
   const bufferMinutes = 30;
   return allTimeSlots().filter((slot) => slot.minutes >= now + bufferMinutes);
@@ -306,14 +274,8 @@ function timeReplies(dayPayload, lang = "en") {
 function staffReplies(branch = "Dubai", lang = "en") {
   if (branch === "Abu Dhabi") {
     return isAr(lang)
-      ? [
-          quickReply("أدهم", "STAFF_ADHAM"),
-          quickReply("أسامة", "STAFF_OSAMA")
-        ]
-      : [
-          quickReply("Adham", "STAFF_ADHAM"),
-          quickReply("Osama", "STAFF_OSAMA")
-        ];
+      ? [quickReply("أدهم", "STAFF_ADHAM"), quickReply("أسامة", "STAFF_OSAMA")]
+      : [quickReply("Adham", "STAFF_ADHAM"), quickReply("Osama", "STAFF_OSAMA")];
   }
 
   return isAr(lang)
@@ -348,75 +310,50 @@ function resetState(key) {
   conversationState.delete(key);
 }
 
+function includesAny(value, keywords) {
+  return keywords.some((keyword) => value.includes(keyword));
+}
+
 function isGreeting(text) {
   const value = normalizeText(text);
-  return !value || ["hi", "hello", "hey", "مرحبا", "هلا", "السلام عليكم", "هاي", "menu", "start"].includes(value);
+  return !value || ["hi", "hello", "hey", "مرحبا", "هلا", "السلام عليكم", "هاي", "menu", "start", "القائمة"].includes(value);
 }
 
 function isBooking(text) {
   const value = normalizeText(text);
   return ["booking", "book", "حجز", "موعد", "booking | حجز", "book appointment"].includes(value) ||
-    value.includes("احجز") ||
-    value.includes("appointment");
+    value.includes("احجز") || value.includes("appointment") || value.includes("استشارة") || value.includes("استشاره");
 }
 
 function isConsult(text) {
   const value = normalizeText(text);
-  return value === "consult" ||
-    value === "consultation" ||
-    value === "consult | استشارة" ||
-    value.includes("استشارة") ||
-    value.includes("استشاره") ||
-    value.includes("consult");
+  return value === "consult" || value === "consultation" || value === "consult | استشارة" ||
+    value.includes("استشارة") || value.includes("استشاره") || value.includes("consult");
 }
 
 function isService(text) {
   const value = normalizeText(text);
-  return value === "service" ||
-    value === "service | سيرفس" ||
-    value === "سيرفس" ||
-    value === "خدمة" ||
-    value.includes("صيانة") ||
-    value.includes("متابعة") ||
-    value.includes("تعديل") ||
-    value.includes("fitting") ||
-    value.includes("follow up") ||
-    value.includes("adjustment") ||
-    value.includes("maintenance");
+  return value === "service" || value === "service | سيرفس" || value === "سيرفس" || value === "خدمة" ||
+    value.includes("صيانة") || value.includes("متابعة") || value.includes("تعديل") ||
+    value.includes("fitting") || value.includes("follow up") || value.includes("adjustment") || value.includes("maintenance");
 }
 
 function isServices(text) {
   const value = normalizeText(text);
-  return value === "services" ||
-    value === "services | خدمات" ||
-    value === "services | خدماتنا" ||
-    value.includes("خدماتنا") ||
-    value.includes("خدمات") ||
-    value.includes("hair replacement");
+  return value === "services" || value === "services | خدمات" || value === "services | خدماتنا" ||
+    value.includes("خدماتنا") || value.includes("خدمات") || value.includes("hair replacement");
 }
 
 function isResults(text) {
   const value = normalizeText(text);
-  return value === "results" ||
-    value === "results | نتائج" ||
-    value.includes("نتائج") ||
-    value.includes("صور") ||
-    value.includes("صورة") ||
-    value.includes("photo") ||
-    value.includes("before") ||
-    value.includes("قبل وبعد");
+  return value === "results" || value === "results | نتائج" ||
+    includesAny(value, ["نتائج", "صور", "صورة", "فيديو", "قبل وبعد", "قبل و بعد", "photo", "photos", "video", "before after", "before and after", "see results"]);
 }
 
 function isDetails(text) {
   const value = normalizeText(text);
-  return value === "details" ||
-    value === "details | تفاصيل" ||
-    value === "how_it_works" ||
-    value.includes("تفاصيل") ||
-    value.includes("كيف") ||
-    value.includes("how it works") ||
-    value.includes("how works") ||
-    value.includes("process");
+  return value === "details" || value === "details | تفاصيل" || value === "how_it_works" ||
+    includesAny(value, ["تفاصيل", "طريقة التركيب", "كيف بيتركب", "كيف يتم التركيب", "كيف يشتغل", "اشرحلي", "شرح", "how it works", "how does it work", "how is it applied", "explain", "procedure", "process"]);
 }
 
 function isLocation(text) {
@@ -424,25 +361,35 @@ function isLocation(text) {
   if (raw === "BRANCH_DUBAI" || raw === "BRANCH_ABUDHABI") return false;
 
   const value = normalizeText(text);
-  return value === "location" ||
-    value === "location | موقع" ||
-    value.includes("موقع") ||
-    value.includes("لوكيشن") ||
-    value.includes("map") ||
-    value === "branch" ||
-    value === "branches";
+  return value === "location" || value === "location | موقع" ||
+    includesAny(value, ["موقع", "لوكيشن", "العنوان", "وين", "map", "address", "where", "branch", "branches"]);
 }
 
 function isTeam(text) {
   const value = normalizeText(text);
-  return value === "team" ||
-    value === "help" ||
-    value === "help | فريقنا" ||
-    value.includes("فريق") ||
-    value.includes("ساعدني") ||
-    value.includes("موظف") ||
-    value.includes("human") ||
-    value.includes("support");
+  return value === "team" || value === "help" || value === "help | فريقنا" ||
+    includesAny(value, ["فريق", "ساعدني", "مساعدة", "موظف", "كلموني", "تواصل", "بدي احكي مع حدا", "human", "support", "staff", "agent", "talk to team", "contact"]);
+}
+
+function detectSmartIntent(text) {
+  const value = normalizeText(text);
+  if (!value || isPayloadOnly(value.toUpperCase())) return "";
+
+  const intents = [
+    { name: "price", keywords: ["السعر", "الأسعار", "كم السعر", "كم التكلفة", "التكلفة", "بكم", "قديش", "كم يكلف", "price", "cost", "how much", "pricing", "charges", "rate"] },
+    { name: "results", keywords: ["نتائج", "النتائج", "صور", "صورة", "فيديو", "قبل وبعد", "قبل و بعد", "شوف النتائج", "results", "photos", "photo", "video", "before after", "before and after", "see results"] },
+    { name: "details", keywords: ["تفاصيل", "طريقة التركيب", "كيف بيتركب", "كيف يتم التركيب", "كيف يشتغل", "اشرحلي", "شرح", "details", "how it works", "how does it work", "how is it applied", "explain", "procedure"] },
+    { name: "surgery", keywords: ["جراحة", "عملية", "في عملية", "بدون جراحة", "هل يحتاج عملية", "زراعة", "surgery", "operation", "surgical", "non surgical", "non-surgical", "without surgery", "hair transplant"] },
+    { name: "natural", keywords: ["طبيعي", "بيبين طبيعي", "هل يبين طبيعي", "ما يبين تركيب", "الشكل", "يبان", "natural", "natural look", "does it look natural", "will it show", "detectable", "fake"] },
+    { name: "duration", keywords: ["كم المدة", "قديش بياخد وقت", "مدة الجلسة", "وقت التركيب", "كم ساعة", "duration", "how long", "how much time", "session time", "how many hours"] },
+    { name: "pain", keywords: ["ألم", "الم", "وجع", "بيوجع", "مؤلم", "في ألم", "هل يؤلم", "pain", "painful", "does it hurt", "hurt", "is it painful"] },
+    { name: "booking", keywords: ["حجز", "احجز", "موعد", "بدي موعد", "استشارة", "احجز استشارة", "booking", "book", "appointment", "consultation", "book consultation", "reserve"] },
+    { name: "location", keywords: ["الموقع", "وين", "العنوان", "الفرع", "دبي", "ابوظبي", "أبوظبي", "لوكيشن", "location", "where", "address", "branch", "dubai", "abu dhabi", "map"] },
+    { name: "team", keywords: ["فريق", "موظف", "كلموني", "تواصل", "بدي احكي مع حدا", "مساعدة", "ساعدني", "team", "staff", "agent", "talk to team", "contact", "help", "support", "human"] }
+  ];
+
+  const match = intents.find((intent) => includesAny(value, intent.keywords));
+  return match?.name || "";
 }
 
 function payloadToBranch(payload) {
@@ -497,104 +444,68 @@ function payloadToStaff(payload) {
 
 function welcomeBody(lang = "en") {
   if (isAr(lang)) {
-    return `مرحبا 👋
-
-معك المساعد الذكي الخاص بـ
-
-${BUSINESS_NAME}
-
-نقدر نساعدك في:
-حجز استشارة للعميل الجديد
-خدمة أو متابعة للعميل الحالي
-مشاهدة النتائج
-أو التواصل مع الفريق`;
+    return `مرحبا 👋\n\nمعك المساعد الذكي الخاص بـ\n\n${BUSINESS_NAME}\n\nنقدر نساعدك في:\nحجز استشارة للعميل الجديد\nخدمة أو متابعة للعميل الحالي\nمشاهدة النتائج\nأو التواصل مع الفريق`;
   }
 
-  return `Hello 👋
-
-You are chatting with the smart assistant of
-
-${BUSINESS_NAME}
-
-We can help you with:
-booking a consultation for new clients
-service or follow-up for existing clients
-viewing results
-or connecting with our team`;
+  return `Hello 👋\n\nYou are chatting with the smart assistant of\n\n${BUSINESS_NAME}\n\nWe can help you with:\nbooking a consultation for new clients\nservice or follow-up for existing clients\nviewing results\nor connecting with our team`;
 }
 
 function bookingBody(lang = "en") {
   if (isAr(lang)) {
-    return `تمام، اختر نوع الحجز المناسب لك:
-
-استشارة: إذا كنت عميل جديد وتريد معرفة الحل الأنسب لك.
-سيرفس: إذا كنت عميل حالي وتحتاج متابعة، تركيب، تعديل، أو صيانة.`;
+    return `تمام، اختر نوع الحجز المناسب لك:\n\nاستشارة: إذا كنت عميل جديد وتريد معرفة الحل الأنسب لك.\nسيرفس: إذا كنت عميل حالي وتحتاج متابعة، تركيب، تعديل، أو صيانة.`;
   }
 
-  return `Sure, please choose the right booking type:
-
-Consultation: for new clients who want the best solution.
-Service: for existing clients who need follow-up, fitting, adjustment, or maintenance.`;
+  return `Sure, please choose the right booking type:\n\nConsultation: for new clients who want the best solution.\nService: for existing clients who need follow-up, fitting, adjustment, or maintenance.`;
 }
 
 function servicesBody(lang = "en") {
   if (isAr(lang)) {
-    return `أكيد ✨
-
-في Iconic Hair Care نقدم حلول Hair Replacement بمظهر طبيعي 100%، بدون جراحة، وبخصوصية عالية.
-
-شو تحب تشوف أولاً؟`;
+    return `أكيد ✨\n\nفي Iconic Hair Care نقدم حلول Hair Replacement بمظهر طبيعي 100%، بدون جراحة، وبخصوصية عالية.\n\nشو تحب تشوف أولاً؟`;
   }
 
-  return `Sure ✨
-
-At Iconic Hair Care, we provide non-surgical Hair Replacement with a 100% natural look and high privacy.
-
-What would you like to check first?`;
+  return `Sure ✨\n\nAt Iconic Hair Care, we provide non-surgical Hair Replacement with a 100% natural look and high privacy.\n\nWhat would you like to check first?`;
 }
 
 function resultsBody(lang = "en") {
   if (isAr(lang)) {
-    return `أكيد ✨
-
-هذه بعض النتائج من Iconic Hair Care.
-المظهر طبيعي، بدون جراحة، وبشكل يناسبك تماماً.
-
-إذا لم يظهر الفيديو مباشرة، سنرسل لك رابط الفيديو أيضاً.
-
-الخطوة التالية؟`;
+    return `أكيد، فيك تشوف بعض النتائج الطبيعية لعملائنا.\n\nالهدف دائمًا يكون شكل طبيعي، مرتب، ومناسب لملامح كل شخص.\n\nإذا لم يظهر الفيديو مباشرة، سنرسل لك رابط الفيديو أيضاً.`;
   }
 
-  return `Sure ✨
-
-Here are some Iconic Hair Care results.
-Natural look, non-surgical, and designed to suit you.
-
-If the video does not open directly, we will also send you the video link.
-
-What would you like to do next?`;
+  return `Sure, you can see some of our natural-looking client results.\n\nOur goal is always a clean, natural look that matches each person's features.\n\nIf the video does not open directly, we will also send you the video link.`;
 }
 
 function detailsBody(lang = "en") {
   if (isAr(lang)) {
-    return `أكيد ✨
-
-الطريقة بسيطة ومريحة:
-نبدأ بفهم الشكل المناسب لك، ثم نختار اللوك الأقرب لطبيعة شعرك، وبعدها يتم التطبيق بمظهر طبيعي بدون جراحة.
-
-إذا لم يظهر الفيديو مباشرة، سنرسل لك رابط الفيديو أيضاً.
-
-شو تحب تعمل الآن؟`;
+    return `الفكرة بسيطة:\n\nنختار الحل المناسب حسب حالتك، ثم يتم تركيب الشعر بطريقة احترافية تعطي مظهر طبيعي بدون جراحة.\n\nكل شيء يتم داخل المركز وبخصوصية.\n\nإذا لم يظهر الفيديو مباشرة، سنرسل لك رابط الفيديو أيضاً.`;
   }
 
-  return `Sure ✨
+  return `The idea is simple:\n\nWe choose the right solution for your case, then apply it professionally to give a natural look without surgery.\n\nEverything is done in the center with privacy.\n\nIf the video does not open directly, we will also send you the video link.`;
+}
 
-The process is simple and comfortable:
-We start by understanding the look that suits you, choose the closest natural style for your hair, then apply it with a natural, non-surgical result.
+function smartIntentBody(intent, lang = "en") {
+  const ar = {
+    price: `أكيد 👋\n\nالسعر يختلف حسب الحالة، والمساحة المطلوبة، ونوع الخدمة المناسبة لك.\n\nالأفضل نعمل لك استشارة بسيطة حتى نحدد الحل الأنسب والسعر بشكل واضح، بدون أي التزام.`,
+    surgery: `لا، الخدمة بدون جراحة وبدون عملية.\n\nهي حل غير جراحي يعطي مظهر طبيعي، ويتم داخل المركز بدون تدخل طبي جراحي.`,
+    natural: `نعم، هدفنا الأساسي أن يكون الشكل طبيعي جدًا ومناسب لملامحك.\n\nنختار الكثافة، اللون، والتصميم حسب شكل الوجه حتى ما يعطي مظهر صناعي.`,
+    duration: `مدة الجلسة تختلف حسب الحالة والخدمة المطلوبة.\n\nعادة يتم توضيح الوقت بعد الاستشارة، لأن كل حالة تختلف حسب المساحة والتفاصيل المطلوبة.`,
+    pain: `لا، الخدمة غير جراحية ولا تحتاج عملية.\n\nعادة تكون مريحة، والفريق يشرح لك كل خطوة قبل البدء.`,
+    booking: `أكيد 👋\n\nفينا نساعدك بحجز استشارة أو موعد خدمة.\n\nاختار نوع الحجز المناسب لك، والفريق يتابع معك التفاصيل.`,
+    location: `عندنا فرعين:\n\nDubai branch\nAbu Dhabi branch\n\nاختار الفرع المناسب لك حتى نرسل لك الموقع الصحيح.`,
+    team: `أكيد، رح نخلي أحد أعضاء الفريق يتابع معك.\n\nاكتب لنا سؤالك أو اختار الفرع المناسب حتى نوجهك بشكل أسرع.`
+  };
 
-If the video does not open directly, we will also send you the video link.
+  const en = {
+    price: `Of course 👋\n\nThe price depends on your case, the area needed, and the best service option for you.\n\nThe best step is a quick consultation so we can recommend the right solution and give you a clear price with no obligation.`,
+    surgery: `No, it does not require surgery.\n\nIt is a non-surgical solution designed to give a natural look, done inside the center without a surgical procedure.`,
+    natural: `Yes, the main goal is a very natural look that suits your features.\n\nWe choose the density, color, and design based on your face shape so it does not look artificial.`,
+    duration: `The session duration depends on the case and the service needed.\n\nUsually, we confirm the time after the consultation because every case is different depending on the area and details required.`,
+    pain: `No, the service is non-surgical and does not require an operation.\n\nIt is usually comfortable, and the team explains every step before starting.`,
+    booking: `Sure 👋\n\nWe can help you book a consultation or a service appointment.\n\nChoose the right booking type, and the team will follow up with the details.`,
+    location: `We have two branches:\n\nDubai branch\nAbu Dhabi branch\n\nChoose the branch that suits you so we can send the correct location.`,
+    team: `Sure, one of our team members will follow up with you.\n\nPlease write your question or choose the right branch so we can guide you faster.`
+  };
 
-What would you like to do now?`;
+  return isAr(lang) ? ar[intent] : en[intent];
 }
 
 function askBranchBody(intent, lang = "en") {
@@ -608,15 +519,8 @@ function askBranchBody(intent, lang = "en") {
 }
 
 function askStaffBody(branch = "Dubai", lang = "en") {
-  if (isAr(lang)) {
-    return branch === "Abu Dhabi"
-      ? `اختر مختص فرع أبوظبي:`
-      : `اختر مختص فرع دبي:`;
-  }
-
-  return branch === "Abu Dhabi"
-    ? `Choose your Abu Dhabi branch specialist:`
-    : `Choose your Dubai branch specialist:`;
+  if (isAr(lang)) return branch === "Abu Dhabi" ? `اختر مختص فرع أبوظبي:` : `اختر مختص فرع دبي:`;
+  return branch === "Abu Dhabi" ? `Choose your Abu Dhabi branch specialist:` : `Choose your Dubai branch specialist:`;
 }
 
 function askDayBody(lang = "en") {
@@ -626,17 +530,11 @@ function askDayBody(lang = "en") {
 function askTimeBody(dayPayload, lang = "en") {
   if (isTodayPayload(dayPayload) && getAvailableTimeSlots(dayPayload).length === 0) {
     return isAr(lang)
-      ? `مواعيد اليوم خلصت حسب توقيت دبي.
-
-اختر بكرا أو هذا الأسبوع.`
-      : `Today's available slots are finished based on Dubai time.
-
-Please choose Tomorrow or This week.`;
+      ? `مواعيد اليوم خلصت حسب توقيت دبي.\n\nاختر بكرا أو هذا الأسبوع.`
+      : `Today's available slots are finished based on Dubai time.\n\nPlease choose Tomorrow or This week.`;
   }
 
-  return isAr(lang)
-    ? `تمام، اختر الوقت المفضل حسب توقيت دبي:`
-    : `Great, please choose your preferred time based on Dubai time:`;
+  return isAr(lang) ? `تمام، اختر الوقت المفضل حسب توقيت دبي:` : `Great, please choose your preferred time based on Dubai time:`;
 }
 
 function finalSummaryBody(state, lang = "en") {
@@ -648,52 +546,31 @@ function finalSummaryBody(state, lang = "en") {
 
   if (isAr(lang)) {
     const requestType = state.intent === "service" ? "موعد سيرفس" : "حجز استشارة";
-    return `تم استلام طلبك ✅
-
-نوع الطلب: ${requestType}
-الفرع: ${branchAr}
-اليوم: ${day}
-الوقت: ${time}${staff ? `
-المختص: ${staff}` : ""}
-
-الفريق سيراجع الطلب ويرد عليك قريباً لتأكيد الموعد.`;
+    return `تم استلام طلبك ✅\n\nنوع الطلب: ${requestType}\nالفرع: ${branchAr}\nاليوم: ${day}\nالوقت: ${time}${staff ? `\nالمختص: ${staff}` : ""}\n\nالفريق سيراجع الطلب ويرد عليك قريباً لتأكيد الموعد.`;
   }
 
   const requestType = state.intent === "service" ? "Service Appointment" : "Consultation Booking";
-  return `Your request has been received ✅
-
-Request type: ${requestType}
-Branch: ${branch}
-Day: ${day}
-Time: ${time}${staff ? `
-Specialist: ${staff}` : ""}
-
-Our team will review it and confirm your appointment shortly.`;
+  return `Your request has been received ✅\n\nRequest type: ${requestType}\nBranch: ${branch}\nDay: ${day}\nTime: ${time}${staff ? `\nSpecialist: ${staff}` : ""}\n\nOur team will review it and confirm your appointment shortly.`;
 }
 
 function teamBody(lang = "en") {
   if (isAr(lang)) {
-    return `تمام 👌
-
-تم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.`;
+    return `تمام 👌\n\nتم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.`;
   }
 
-  return `Done 👌
-
-Your conversation has been forwarded to our team. One of our specialists will assist you shortly.`;
+  return `Done 👌\n\nYour conversation has been forwarded to our team. One of our specialists will assist you shortly.`;
 }
 
 function locationBody(branch = "Dubai", lang = "en") {
   const locationUrl = branch === "Abu Dhabi" ? ABU_DHABI_LOCATION_URL : DUBAI_LOCATION_URL;
   const branchAr = branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
+  return isAr(lang) ? `هذا هو موقع فرع ${branchAr}:\n\n${locationUrl}` : `This is our ${branch} branch location:\n\n${locationUrl}`;
+}
 
+function fallbackBody(lang = "en") {
   return isAr(lang)
-    ? `هذا هو موقع فرع ${branchAr}:
-
-${locationUrl}`
-    : `This is our ${branch} branch location:
-
-${locationUrl}`;
+    ? `ممكن تساعدني أوجهك بشكل أسرع؟ اختر من القائمة:`
+    : `Let me guide you faster. Please choose from the menu:`;
 }
 
 function getStaffNumberForBranch(branch) {
@@ -701,50 +578,20 @@ function getStaffNumberForBranch(branch) {
 }
 
 function getStaffSenderPhoneNumberIdForBranch(branch) {
-  return branch === "Abu Dhabi"
-    ? ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID
-    : DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID;
+  return branch === "Abu Dhabi" ? ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID : DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID;
 }
 
 function buildStaffBookingAlert(state, channel, senderId) {
-  const isService = state.intent === "service";
-  const requestTypeAr = isService ? "موعد سيرفس" : "حجز استشارة";
-  const requestTypeEn = isService ? "Service Appointment" : "Consultation Booking";
+  const isServiceRequest = state.intent === "service";
+  const requestTypeAr = isServiceRequest ? "موعد سيرفس" : "حجز استشارة";
+  const requestTypeEn = isServiceRequest ? "Service Appointment" : "Consultation Booking";
   const branchEn = state.branch || "Dubai";
   const branchAr = branchEn === "Abu Dhabi" ? "أبوظبي" : "دبي";
   const day = state.day || "Not selected | غير محدد";
   const time = state.time || "Flexible | مرن";
   const staff = state.staff || "Not selected | غير محدد";
 
-  return `🔔 طلب حجز جديد من Instagram / Messenger
-
-القناة: ${channel}
-نوع الطلب: ${requestTypeAr}
-الفرع: ${branchAr}
-اليوم: ${day}
-الوقت: ${time}
-المختص: ${staff}
-
-رقم/معرّف العميل داخل Meta:
-${senderId}
-
-الرجاء متابعة العميل من Instagram / Meta Inbox.
-
-------------------------------
-
-🔔 New booking request from Instagram / Messenger
-
-Channel: ${channel}
-Request type: ${requestTypeEn}
-Branch: ${branchEn}
-Day: ${day}
-Time: ${time}
-Specialist: ${staff}
-
-Meta customer sender ID:
-${senderId}
-
-Please follow up with the client from Instagram / Meta Inbox.`;
+  return `🔔 طلب حجز جديد من Instagram / Messenger\n\nالقناة: ${channel}\nنوع الطلب: ${requestTypeAr}\nالفرع: ${branchAr}\nاليوم: ${day}\nالوقت: ${time}\nالمختص: ${staff}\n\nرقم/معرّف العميل داخل Meta:\n${senderId}\n\nالرجاء متابعة العميل من Instagram / Meta Inbox.\n\n------------------------------\n\n🔔 New booking request from Instagram / Messenger\n\nChannel: ${channel}\nRequest type: ${requestTypeEn}\nBranch: ${branchEn}\nDay: ${day}\nTime: ${time}\nSpecialist: ${staff}\n\nMeta customer sender ID:\n${senderId}\n\nPlease follow up with the client from Instagram / Meta Inbox.`;
 }
 
 async function sendStaffWhatsAppText(to, body, phoneNumberId) {
@@ -766,413 +613,456 @@ async function sendStaffWhatsAppText(to, body, phoneNumberId) {
   }
 
   const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(senderPhoneNumberId)}/messages`;
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "text",
+    text: { preview_url: false, body }
+  };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${STAFF_WHATSAPP_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: {
-        preview_url: false,
-        body: body.toString().slice(0, 4000)
-      }
-    })
-  });
-
-  const text = await response.text();
-  let result;
   try {
-    result = JSON.parse(text);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${STAFF_WHATSAPP_TOKEN}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.log("[Staff Notify] failed", response.status, JSON.stringify(data));
+      return { ok: false, status: response.status, data };
+    }
+
+    console.log("[Staff Notify] sent", JSON.stringify(data));
+    return { ok: true, data };
   } catch (error) {
-    result = { raw: text };
+    console.log("[Staff Notify] error", error.message);
+    return { ok: false, error: error.message };
   }
-
-  if (!response.ok) {
-    console.log(`[Staff Notify] failed status=${response.status}`);
-    console.log(JSON.stringify(result, null, 2));
-  } else {
-    const messageId = result?.messages?.[0]?.id || "no-message-id";
-    console.log(`[Staff Notify] sent from ${senderPhoneNumberId} to ${to} messageId=${messageId}`);
-    console.log(JSON.stringify(result, null, 2));
-  }
-
-  return { ok: response.ok, status: response.status, result };
 }
 
-async function notifyStaffBooking(state, channel, senderId) {
-  const branch = state.branch || "Dubai";
-  const staffNumber = getStaffNumberForBranch(branch);
-  const senderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(branch);
-  const alertText = buildStaffBookingAlert(state, channel, senderId);
-  return sendStaffWhatsAppText(staffNumber, alertText, senderPhoneNumberId);
-}
-
-
-function isStaffAllowedForBranch(staffPayload, branch = "Dubai") {
-  const abuDhabiStaff = ["STAFF_ADHAM", "STAFF_OSAMA"];
-  const dubaiStaff = [
-    "STAFF_AHMAD",
-    "STAFF_WAEL",
-    "STAFF_TAMER",
-    "STAFF_BASHIR",
-    "STAFF_EMAD",
-    "STAFF_HAMOUDA",
-    "STAFF_ANI",
-    "STAFF_OMAR"
-  ];
-
-  return branch === "Abu Dhabi"
-    ? abuDhabiStaff.includes(staffPayload)
-    : dubaiStaff.includes(staffPayload);
-}
-
-function buildReply(text, key, hasAttachment) {
-  const state = getState(key);
-  const cleanText = (text || "").toString().trim();
-  const upper = cleanText.toUpperCase();
-  const lang = getTurnLanguage(cleanText, state);
-  state.lang = lang;
-
-  if (upper === "TEAM" || isTeam(cleanText)) {
-    resetState(key);
-    return { text: teamBody(lang), quickReplies: [] };
-  }
-
-  if (upper === "BOOKING" || isBooking(cleanText)) {
-    conversationState.set(key, { intent: "booking", lang });
-    return { text: bookingBody(lang), quickReplies: bookingReplies(lang) };
-  }
-
-  if (upper === "CONSULT" || isConsult(cleanText)) {
-    conversationState.set(key, { intent: "consult", lang });
-    return { text: askBranchBody("consult", lang), quickReplies: branchReplies(lang) };
-  }
-
-  if (upper === "SERVICE" || isService(cleanText)) {
-    conversationState.set(key, { intent: "service", lang });
-    return { text: askBranchBody("service", lang), quickReplies: branchReplies(lang) };
-  }
-
-  if (upper === "SERVICES" || isServices(cleanText)) {
-    return { text: servicesBody(lang), quickReplies: servicesReplies(lang) };
-  }
-
-  if (upper === "RESULTS" || isResults(cleanText)) {
-    return { text: resultsBody(lang), quickReplies: resultsReplies(lang), sendResultsMedia: true };
-  }
-
-  if (upper === "DETAILS" || isDetails(cleanText)) {
-    return { text: detailsBody(lang), quickReplies: detailsReplies(lang), sendDetailsMedia: true };
-  }
-
-  const staff = payloadToStaff(upper);
-  if (staff && state.intent === "service") {
-    if (!state.branch) {
-      return { text: askBranchBody("service", lang), quickReplies: branchReplies(lang) };
-    }
-
-    if (!isStaffAllowedForBranch(upper, state.branch)) {
-      return { text: askStaffBody(state.branch, lang), quickReplies: staffReplies(state.branch, lang) };
-    }
-
-    state.staff = staff;
-    state.lang = lang;
-    return { text: askDayBody(lang), quickReplies: dayReplies(lang) };
-  }
-
-  const branch = payloadToBranch(upper);
-  if (branch && state.intent === "location") {
-    resetState(key);
-    return { text: locationBody(branch, lang), quickReplies: mainReplies(lang) };
-  }
-
-  if (branch && state.intent === "service") {
-    state.branch = branch;
-    state.lang = lang;
-    return { text: askStaffBody(branch, lang), quickReplies: staffReplies(branch, lang) };
-  }
-
-  if (branch && state.intent) {
-    state.branch = branch;
-    state.lang = lang;
-    return { text: askDayBody(lang), quickReplies: dayReplies(lang) };
-  }
-
-  if (upper === "LOCATION" || isLocation(cleanText)) {
-    conversationState.set(key, { intent: "location", lang });
-    return { text: askBranchBody("location", lang), quickReplies: branchReplies(lang) };
-  }
-
-  const day = payloadToDay(upper);
-  if (day && state.intent) {
-    state.day = day;
-    state.dayPayload = upper;
-    state.lang = lang;
-
-    if (isTodayPayload(upper) && getAvailableTimeSlots(upper).length === 0) {
-      return {
-        text: askTimeBody(upper, lang),
-        quickReplies: [
-          quickReply(isAr(lang) ? "بكرا" : "Tomorrow", "DAY_TOMORROW"),
-          quickReply(isAr(lang) ? "هذا الأسبوع" : "This week", "DAY_WEEK")
-        ]
-      };
-    }
-
-    return { text: askTimeBody(upper, lang), quickReplies: timeReplies(upper, lang) };
-  }
-
-  const time = payloadToTime(upper);
-  if (time && state.intent) {
-    state.time = time;
-    state.lang = lang;
-    const done = { ...state };
-    resetState(key);
-    return { text: finalSummaryBody(done, lang), quickReplies: [], staffNotification: done };
-  }
-
-  if (hasAttachment) {
+function getChannelConfig(channel) {
+  if (channel === "instagram") {
     return {
-      text: isAr(lang)
-        ? `وصلتنا الرسالة أو الملف ✅
-فريقنا رح يراجعها ويرد عليك بأقرب وقت.`
-        : `We received your message or file ✅
-Our team will review it and reply as soon as possible.`,
-      quickReplies: mainReplies(lang)
+      graphVersion: INSTAGRAM_GRAPH_VERSION,
+      senderId: INSTAGRAM_BUSINESS_ACCOUNT_ID,
+      accessToken: INSTAGRAM_ACCESS_TOKEN
     };
   }
 
-  if (isGreeting(cleanText)) {
-    conversationState.set(key, { lang });
-    return { text: welcomeBody(lang), quickReplies: mainReplies(lang) };
-  }
-
   return {
-    text: isAr(lang) ? `اختر كيف فينا نساعدك:` : `Please choose how we can help:`,
-    quickReplies: mainReplies(lang)
+    graphVersion: FACEBOOK_GRAPH_VERSION,
+    senderId: MESSENGER_PAGE_ID || "me",
+    accessToken: MESSENGER_PAGE_ACCESS_TOKEN
   };
 }
 
-function getChannel(body) {
-  const objectName = (body?.object || "").toString().toLowerCase();
-  return objectName.includes("instagram") ? "Instagram" : "Messenger";
-}
+async function sendMetaMessage(channel, recipientId, message) {
+  const config = getChannelConfig(channel);
 
-function getSendConfig(channel) {
-  const isInstagram = channel === "Instagram";
-  return {
-    accountId: isInstagram ? INSTAGRAM_BUSINESS_ACCOUNT_ID : MESSENGER_PAGE_ID,
-    token: isInstagram ? INSTAGRAM_ACCESS_TOKEN : MESSENGER_PAGE_ACCESS_TOKEN
-  };
-}
-
-function getIncomingText(event) {
-  return (
-    event?.message?.quick_reply?.payload ||
-    event?.message?.text ||
-    event?.postback?.payload ||
-    event?.postback?.title ||
-    ""
-  ).toString().trim();
-}
-
-function hasAttachment(event) {
-  return Array.isArray(event?.message?.attachments) && event.message.attachments.length > 0;
-}
-
-function isSystemEvent(event) {
-  return Boolean(
-    event?.message?.is_echo ||
-    event?.delivery ||
-    event?.read ||
-    event?.optin ||
-    event?.account_linking ||
-    event?.take_thread_control ||
-    event?.pass_thread_control ||
-    event?.request_thread_control
-  );
-}
-
-function getGraphBaseUrl(channel) {
-  if (channel === "Instagram") {
-    return `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`;
-  }
-  return `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}`;
-}
-
-async function sendMetaMessage(senderId, messagePayload, channel) {
-  const config = getSendConfig(channel);
-  if (!config.accountId || !config.token) {
-    console.log(`[${channel}] missing env. Message skipped.`);
-    return { ok: false, skipped: true };
+  if (!config.accessToken || !config.senderId) {
+    console.log(`[Meta Send] skipped: missing env for ${channel}`);
+    return { ok: false, skipped: true, reason: "missing_env" };
   }
 
-  const graphBaseUrl = getGraphBaseUrl(channel);
-  const url = `${graphBaseUrl}/${encodeURIComponent(config.accountId)}/messages`;
-  const payload = {
-    recipient: { id: senderId },
-    messaging_type: "RESPONSE",
-    message: messagePayload
-  };
+  const url = `https://graph.facebook.com/${config.graphVersion}/${encodeURIComponent(config.senderId)}/messages`;
+  const payload = { recipient: { id: recipientId }, message };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
+  if (channel !== "instagram") {
+    payload.messaging_type = "RESPONSE";
+  }
 
-  const text = await response.text();
-  let result;
   try {
-    result = JSON.parse(text);
+    const response = await fetch(`${url}?access_token=${encodeURIComponent(config.accessToken)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.log(`[Meta Send] failed ${channel}`, response.status, JSON.stringify(data));
+      return { ok: false, status: response.status, data };
+    }
+
+    return { ok: true, data };
   } catch (error) {
-    result = { raw: text };
+    console.log(`[Meta Send] error ${channel}`, error.message);
+    return { ok: false, error: error.message };
   }
-
-  if (!response.ok) {
-    console.log(`[${channel}] send failed via ${graphBaseUrl}:`);
-    console.log(JSON.stringify(result, null, 2));
-  }
-
-  return { ok: response.ok, status: response.status, result };
 }
 
-async function sendText(senderId, text, quickReplies, channel) {
-  const message = { text: text.toString().slice(0, 2000) };
-  if (Array.isArray(quickReplies) && quickReplies.length) {
+async function sendText(channel, recipientId, text, quickReplies = []) {
+  const message = { text };
+  if (quickReplies && quickReplies.length) {
     message.quick_replies = quickReplies.slice(0, 13);
   }
-  return sendMetaMessage(senderId, message, channel);
+  return sendMetaMessage(channel, recipientId, message);
 }
 
-async function sendMedia(senderId, mediaType, mediaUrl, channel) {
-  const url = (mediaUrl || "").toString().trim();
-  if (!url) return { ok: false, skipped: true };
-  return sendMetaMessage(senderId, {
+async function sendMedia(channel, recipientId, type, url) {
+  if (!url) return { ok: false, skipped: true, reason: "missing_media_url" };
+  const safeType = type === "video" ? "video" : "image";
+  return sendMetaMessage(channel, recipientId, {
     attachment: {
-      type: mediaType === "video" ? "video" : "image",
-      payload: { url, is_reusable: true }
+      type: safeType,
+      payload: {
+        url,
+        is_reusable: true
+      }
     }
-  }, channel);
+  });
 }
 
-async function sendVideoWithFallback(senderId, videoUrl, channel, label) {
-  const url = (videoUrl || "").toString().trim();
-  if (!url) return { ok: false, skipped: true };
+async function sendResultsContent(channel, recipientId, lang) {
+  let mediaResult = { ok: false };
+  if (META_RESULTS_VIDEO_URL) mediaResult = await sendMedia(channel, recipientId, "video", META_RESULTS_VIDEO_URL);
+  if (!mediaResult.ok && META_RESULTS_IMAGE_URL) mediaResult = await sendMedia(channel, recipientId, "image", META_RESULTS_IMAGE_URL);
 
-  const result = await sendMedia(senderId, "video", url, channel);
+  if (!mediaResult.ok && META_RESULTS_VIDEO_URL) {
+    await sendText(channel, recipientId, isAr(lang) ? `رابط النتائج:\n${META_RESULTS_VIDEO_URL}` : `Results video link:\n${META_RESULTS_VIDEO_URL}`);
+  }
+}
 
-  if (!result.ok) {
-    console.log(`[Video fallback] ${label} video failed, sending link instead.`);
-    await sendText(senderId, `${label}\n\n${url}`, [], channel);
+async function sendDetailsContent(channel, recipientId, lang) {
+  const mediaResult = await sendMedia(channel, recipientId, "video", DETAILS_VIDEO_URL);
+  if (!mediaResult.ok && DETAILS_VIDEO_URL) {
+    await sendText(channel, recipientId, isAr(lang) ? `رابط التفاصيل:\n${DETAILS_VIDEO_URL}` : `Details video link:\n${DETAILS_VIDEO_URL}`);
+  }
+}
+
+async function handlePayload({ channel, senderId, payload, state, lang }) {
+  if (payload === "MAIN_MENU") {
+    resetState(senderId);
+    await sendText(channel, senderId, welcomeBody(lang), mainReplies(lang));
+    return true;
   }
 
-  return result;
+  if (payload === "BOOKING") {
+    state.intent = "booking";
+    await sendText(channel, senderId, bookingBody(lang), bookingReplies(lang));
+    return true;
+  }
+
+  if (payload === "SERVICES") {
+    await sendText(channel, senderId, servicesBody(lang), servicesReplies(lang));
+    return true;
+  }
+
+  if (payload === "CONSULT") {
+    state.intent = "consult";
+    state.lang = lang;
+    await sendText(channel, senderId, askBranchBody("consult", lang), branchReplies(lang));
+    return true;
+  }
+
+  if (payload === "SERVICE") {
+    state.intent = "service";
+    state.lang = lang;
+    await sendText(channel, senderId, askBranchBody("service", lang), branchReplies(lang));
+    return true;
+  }
+
+  if (payload === "RESULTS") {
+    await sendResultsContent(channel, senderId, lang);
+    await sendText(channel, senderId, resultsBody(lang), resultsReplies(lang));
+    return true;
+  }
+
+  if (payload === "DETAILS") {
+    await sendDetailsContent(channel, senderId, lang);
+    await sendText(channel, senderId, detailsBody(lang), detailsReplies(lang));
+    return true;
+  }
+
+  if (payload === "LOCATION") {
+    state.intent = "location";
+    state.lang = lang;
+    await sendText(channel, senderId, askBranchBody("location", lang), branchReplies(lang));
+    return true;
+  }
+
+  if (payload === "TEAM") {
+    await sendText(channel, senderId, teamBody(lang), mainReplies(lang));
+    return true;
+  }
+
+  const branch = payloadToBranch(payload);
+  if (branch) {
+    state.branch = branch;
+    state.lang = lang;
+
+    if (state.intent === "location") {
+      await sendText(channel, senderId, locationBody(branch, lang), intentReplies("location", lang));
+      return true;
+    }
+
+    if (state.intent === "service") {
+      await sendText(channel, senderId, askStaffBody(branch, lang), staffReplies(branch, lang));
+      return true;
+    }
+
+    if (!state.intent || state.intent === "team") {
+      await sendText(channel, senderId, teamBody(lang), mainReplies(lang));
+      return true;
+    }
+
+    await sendText(channel, senderId, askDayBody(lang), dayReplies(lang));
+    return true;
+  }
+
+  const staff = payloadToStaff(payload);
+  if (staff) {
+    state.staff = staff;
+    state.lang = lang;
+    await sendText(channel, senderId, askDayBody(lang), dayReplies(lang));
+    return true;
+  }
+
+  const day = payloadToDay(payload);
+  if (day) {
+    state.day = day;
+    state.dayPayload = payload;
+    state.lang = lang;
+
+    if (isTodayPayload(payload) && getAvailableTimeSlots(payload).length === 0) {
+      await sendText(channel, senderId, askTimeBody(payload, lang), dayReplies(lang).filter((reply) => reply.payload !== "DAY_TODAY"));
+      return true;
+    }
+
+    await sendText(channel, senderId, askTimeBody(payload, lang), timeReplies(payload, lang));
+    return true;
+  }
+
+  const time = payloadToTime(payload);
+  if (time) {
+    state.time = time;
+    state.lang = lang;
+
+    await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
+
+    const staffNumber = getStaffNumberForBranch(state.branch);
+    const staffSenderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(state.branch);
+    const alertBody = buildStaffBookingAlert(state, channel, senderId);
+    await sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
+
+    resetState(senderId);
+    return true;
+  }
+
+  return false;
 }
 
-async function handleEvent(event, channel) {
-  if (isSystemEvent(event)) return;
+async function handleSmartIntent({ channel, senderId, text, state, lang }) {
+  const intent = detectSmartIntent(text);
+  if (!intent) return false;
 
-  const senderId = (event?.sender?.id || "").toString().trim();
+  state.lang = lang;
+
+  if (intent === "results") {
+    await sendResultsContent(channel, senderId, lang);
+    await sendText(channel, senderId, resultsBody(lang), resultsReplies(lang));
+    return true;
+  }
+
+  if (intent === "details") {
+    await sendDetailsContent(channel, senderId, lang);
+    await sendText(channel, senderId, detailsBody(lang), detailsReplies(lang));
+    return true;
+  }
+
+  if (intent === "booking") {
+    state.intent = "booking";
+    await sendText(channel, senderId, smartIntentBody("booking", lang), bookingReplies(lang));
+    return true;
+  }
+
+  if (intent === "location") {
+    state.intent = "location";
+    await sendText(channel, senderId, smartIntentBody("location", lang), intentReplies("location", lang));
+    return true;
+  }
+
+  if (intent === "team") {
+    state.intent = "team";
+    await sendText(channel, senderId, smartIntentBody("team", lang), intentReplies("team", lang));
+    return true;
+  }
+
+  await sendText(channel, senderId, smartIntentBody(intent, lang), intentReplies(intent, lang));
+  return true;
+}
+
+function getMessageText(event) {
+  if (event?.message?.quick_reply?.payload) return event.message.quick_reply.payload;
+  if (event?.postback?.payload) return event.postback.payload;
+  if (event?.message?.text) return event.message.text;
+  return "";
+}
+
+function getSenderId(event) {
+  return event?.sender?.id || event?.from?.id || event?.sender_id || "";
+}
+
+function getChannelFromEntry(entry, event) {
+  const object = (entry?.object || "").toString().toLowerCase();
+  if (object.includes("instagram")) return "instagram";
+  if (entry?.messaging_product === "instagram") return "instagram";
+  if (event?.recipient?.id && INSTAGRAM_BUSINESS_ACCOUNT_ID && event.recipient.id === INSTAGRAM_BUSINESS_ACCOUNT_ID) return "instagram";
+  return "messenger";
+}
+
+async function handleIncomingEvent(entry, event) {
+  const senderId = getSenderId(event);
   if (!senderId) return;
 
-  const incomingText = getIncomingText(event);
-  const key = `${channel}:${senderId}`;
-  const reply = buildReply(incomingText, key, hasAttachment(event));
+  const channel = getChannelFromEntry(entry, event);
+  const text = getMessageText(event);
+  const state = getState(senderId);
+  const lang = getTurnLanguage(text, state);
+  state.lang = lang;
 
-  if (reply.mediaUrl) {
-    await sendMedia(senderId, reply.mediaType || "image", reply.mediaUrl, channel);
+  const payload = isPayloadOnly(text) ? text.toUpperCase().trim() : "";
+  if (payload) {
+    const handledPayload = await handlePayload({ channel, senderId, payload, state, lang });
+    if (handledPayload) return;
   }
 
-  await sendText(senderId, reply.text, reply.quickReplies || [], channel);
-
-  if (reply.staffNotification) {
-    await notifyStaffBooking(reply.staffNotification, channel, senderId);
+  if (isGreeting(text)) {
+    await sendText(channel, senderId, welcomeBody(lang), mainReplies(lang));
+    return;
   }
 
-  if (reply.sendResultsMedia) {
-    if (META_RESULTS_IMAGE_URL) await sendMedia(senderId, "image", META_RESULTS_IMAGE_URL, channel);
-    if (META_RESULTS_VIDEO_URL) {
-      await sendVideoWithFallback(senderId, META_RESULTS_VIDEO_URL, channel, "Results video | فيديو النتائج");
+  if (isConsult(text)) {
+    state.intent = "consult";
+    await sendText(channel, senderId, askBranchBody("consult", lang), branchReplies(lang));
+    return;
+  }
+
+  if (isService(text)) {
+    state.intent = "service";
+    await sendText(channel, senderId, askBranchBody("service", lang), branchReplies(lang));
+    return;
+  }
+
+  const handledIntent = await handleSmartIntent({ channel, senderId, text, state, lang });
+  if (handledIntent) return;
+
+  if (isBooking(text)) {
+    state.intent = "booking";
+    await sendText(channel, senderId, bookingBody(lang), bookingReplies(lang));
+    return;
+  }
+
+  if (isServices(text)) {
+    await sendText(channel, senderId, servicesBody(lang), servicesReplies(lang));
+    return;
+  }
+
+  if (isResults(text)) {
+    await sendResultsContent(channel, senderId, lang);
+    await sendText(channel, senderId, resultsBody(lang), resultsReplies(lang));
+    return;
+  }
+
+  if (isDetails(text)) {
+    await sendDetailsContent(channel, senderId, lang);
+    await sendText(channel, senderId, detailsBody(lang), detailsReplies(lang));
+    return;
+  }
+
+  if (isLocation(text)) {
+    state.intent = "location";
+    await sendText(channel, senderId, askBranchBody("location", lang), branchReplies(lang));
+    return;
+  }
+
+  if (isTeam(text)) {
+    await sendText(channel, senderId, teamBody(lang), mainReplies(lang));
+    return;
+  }
+
+  await sendText(channel, senderId, fallbackBody(lang), mainReplies(lang));
+}
+
+function collectMessagingEvents(body) {
+  const events = [];
+  const entries = Array.isArray(body?.entry) ? body.entry : [];
+
+  for (const entry of entries) {
+    const messaging = Array.isArray(entry.messaging) ? entry.messaging : [];
+    for (const event of messaging) events.push({ entry, event });
+
+    const changes = Array.isArray(entry.changes) ? entry.changes : [];
+    for (const change of changes) {
+      const messages = Array.isArray(change?.value?.messages) ? change.value.messages : [];
+      for (const message of messages) {
+        events.push({
+          entry: { ...entry, object: body?.object || entry?.object || "instagram" },
+          event: {
+            sender: { id: message.from || message.sender?.id },
+            message: { text: message.text?.body || message.text || "" }
+          }
+        });
+      }
     }
   }
 
-  if (reply.sendDetailsMedia) {
-    if (DETAILS_VIDEO_URL) {
-      await sendVideoWithFallback(senderId, DETAILS_VIDEO_URL, channel, "Details video | فيديو التفاصيل");
-    }
-  }
+  return events;
 }
 
 app.get("/", (req, res) => {
-  res.status(200).send("Iconic Hair Care Meta DM bot is running");
+  res.status(200).json({ ok: true, service: "iconic-meta-dm", version: BOT_VERSION });
 });
 
 app.get("/api/version", (req, res) => {
-  res.json({
+  res.status(200).json({
     ok: true,
+    service: "iconic-meta-dm",
     version: BOT_VERSION,
-    routes: ["GET /webhook", "POST /webhook", "GET /api/version"],
-    messengerConfigured: Boolean(MESSENGER_PAGE_ACCESS_TOKEN && MESSENGER_PAGE_ID),
     instagramConfigured: Boolean(INSTAGRAM_ACCESS_TOKEN && INSTAGRAM_BUSINESS_ACCOUNT_ID),
-    resultsImageConfigured: Boolean(META_RESULTS_IMAGE_URL),
-    resultsVideoConfigured: Boolean(META_RESULTS_VIDEO_URL),
-    detailsVideoConfigured: Boolean(DETAILS_VIDEO_URL),
-    smartLanguageReplies: true,
-    facebookGraphVersion: FACEBOOK_GRAPH_VERSION,
-    instagramGraphVersion: INSTAGRAM_GRAPH_VERSION,
-    instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`,
+    messengerConfigured: Boolean(MESSENGER_PAGE_ACCESS_TOKEN && MESSENGER_PAGE_ID),
     staffNotifyEnabled: STAFF_NOTIFY_ENABLED,
-    staffWhatsAppConfigured: Boolean(STAFF_WHATSAPP_TOKEN && DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID && ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID),
-    dubaiStaffConfigured: Boolean(DUBAI_STAFF_NUMBER),
-    abuDhabiStaffConfigured: Boolean(ABU_DHABI_STAFF_NUMBER),
-    dubaiStaffSenderConfigured: Boolean(DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID),
-    abuDhabiStaffSenderConfigured: Boolean(ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID)
+    staffNotifyConfigured: Boolean(STAFF_WHATSAPP_TOKEN && (DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID || STAFF_WHATSAPP_PHONE_NUMBER_ID)),
+    smartIntentLayer: {
+      enabled: true,
+      phase: 1,
+      intents: ["price", "results", "details", "surgery", "natural", "duration", "pain", "booking", "location", "team"]
+    }
   });
 });
 
-app.get("/webhook", (req, res) => {
+app.get(["/webhook", "/webhook/meta", "/api/webhook"], (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode && token === VERIFY_TOKEN) {
-    console.log("Meta DM webhook verified");
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
     return res.status(200).send(challenge);
   }
 
   return res.sendStatus(403);
 });
 
-app.post("/webhook", async (req, res) => {
+app.post(["/webhook", "/webhook/meta", "/api/webhook"], async (req, res) => {
+  res.sendStatus(200);
+
   try {
-    const channel = getChannel(req.body);
-    const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
-
-    for (const entry of entries) {
-      const events = Array.isArray(entry?.messaging) ? entry.messaging : [];
-      for (const event of events) {
-        await handleEvent(event, channel);
-      }
+    const events = collectMessagingEvents(req.body);
+    for (const { entry, event } of events) {
+      await handleIncomingEvent(entry, event);
     }
-
-    return res.sendStatus(200);
   } catch (error) {
-    console.error("Meta DM webhook failed:");
-    console.error(error);
-    return res.sendStatus(200);
+    console.log("[Webhook] error", error.message);
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`${BOT_VERSION} is running on port ${PORT}`);
+  console.log(`Iconic Meta DM Bot running on port ${PORT}`);
+  console.log(`BOT_VERSION=${BOT_VERSION}`);
 });
