@@ -11,7 +11,9 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-independent-v1";
+const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing";
+const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
+const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
 
 const MESSENGER_PAGE_ACCESS_TOKEN = (
@@ -422,6 +424,14 @@ function isSystemEvent(event) {
   );
 }
 
+
+function getGraphBaseUrl(channel) {
+  if (channel === "Instagram") {
+    return `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`;
+  }
+  return `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}`;
+}
+
 async function sendMetaMessage(senderId, messagePayload, channel) {
   const config = getSendConfig(channel);
   if (!config.accountId || !config.token) {
@@ -429,7 +439,8 @@ async function sendMetaMessage(senderId, messagePayload, channel) {
     return { ok: false, skipped: true };
   }
 
-  const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(config.accountId)}/messages`;
+  const graphBaseUrl = getGraphBaseUrl(channel);
+  const url = `${graphBaseUrl}/${encodeURIComponent(config.accountId)}/messages`;
   const payload = {
     recipient: { id: senderId },
     messaging_type: "RESPONSE",
@@ -454,7 +465,7 @@ async function sendMetaMessage(senderId, messagePayload, channel) {
   }
 
   if (!response.ok) {
-    console.log(`[${channel}] send failed:`);
+    console.log(`[${channel}] send failed via ${graphBaseUrl}:`);
     console.log(JSON.stringify(result, null, 2));
   }
 
@@ -514,7 +525,10 @@ app.get("/api/version", (req, res) => {
     messengerConfigured: Boolean(MESSENGER_PAGE_ACCESS_TOKEN && MESSENGER_PAGE_ID),
     instagramConfigured: Boolean(INSTAGRAM_ACCESS_TOKEN && INSTAGRAM_BUSINESS_ACCOUNT_ID),
     resultsImageConfigured: Boolean(META_RESULTS_IMAGE_URL),
-    resultsVideoConfigured: Boolean(META_RESULTS_VIDEO_URL)
+    resultsVideoConfigured: Boolean(META_RESULTS_VIDEO_URL),
+    facebookGraphVersion: FACEBOOK_GRAPH_VERSION,
+    instagramGraphVersion: INSTAGRAM_GRAPH_VERSION,
+    instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`
   });
 });
 
