@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-smart-faq-intent-layer-phase1";
+const BOT_VERSION = "iconic-meta-dm-v1-smart-faq-intent-layer-phase1-instagram-page-sender-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -648,9 +648,9 @@ async function sendStaffWhatsAppText(to, body, phoneNumberId) {
 function getChannelConfig(channel) {
   if (channel === "instagram") {
     return {
-      graphVersion: INSTAGRAM_GRAPH_VERSION,
-      senderId: INSTAGRAM_BUSINESS_ACCOUNT_ID,
-      accessToken: INSTAGRAM_ACCESS_TOKEN
+      graphVersion: FACEBOOK_GRAPH_VERSION,
+      senderId: MESSENGER_PAGE_ID || "me",
+      accessToken: MESSENGER_PAGE_ACCESS_TOKEN || INSTAGRAM_ACCESS_TOKEN
     };
   }
 
