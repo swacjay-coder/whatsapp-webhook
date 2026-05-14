@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-smart-faq-phase1-fallback-message-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-stable-log-cleanup";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -687,6 +687,17 @@ async function sendMetaMessage(channel, recipientId, message) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const errorCode = data?.error?.code;
+      const errorSubcode = data?.error?.error_subcode;
+
+      // Instagram DMs can sometimes be mirrored through the Messenger webhook path.
+      // When that happens, Facebook returns "No matching user found" because the
+      // Instagram sender is not a Messenger PSID. The real Instagram reply may still
+      // be delivered, so keep this silent to avoid scary red log noise.
+      if (channel === "messenger" && errorCode === 100 && errorSubcode === 2018001) {
+        return { ok: false, skipped: true, reason: "messenger_no_matching_user", status: response.status, data };
+      }
+
       console.log(`[Meta Send] failed ${channel}`, response.status, JSON.stringify(data));
       return { ok: false, status: response.status, data };
     }
