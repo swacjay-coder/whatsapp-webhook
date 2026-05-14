@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-smart-faq-phase1-name-channel-service-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-channel-cleanup-safe-name-first-message";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -473,6 +473,53 @@ function displayCustomerName(customerName) {
   const name = cleanCustomerName(customerName);
   if (!name) return "";
   return name.split(" ").filter(Boolean).slice(0, 2).join(" ");
+}
+
+const CUSTOMER_NAME_LOOKUP_TIMEOUT_MS = Number(process.env.CUSTOMER_NAME_LOOKUP_TIMEOUT_MS || 1200);
+
+async function fetchJsonWithTimeout(url, timeoutMs = CUSTOMER_NAME_LOOKUP_TIMEOUT_MS) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  try {
+    const response = await fetch(url, { signal: controller?.signal });
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok, status: response.status, data };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function getCustomerNameFromProfile(channel, senderId) {
+  if (!senderId) return "";
+
+  const config = getChannelConfig(channel);
+  if (!config?.accessToken) return "";
+
+  const fields = channel === "instagram" ? "name,username" : "name,first_name,last_name";
+  const url = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/${encodeURIComponent(senderId)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(config.accessToken)}`;
+
+  try {
+    const result = await fetchJsonWithTimeout(url);
+    if (!result.ok) {
+      console.log(`[Customer Name] skipped ${channel}`, result.status, JSON.stringify(result.data));
+      return "";
+    }
+
+    const data = result.data || {};
+    const fullName = cleanCustomerName(data.name);
+    if (fullName) return fullName;
+
+    const firstLast = cleanCustomerName(`${data.first_name || ""} ${data.last_name || ""}`);
+    if (firstLast) return firstLast;
+
+    const username = cleanCustomerName(data.username);
+    if (username) return username;
+  } catch (error) {
+    console.log(`[Customer Name] skipped ${channel}`, error.message);
+  }
+
+  return "";
 }
 
 function welcomeBody(lang = "en", customerName = "") {
@@ -956,9 +1003,15 @@ function getSenderId(event) {
 
 function getChannelFromEntry(entry, event) {
   const object = (entry?.object || "").toString().toLowerCase();
+  const messagingProduct = (entry?.messaging_product || entry?.value?.messaging_product || event?.messaging_product || "").toString().toLowerCase();
+  const entryId = (entry?.id || "").toString();
+  const recipientId = (event?.recipient?.id || "").toString();
+
   if (object.includes("instagram")) return "instagram";
-  if (entry?.messaging_product === "instagram") return "instagram";
-  if (event?.recipient?.id && INSTAGRAM_BUSINESS_ACCOUNT_ID && event.recipient.id === INSTAGRAM_BUSINESS_ACCOUNT_ID) return "instagram";
+  if (messagingProduct === "instagram") return "instagram";
+  if (entryId && INSTAGRAM_BUSINESS_ACCOUNT_ID && entryId === INSTAGRAM_BUSINESS_ACCOUNT_ID) return "instagram";
+  if (recipientId && INSTAGRAM_BUSINESS_ACCOUNT_ID && recipientId === INSTAGRAM_BUSINESS_ACCOUNT_ID) return "instagram";
+
   return "messenger";
 }
 
@@ -971,6 +1024,11 @@ async function handleIncomingEvent(entry, event) {
   const state = getState(senderId);
   const customerName = getCustomerNameFromEvent(event);
   if (customerName) state.customerName = customerName;
+
+  if (!state.customerName) {
+    const profileName = await getCustomerNameFromProfile(channel, senderId);
+    if (profileName) state.customerName = profileName;
+  }
 
   const lang = getTurnLanguage(text, state);
   state.lang = lang;
@@ -1044,7 +1102,9 @@ function collectMessagingEvents(body) {
 
   for (const entry of entries) {
     const messaging = Array.isArray(entry.messaging) ? entry.messaging : [];
-    for (const event of messaging) rawEvents.push({ entry, event });
+    for (const event of messaging) {
+      rawEvents.push({ entry: { ...entry, object: body?.object || entry?.object || "page" }, event });
+    }
 
     const changes = Array.isArray(entry.changes) ? entry.changes : [];
     for (const change of changes) {
@@ -1122,6 +1182,8 @@ app.get("/api/version", (req, res) => {
     smartIntentLayer: {
       enabled: true,
       phase: 1,
+      safeCustomerNameLookup: true,
+      channelCleanup: true,
       intents: ["price", "results", "details", "surgery", "natural", "duration", "pain", "booking", "location", "team"]
     }
   });
