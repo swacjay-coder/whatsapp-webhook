@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-no-team-inbox";
+const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-debug-webhook";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -435,7 +435,7 @@ function getGraphBaseUrl(channel) {
 async function sendMetaMessage(senderId, messagePayload, channel) {
   const config = getSendConfig(channel);
   if (!config.accountId || !config.token) {
-    console.log(`[${channel}] missing env. Message skipped.`);
+    console.log(`[${channel}] missing env. Message skipped. accountId=${Boolean(config.accountId)} token=${Boolean(config.token)}`);
     return { ok: false, skipped: true };
   }
 
@@ -446,6 +446,8 @@ async function sendMetaMessage(senderId, messagePayload, channel) {
     messaging_type: "RESPONSE",
     message: messagePayload
   };
+
+  console.log(`[Send] channel=${channel} senderId=${senderId} graph=${graphBaseUrl} text=${(messagePayload?.text || "[media]").toString().slice(0, 80)}`);
 
   const response = await fetch(url, {
     method: "POST",
@@ -465,8 +467,10 @@ async function sendMetaMessage(senderId, messagePayload, channel) {
   }
 
   if (!response.ok) {
-    console.log(`[${channel}] send failed via ${graphBaseUrl}:`);
+    console.log(`[Send failed] channel=${channel} status=${response.status} graph=${graphBaseUrl}`);
     console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`[Send success] channel=${channel} status=${response.status}`);
   }
 
   return { ok: response.ok, status: response.status, result };
@@ -492,24 +496,41 @@ async function sendMedia(senderId, mediaType, mediaUrl, channel) {
 }
 
 async function handleEvent(event, channel) {
-  if (isSystemEvent(event)) return;
+  if (isSystemEvent(event)) {
+    console.log(`[Incoming skipped] channel=${channel} system event`);
+    return;
+  }
 
   const senderId = (event?.sender?.id || "").toString().trim();
-  if (!senderId) return;
+  if (!senderId) {
+    console.log(`[Incoming skipped] channel=${channel} missing senderId`);
+    return;
+  }
 
   const incomingText = getIncomingText(event);
+  const attachmentFlag = hasAttachment(event);
+  console.log(`[Incoming] channel=${channel} senderId=${senderId} text=${incomingText || "[no text]"} attachment=${attachmentFlag}`);
+
   const key = `${channel}:${senderId}`;
-  const reply = buildReply(incomingText, key, hasAttachment(event));
+  const reply = buildReply(incomingText, key, attachmentFlag);
+  console.log(`[Reply built] channel=${channel} text=${(reply?.text || "").toString().slice(0, 120)} quickReplies=${Array.isArray(reply?.quickReplies) ? reply.quickReplies.length : 0}`);
 
   if (reply.mediaUrl) {
+    console.log(`[Media] sending header media type=${reply.mediaType || "image"}`);
     await sendMedia(senderId, reply.mediaType || "image", reply.mediaUrl, channel);
   }
 
   await sendText(senderId, reply.text, reply.quickReplies || [], channel);
 
   if (reply.sendResultsMedia) {
-    if (META_RESULTS_IMAGE_URL) await sendMedia(senderId, "image", META_RESULTS_IMAGE_URL, channel);
-    if (META_RESULTS_VIDEO_URL) await sendMedia(senderId, "video", META_RESULTS_VIDEO_URL, channel);
+    if (META_RESULTS_IMAGE_URL) {
+      console.log("[Media] sending results image");
+      await sendMedia(senderId, "image", META_RESULTS_IMAGE_URL, channel);
+    }
+    if (META_RESULTS_VIDEO_URL) {
+      console.log("[Media] sending results video");
+      await sendMedia(senderId, "video", META_RESULTS_VIDEO_URL, channel);
+    }
   }
 }
 
@@ -547,16 +568,22 @@ app.get("/webhook", (req, res) => {
 
 app.post("/webhook", async (req, res) => {
   try {
+    console.log(`[Webhook] POST received object=${req.body?.object || "unknown"}`);
+
     const channel = getChannel(req.body);
     const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
+    console.log(`[Webhook] channel=${channel} entries=${entries.length}`);
 
     for (const entry of entries) {
       const events = Array.isArray(entry?.messaging) ? entry.messaging : [];
+      console.log(`[Webhook] entry events=${events.length}`);
+
       for (const event of events) {
         await handleEvent(event, channel);
       }
     }
 
+    console.log("[Webhook] POST handled 200");
     return res.sendStatus(200);
   } catch (error) {
     console.error("Meta DM webhook failed:");
