@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-legendary-replies-staff-notify-v2";
+const BOT_VERSION = "iconic-meta-dm-v1-legendary-replies-staff-branch-v1";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -194,7 +194,14 @@ function timeReplies(dayPayload) {
   return replies.slice(0, 13);
 }
 
-function staffReplies() {
+function staffReplies(branch = "Dubai") {
+  if (branch === "Abu Dhabi") {
+    return [
+      quickReply("Adham | أدهم", "STAFF_ADHAM"),
+      quickReply("Osama | أسامة", "STAFF_OSAMA")
+    ];
+  }
+
   return [
     quickReply("Ahmad | أحمد", "STAFF_AHMAD"),
     quickReply("Wael | وائل", "STAFF_WAEL"),
@@ -203,10 +210,7 @@ function staffReplies() {
     quickReply("Emad | عماد", "STAFF_EMAD"),
     quickReply("Hamouda | حمودة", "STAFF_HAMOUDA"),
     quickReply("Ani | اني", "STAFF_ANI"),
-    quickReply("Omar | عمر", "STAFF_OMAR"),
-    quickReply("Osama | أسامة", "STAFF_OSAMA"),
-    quickReply("Adham | أدهم", "STAFF_ADHAM"),
-    quickReply("Any | أي مختص", "STAFF_ANY")
+    quickReply("Omar | عمر", "STAFF_OMAR")
   ];
 }
 
@@ -280,13 +284,17 @@ function isResults(text) {
 }
 
 function isLocation(text) {
+  const raw = (text || "").toString().trim().toUpperCase();
+  if (raw === "BRANCH_DUBAI" || raw === "BRANCH_ABUDHABI") return false;
+
   const value = normalizeText(text);
   return value === "location" ||
     value === "location | موقع" ||
     value.includes("موقع") ||
     value.includes("لوكيشن") ||
     value.includes("map") ||
-    value.includes("branch");
+    value === "branch" ||
+    value === "branches";
 }
 
 function isTeam(text) {
@@ -415,10 +423,16 @@ function askBranchBody(intent) {
 Great, please choose the branch for ${label}:`;
 }
 
-function askStaffBody() {
-  return `اختر المختص المفضل للسيرفس، أو اختر أي مختص متاح.
+function askStaffBody(branch = "Dubai") {
+  if (branch === "Abu Dhabi") {
+    return `اختر مختص فرع أبوظبي:
 
-Choose your preferred service specialist, or choose any available specialist.`;
+Choose your Abu Dhabi branch specialist:`;
+  }
+
+  return `اختر مختص فرع دبي:
+
+Choose your Dubai branch specialist:`;
 }
 
 function askDayBody() {
@@ -569,6 +583,25 @@ async function notifyStaffBooking(state, channel, senderId) {
   return sendStaffWhatsAppText(staffNumber, alertText);
 }
 
+
+function isStaffAllowedForBranch(staffPayload, branch = "Dubai") {
+  const abuDhabiStaff = ["STAFF_ADHAM", "STAFF_OSAMA"];
+  const dubaiStaff = [
+    "STAFF_AHMAD",
+    "STAFF_WAEL",
+    "STAFF_TAMER",
+    "STAFF_BASHIR",
+    "STAFF_EMAD",
+    "STAFF_HAMOUDA",
+    "STAFF_ANI",
+    "STAFF_OMAR"
+  ];
+
+  return branch === "Abu Dhabi"
+    ? abuDhabiStaff.includes(staffPayload)
+    : dubaiStaff.includes(staffPayload);
+}
+
 function buildReply(text, key, hasAttachment) {
   const state = getState(key);
   const cleanText = (text || "").toString().trim();
@@ -591,7 +624,7 @@ function buildReply(text, key, hasAttachment) {
 
   if (upper === "SERVICE" || isService(cleanText)) {
     conversationState.set(key, { intent: "service" });
-    return { text: askStaffBody(), quickReplies: staffReplies() };
+    return { text: askBranchBody("service"), quickReplies: branchReplies() };
   }
 
   if (upper === "SERVICES" || isServices(cleanText)) {
@@ -602,15 +635,18 @@ function buildReply(text, key, hasAttachment) {
     return { text: resultsBody(), quickReplies: resultsReplies(), sendResultsMedia: true };
   }
 
-  if (upper === "LOCATION" || isLocation(cleanText)) {
-    conversationState.set(key, { intent: "location" });
-    return { text: askBranchBody("location"), quickReplies: branchReplies() };
-  }
-
   const staff = payloadToStaff(upper);
   if (staff && state.intent === "service") {
+    if (!state.branch) {
+      return { text: askBranchBody("service"), quickReplies: branchReplies() };
+    }
+
+    if (!isStaffAllowedForBranch(upper, state.branch)) {
+      return { text: askStaffBody(state.branch), quickReplies: staffReplies(state.branch) };
+    }
+
     state.staff = staff;
-    return { text: askBranchBody("service"), quickReplies: branchReplies() };
+    return { text: askDayBody(), quickReplies: dayReplies() };
   }
 
   const branch = payloadToBranch(upper);
@@ -619,9 +655,19 @@ function buildReply(text, key, hasAttachment) {
     return { text: locationBody(branch), quickReplies: mainReplies() };
   }
 
+  if (branch && state.intent === "service") {
+    state.branch = branch;
+    return { text: askStaffBody(branch), quickReplies: staffReplies(branch) };
+  }
+
   if (branch && state.intent) {
     state.branch = branch;
     return { text: askDayBody(), quickReplies: dayReplies() };
+  }
+
+  if (upper === "LOCATION" || isLocation(cleanText)) {
+    conversationState.set(key, { intent: "location" });
+    return { text: askBranchBody("location"), quickReplies: branchReplies() };
   }
 
   const day = payloadToDay(upper);
