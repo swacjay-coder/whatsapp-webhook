@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-3-whatsapp-only-clean";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-2-sidebar-icons-and-booking-actions-visible";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -17757,7 +17757,6 @@ setInterval(loadMessages, 5000);
 </body>
 </html>`);
 });
-
 /* تحقق من Webhook */
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -17774,10 +17773,10 @@ app.get("/webhook", (req, res) => {
 
 /* استقبال الرسائل */
 app.post("/webhook", async (req, res) => {
-  try {
-    console.log("New webhook payload:");
-    console.log(JSON.stringify(req.body, null, 2));
+  console.log("New webhook payload:");
+  console.log(JSON.stringify(req.body, null, 2));
 
+  try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
 
