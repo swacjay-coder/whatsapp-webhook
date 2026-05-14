@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-smart-language-replies-v1";
+const BOT_VERSION = "iconic-meta-dm-v1-smart-language-branch-sender-v1";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -81,6 +81,20 @@ const STAFF_WHATSAPP_PHONE_NUMBER_ID = (
   process.env.META_WA_PHONE_NUMBER_ID ||
   process.env.PHONE_NUMBER_ID ||
   ""
+).toString().trim();
+
+const DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID = (
+  process.env.DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID ||
+  process.env.DUBAI_WHATSAPP_PHONE_NUMBER_ID ||
+  STAFF_WHATSAPP_PHONE_NUMBER_ID ||
+  "1100042333191350"
+).toString().trim();
+
+const ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID = (
+  process.env.ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID ||
+  process.env.ABUDHABI_STAFF_NOTIFY_PHONE_NUMBER_ID ||
+  process.env.ABU_DHABI_WHATSAPP_PHONE_NUMBER_ID ||
+  "1000146433192239"
 ).toString().trim();
 
 const DUBAI_STAFF_NUMBER = (
@@ -686,6 +700,12 @@ function getStaffNumberForBranch(branch) {
   return branch === "Abu Dhabi" ? ABU_DHABI_STAFF_NUMBER : DUBAI_STAFF_NUMBER;
 }
 
+function getStaffSenderPhoneNumberIdForBranch(branch) {
+  return branch === "Abu Dhabi"
+    ? ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID
+    : DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID;
+}
+
 function buildStaffBookingAlert(state, channel, senderId) {
   const isService = state.intent === "service";
   const requestTypeAr = isService ? "موعد سيرفس" : "حجز استشارة";
@@ -727,7 +747,7 @@ ${senderId}
 Please follow up with the client from Instagram / Meta Inbox.`;
 }
 
-async function sendStaffWhatsAppText(to, body) {
+async function sendStaffWhatsAppText(to, body, phoneNumberId) {
   if (!STAFF_NOTIFY_ENABLED) {
     console.log("[Staff Notify] skipped because STAFF_NOTIFY_ENABLED=false");
     return { ok: false, skipped: true };
@@ -738,12 +758,14 @@ async function sendStaffWhatsAppText(to, body) {
     return { ok: false, skipped: true, reason: "missing_staff_number" };
   }
 
-  if (!STAFF_WHATSAPP_TOKEN || !STAFF_WHATSAPP_PHONE_NUMBER_ID) {
-    console.log("[Staff Notify] skipped: WhatsApp token or phone number ID missing");
+  const senderPhoneNumberId = (phoneNumberId || STAFF_WHATSAPP_PHONE_NUMBER_ID || "").toString().trim();
+
+  if (!STAFF_WHATSAPP_TOKEN || !senderPhoneNumberId) {
+    console.log("[Staff Notify] skipped: WhatsApp token or sender phone number ID missing");
     return { ok: false, skipped: true, reason: "missing_whatsapp_env" };
   }
 
-  const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(STAFF_WHATSAPP_PHONE_NUMBER_ID)}/messages`;
+  const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(senderPhoneNumberId)}/messages`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -775,7 +797,7 @@ async function sendStaffWhatsAppText(to, body) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     const messageId = result?.messages?.[0]?.id || "no-message-id";
-    console.log(`[Staff Notify] sent to ${to} messageId=${messageId}`);
+    console.log(`[Staff Notify] sent from ${senderPhoneNumberId} to ${to} messageId=${messageId}`);
     console.log(JSON.stringify(result, null, 2));
   }
 
@@ -783,9 +805,11 @@ async function sendStaffWhatsAppText(to, body) {
 }
 
 async function notifyStaffBooking(state, channel, senderId) {
-  const staffNumber = getStaffNumberForBranch(state.branch || "Dubai");
+  const branch = state.branch || "Dubai";
+  const staffNumber = getStaffNumberForBranch(branch);
+  const senderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(branch);
   const alertText = buildStaffBookingAlert(state, channel, senderId);
-  return sendStaffWhatsAppText(staffNumber, alertText);
+  return sendStaffWhatsAppText(staffNumber, alertText, senderPhoneNumberId);
 }
 
 
@@ -1107,9 +1131,11 @@ app.get("/api/version", (req, res) => {
     instagramGraphVersion: INSTAGRAM_GRAPH_VERSION,
     instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`,
     staffNotifyEnabled: STAFF_NOTIFY_ENABLED,
-    staffWhatsAppConfigured: Boolean(STAFF_WHATSAPP_TOKEN && STAFF_WHATSAPP_PHONE_NUMBER_ID),
+    staffWhatsAppConfigured: Boolean(STAFF_WHATSAPP_TOKEN && DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID && ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID),
     dubaiStaffConfigured: Boolean(DUBAI_STAFF_NUMBER),
-    abuDhabiStaffConfigured: Boolean(ABU_DHABI_STAFF_NUMBER)
+    abuDhabiStaffConfigured: Boolean(ABU_DHABI_STAFF_NUMBER),
+    dubaiStaffSenderConfigured: Boolean(DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID),
+    abuDhabiStaffSenderConfigured: Boolean(ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID)
   });
 });
 
