@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-legendary-replies-staff-branch-v1";
+const BOT_VERSION = "iconic-meta-dm-v1-staff-branch-no-header-media-v1";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -628,7 +628,7 @@ function buildReply(text, key, hasAttachment) {
   }
 
   if (upper === "SERVICES" || isServices(cleanText)) {
-    return { text: servicesBody(), quickReplies: servicesReplies(), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
+    return { text: servicesBody(), quickReplies: servicesReplies() };
   }
 
   if (upper === "RESULTS" || isResults(cleanText)) {
@@ -709,7 +709,7 @@ Our team will review it and reply as soon as possible.`,
 
   if (isGreeting(cleanText)) {
     conversationState.set(key, {});
-    return { text: welcomeBody(), quickReplies: mainReplies(), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
+    return { text: welcomeBody(), quickReplies: mainReplies() };
   }
 
   return {
