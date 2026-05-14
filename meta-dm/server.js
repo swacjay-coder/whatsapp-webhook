@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-staff-branch-no-header-media-v1";
+const BOT_VERSION = "iconic-meta-dm-v1-video-details-staff-alert-v1";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -46,8 +46,20 @@ const BOT_HEADER_IMAGE_URL = (
   "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg"
 ).toString().trim();
 
+const DETAILS_VIDEO_URL = (
+  process.env.META_DETAILS_VIDEO_URL ||
+  process.env.DETAILS_VIDEO_URL ||
+  "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4"
+).toString().trim();
+
 const META_RESULTS_IMAGE_URL = (process.env.META_RESULTS_IMAGE_URL || "").toString().trim();
-const META_RESULTS_VIDEO_URL = (process.env.META_RESULTS_VIDEO_URL || "").toString().trim();
+const META_RESULTS_VIDEO_URL = (
+  process.env.META_RESULTS_VIDEO_URL ||
+  process.env.RESULTS_VIDEO_URL ||
+  process.env.AUTO_REPLY_VIDEO_URL ||
+  DETAILS_VIDEO_URL ||
+  ""
+).toString().trim();
 
 const DUBAI_LOCATION_URL = process.env.DUBAI_LOCATION_URL || "https://maps.app.goo.gl/KyyhbpVVZJ2ixEEBA";
 const ABU_DHABI_LOCATION_URL = process.env.ABU_DHABI_LOCATION_URL || "https://maps.app.goo.gl/twg5JEuP6JgKWP1s7";
@@ -120,6 +132,7 @@ function bookingReplies() {
 function servicesReplies() {
   return [
     quickReply("Results | نتائج", "RESULTS"),
+    quickReply("Details | تفاصيل", "DETAILS"),
     quickReply("Location | موقع", "LOCATION"),
     quickReply("Consult | استشارة", "CONSULT")
   ];
@@ -127,8 +140,16 @@ function servicesReplies() {
 
 function resultsReplies() {
   return [
-    quickReply("Consult | استشارة", "CONSULT"),
-    quickReply("Location | موقع", "LOCATION"),
+    quickReply("Details | تفاصيل", "DETAILS"),
+    quickReply("Booking | حجز", "BOOKING"),
+    quickReply("Team | فريقنا", "TEAM")
+  ];
+}
+
+function detailsReplies() {
+  return [
+    quickReply("Results | نتائج", "RESULTS"),
+    quickReply("Booking | حجز", "BOOKING"),
     quickReply("Team | فريقنا", "TEAM")
   ];
 }
@@ -278,9 +299,20 @@ function isResults(text) {
     value.includes("صور") ||
     value.includes("صورة") ||
     value.includes("photo") ||
-    value.includes("video") ||
     value.includes("before") ||
     value.includes("قبل وبعد");
+}
+
+function isDetails(text) {
+  const value = normalizeText(text);
+  return value === "details" ||
+    value === "details | تفاصيل" ||
+    value === "how_it_works" ||
+    value.includes("تفاصيل") ||
+    value.includes("كيف") ||
+    value.includes("how it works") ||
+    value.includes("how works") ||
+    value.includes("process");
 }
 
 function isLocation(text) {
@@ -406,14 +438,31 @@ At Iconic Hair Care, we provide non-surgical Hair Replacement with a 100% natura
 }
 
 function resultsBody() {
-  return `هذه بعض النتائج من Iconic Hair Care.
+  return `أكيد ✨
 
-المظهر طبيعي، بدون جراحة، ويتم اختيار الشكل حسب الوجه والستايل المناسب لك.
+هذه بعض النتائج من Iconic Hair Care.
+المظهر طبيعي، بدون جراحة، وبشكل يناسبك تماماً.
 
 Here are some Iconic Hair Care results.
-Natural look, non-surgical, and customized to your face shape and style.
+Natural look, non-surgical, and designed to suit you.
+
+إذا لم يظهر الفيديو مباشرة، سنرسل لك رابط الفيديو أيضاً.
 
 الخطوة التالية؟ / Next step?`;
+}
+
+function detailsBody() {
+  return `أكيد ✨
+
+الطريقة بسيطة ومريحة:
+نبدأ بفهم الشكل المناسب لك، ثم نختار اللوك الأقرب لطبيعة شعرك، وبعدها يتم التطبيق بمظهر طبيعي بدون جراحة.
+
+The process is simple and comfortable:
+We start by understanding the look that suits you, choose the closest natural style for your hair, then apply it with a natural, non-surgical result.
+
+إذا لم يظهر الفيديو مباشرة، سنرسل لك رابط الفيديو أيضاً.
+
+شو تحب تعمل الآن؟ / What would you like to do now?`;
 }
 
 function askBranchBody(intent) {
@@ -502,24 +551,44 @@ function getStaffNumberForBranch(branch) {
 }
 
 function buildStaffBookingAlert(state, channel, senderId) {
-  const requestType = state.intent === "service"
-    ? "Service Appointment | موعد سيرفس"
-    : "Consultation Booking | حجز استشارة";
+  const isService = state.intent === "service";
+  const requestTypeAr = isService ? "موعد سيرفس" : "حجز استشارة";
+  const requestTypeEn = isService ? "Service Appointment" : "Consultation Booking";
+  const branchEn = state.branch || "Dubai";
+  const branchAr = branchEn === "Abu Dhabi" ? "أبوظبي" : "دبي";
+  const day = state.day || "Not selected | غير محدد";
+  const time = state.time || "Flexible | مرن";
+  const staff = state.staff || "Not selected | غير محدد";
 
-  const branchAr = state.branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
-
-  return `🔔 New Meta DM Booking Request
+  return `🔔 طلب حجز جديد من Instagram / Messenger
 
 القناة: ${channel}
-نوع الطلب: ${requestType}
-الفرع: ${state.branch || "Dubai"} | ${branchAr}
-اليوم: ${state.day || "Not selected"}
-الوقت: ${state.time || "Flexible"}${state.staff ? `\nالمختص: ${state.staff}` : ""}
+نوع الطلب: ${requestTypeAr}
+الفرع: ${branchAr}
+اليوم: ${day}
+الوقت: ${time}
+المختص: ${staff}
 
-Customer sender ID:
+رقم/معرّف العميل داخل Meta:
 ${senderId}
 
-الرجاء متابعة العميل من Instagram / Meta Inbox.`;
+الرجاء متابعة العميل من Instagram / Meta Inbox.
+
+------------------------------
+
+🔔 New booking request from Instagram / Messenger
+
+Channel: ${channel}
+Request type: ${requestTypeEn}
+Branch: ${branchEn}
+Day: ${day}
+Time: ${time}
+Specialist: ${staff}
+
+Meta customer sender ID:
+${senderId}
+
+Please follow up with the client from Instagram / Meta Inbox.`;
 }
 
 async function sendStaffWhatsAppText(to, body) {
@@ -633,6 +702,10 @@ function buildReply(text, key, hasAttachment) {
 
   if (upper === "RESULTS" || isResults(cleanText)) {
     return { text: resultsBody(), quickReplies: resultsReplies(), sendResultsMedia: true };
+  }
+
+  if (upper === "DETAILS" || isDetails(cleanText)) {
+    return { text: detailsBody(), quickReplies: detailsReplies(), sendDetailsMedia: true };
   }
 
   const staff = payloadToStaff(upper);
@@ -826,6 +899,20 @@ async function sendMedia(senderId, mediaType, mediaUrl, channel) {
   }, channel);
 }
 
+async function sendVideoWithFallback(senderId, videoUrl, channel, label) {
+  const url = (videoUrl || "").toString().trim();
+  if (!url) return { ok: false, skipped: true };
+
+  const result = await sendMedia(senderId, "video", url, channel);
+
+  if (!result.ok) {
+    console.log(`[Video fallback] ${label} video failed, sending link instead.`);
+    await sendText(senderId, `${label}\n\n${url}`, [], channel);
+  }
+
+  return result;
+}
+
 async function handleEvent(event, channel) {
   if (isSystemEvent(event)) return;
 
@@ -848,7 +935,15 @@ async function handleEvent(event, channel) {
 
   if (reply.sendResultsMedia) {
     if (META_RESULTS_IMAGE_URL) await sendMedia(senderId, "image", META_RESULTS_IMAGE_URL, channel);
-    if (META_RESULTS_VIDEO_URL) await sendMedia(senderId, "video", META_RESULTS_VIDEO_URL, channel);
+    if (META_RESULTS_VIDEO_URL) {
+      await sendVideoWithFallback(senderId, META_RESULTS_VIDEO_URL, channel, "Results video | فيديو النتائج");
+    }
+  }
+
+  if (reply.sendDetailsMedia) {
+    if (DETAILS_VIDEO_URL) {
+      await sendVideoWithFallback(senderId, DETAILS_VIDEO_URL, channel, "Details video | فيديو التفاصيل");
+    }
   }
 }
 
@@ -865,6 +960,7 @@ app.get("/api/version", (req, res) => {
     instagramConfigured: Boolean(INSTAGRAM_ACCESS_TOKEN && INSTAGRAM_BUSINESS_ACCOUNT_ID),
     resultsImageConfigured: Boolean(META_RESULTS_IMAGE_URL),
     resultsVideoConfigured: Boolean(META_RESULTS_VIDEO_URL),
+    detailsVideoConfigured: Boolean(DETAILS_VIDEO_URL),
     facebookGraphVersion: FACEBOOK_GRAPH_VERSION,
     instagramGraphVersion: INSTAGRAM_GRAPH_VERSION,
     instagramGraphBase: `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`,
