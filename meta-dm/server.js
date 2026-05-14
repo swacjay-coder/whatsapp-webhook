@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-better-replies-v2-safe";
+const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-no-team-inbox";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -63,54 +63,6 @@ function normalizeText(value) {
   return (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
 }
 
-function getDubaiDateParts() {
-  const formatter = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Dubai",
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    weekday: "short"
-  });
-
-  const parts = formatter.formatToParts(new Date());
-  const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
-  const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
-  const weekday = parts.find((part) => part.type === "weekday")?.value || "";
-
-  return { hour, minute, minutes: hour * 60 + minute, weekday };
-}
-
-function isTodayPayload(payload) {
-  return payload === "DAY_TODAY";
-}
-
-function getAvailableTimeSlots(dayPayload) {
-  const allSlots = [
-    { title: "10:00 AM", payload: "TIME_1000", minutes: 10 * 60 },
-    { title: "11:00 AM", payload: "TIME_1100", minutes: 11 * 60 },
-    { title: "12:00 PM", payload: "TIME_1200", minutes: 12 * 60 },
-    { title: "1:00 PM", payload: "TIME_1300", minutes: 13 * 60 },
-    { title: "2:00 PM", payload: "TIME_1400", minutes: 14 * 60 },
-    { title: "3:00 PM", payload: "TIME_1500", minutes: 15 * 60 },
-    { title: "4:00 PM", payload: "TIME_1600", minutes: 16 * 60 },
-    { title: "5:00 PM", payload: "TIME_1700", minutes: 17 * 60 },
-    { title: "6:00 PM", payload: "TIME_1800", minutes: 18 * 60 },
-    { title: "6:30 PM", payload: "TIME_1830", minutes: 18 * 60 + 30 }
-  ];
-
-  if (!isTodayPayload(dayPayload)) return allSlots;
-
-  const now = getDubaiDateParts();
-  const bufferMinutes = 30;
-  return allSlots.filter((slot) => slot.minutes >= now.minutes + bufferMinutes);
-}
-
-function getPreferredLanguage(text, state) {
-  if (isArabic(text)) return "ar";
-  if (state?.lang) return state.lang;
-  return "en";
-}
-
 function isArabic(text) {
   return /[\u0600-\u06FF]/.test((text || "").toString());
 }
@@ -123,57 +75,46 @@ function quickReply(title, payload) {
   };
 }
 
-function mainReplies() {
-  return [
-    quickReply("Booking | حجز", "BOOKING"),
-    quickReply("Services | خدمات", "SERVICES"),
-    quickReply("Team | فريقنا", "TEAM")
-  ];
+function mainReplies(ar) {
+  return ar
+    ? [quickReply("حجز", "BOOKING"), quickReply("خدماتنا", "SERVICES"), quickReply("فريقنا", "TEAM")]
+    : [quickReply("Booking", "BOOKING"), quickReply("Services", "SERVICES"), quickReply("Team", "TEAM")];
 }
 
-function bookingReplies() {
-  return [
-    quickReply("Consult | استشارة", "CONSULT"),
-    quickReply("Service | سيرفس", "SERVICE"),
-    quickReply("Help | فريقنا", "TEAM")
-  ];
+function bookingReplies(ar) {
+  return ar
+    ? [quickReply("استشارة", "CONSULT"), quickReply("سيرفس", "SERVICE"), quickReply("ساعدني", "TEAM")]
+    : [quickReply("Consult", "CONSULT"), quickReply("Service", "SERVICE"), quickReply("Help", "TEAM")];
 }
 
-function servicesReplies() {
-  return [
-    quickReply("Results | نتائج", "RESULTS"),
-    quickReply("Location | موقع", "LOCATION"),
-    quickReply("Consult | استشارة", "CONSULT")
-  ];
+function servicesReplies(ar) {
+  return ar
+    ? [quickReply("نتائج", "RESULTS"), quickReply("موقعنا", "LOCATION"), quickReply("استشارة", "CONSULT")]
+    : [quickReply("Results", "RESULTS"), quickReply("Location", "LOCATION"), quickReply("Consult", "CONSULT")];
 }
 
-function resultsReplies() {
-  return [
-    quickReply("Consult | استشارة", "CONSULT"),
-    quickReply("Location | موقع", "LOCATION"),
-    quickReply("Team | فريقنا", "TEAM")
-  ];
+function resultsReplies(ar) {
+  return ar
+    ? [quickReply("استشارة", "CONSULT"), quickReply("فريقنا", "TEAM")]
+    : [quickReply("Consult", "CONSULT"), quickReply("Team", "TEAM")];
 }
 
-function branchReplies() {
-  return [
-    quickReply("Dubai | دبي", "BRANCH_DUBAI"),
-    quickReply("Abu Dhabi | أبوظبي", "BRANCH_ABUDHABI")
-  ];
+function branchReplies(ar) {
+  return ar
+    ? [quickReply("دبي", "BRANCH_DUBAI"), quickReply("أبوظبي", "BRANCH_ABUDHABI")]
+    : [quickReply("Dubai", "BRANCH_DUBAI"), quickReply("Abu Dhabi", "BRANCH_ABUDHABI")];
 }
 
-function dayReplies() {
-  return [
-    quickReply("Today | اليوم", "DAY_TODAY"),
-    quickReply("Tomorrow | بكرا", "DAY_TOMORROW"),
-    quickReply("This week | أسبوع", "DAY_WEEK")
-  ];
+function dayReplies(ar) {
+  return ar
+    ? [quickReply("اليوم", "DAY_TODAY"), quickReply("بكرا", "DAY_TOMORROW"), quickReply("هذا الأسبوع", "DAY_WEEK")]
+    : [quickReply("Today", "DAY_TODAY"), quickReply("Tomorrow", "DAY_TOMORROW"), quickReply("This week", "DAY_WEEK")];
 }
 
-function timeReplies(dayPayload) {
-  const slots = getAvailableTimeSlots(dayPayload).map((slot) => quickReply(slot.title, slot.payload));
-  slots.push(quickReply("Flexible | مرن", "TIME_FLEXIBLE"));
-  return slots.slice(0, 13);
+function timeReplies(ar) {
+  return ar
+    ? [quickReply("5:00", "TIME_5"), quickReply("6:00", "TIME_6"), quickReply("6:30", "TIME_630")]
+    : [quickReply("5:00 PM", "TIME_5"), quickReply("6:00 PM", "TIME_6"), quickReply("6:30 PM", "TIME_630")];
 }
 
 function staffReplies(ar) {
@@ -261,31 +202,18 @@ function payloadToBranch(payload) {
   return "";
 }
 
-function payloadToDay(payload) {
-  if (payload === "DAY_TODAY") return "Today | اليوم";
-  if (payload === "DAY_TOMORROW") return "Tomorrow | بكرا";
-  if (payload === "DAY_WEEK") return "This week | هذا الأسبوع";
+function payloadToDay(payload, ar) {
+  if (payload === "DAY_TODAY") return ar ? "اليوم" : "Today";
+  if (payload === "DAY_TOMORROW") return ar ? "بكرا" : "Tomorrow";
+  if (payload === "DAY_WEEK") return ar ? "هذا الأسبوع" : "This week";
   return "";
 }
 
 function payloadToTime(payload) {
-  const times = {
-    TIME_1000: "10:00 AM",
-    TIME_1100: "11:00 AM",
-    TIME_1200: "12:00 PM",
-    TIME_1300: "1:00 PM",
-    TIME_1400: "2:00 PM",
-    TIME_1500: "3:00 PM",
-    TIME_1600: "4:00 PM",
-    TIME_1700: "5:00 PM",
-    TIME_1800: "6:00 PM",
-    TIME_1830: "6:30 PM",
-    TIME_FLEXIBLE: "Flexible | مرن",
-    TIME_5: "5:00 PM",
-    TIME_6: "6:00 PM",
-    TIME_630: "6:30 PM"
-  };
-  return times[payload] || "";
+  if (payload === "TIME_5") return "5:00 PM";
+  if (payload === "TIME_6") return "6:00 PM";
+  if (payload === "TIME_630") return "6:30 PM";
+  return "";
 }
 
 function payloadToStaff(payload) {
@@ -305,200 +233,117 @@ function payloadToStaff(payload) {
   return names[payload] || "";
 }
 
-function welcomeBody() {
-  return `Hello 👋
-
-معك المساعد الذكي الخاص بـ
-
-${BUSINESS_NAME}
-
-نساعدك بحجز استشارة، خدمة للعميل الحالي، مشاهدة النتائج، أو التواصل مع الفريق.
-
-You are chatting with the smart assistant of
-
-${BUSINESS_NAME}
-
-We can help with consultation booking, existing-client service, viewing results, or connecting you with the team.`;
+function welcomeBody(ar) {
+  return ar
+    ? `Hello 👋\n\nمعك ${BUSINESS_NAME}\n\nكيف فينا نساعدك؟`
+    : `Hello 👋\n\nYou are chatting with ${BUSINESS_NAME}.\n\nHow can we help you?`;
 }
 
-function bookingBody() {
-  return `أكيد، اختر نوع الحجز المناسب لك:
-
-استشارة: للعميل الجديد لمعرفة الحل الأنسب.
-سيرفس: للعميل الحالي للمتابعة، التركيب، التعديل، أو الصيانة.
-
-Sure, please choose the right booking type:
-
-Consultation: for new clients who want the best solution.
-Service: for existing clients who need follow-up, fitting, adjustment, or maintenance.`;
+function bookingBody(ar) {
+  return ar
+    ? "أكيد، اختر نوع الحجز المناسب لك:\n\nإذا كنت عميل حالي وتريد خدمة / متابعة / تركيب / تعديل، اختر سيرفس.\n\nإذا كنت عميل جديد وتريد معرفة الحل الأنسب، اختر استشارة.\n\n------------------------------\n\nSure, please choose the right booking type."
+    : "Sure, please choose the right booking type:\n\nIf you are an existing client and need service / follow-up / fitting / adjustment, choose Service.\n\nIf you are a new client and want to know the best solution, choose Consultation.";
 }
 
-function servicesBody() {
-  return `أكيد ✨
-
-في Iconic Hair Care نقدم حلول Hair Replacement بمظهر طبيعي 100%، بدون جراحة، وبخصوصية عالية.
-
-At Iconic Hair Care, we provide non-surgical Hair Replacement with a 100% natural look and high privacy.
-
-شو تحب تشوف أولاً؟ / What would you like to check first?`;
+function servicesBody(ar) {
+  return ar
+    ? "أكيد ✨\n\nفي Iconic Hair Care نقدم حلول Hair Replacement بمظهر طبيعي 100%، بدون جراحة.\n\nشو تحب تشوف أولاً؟"
+    : "Sure ✨\n\nAt Iconic Hair Care, we provide Hair Replacement solutions with a 100% natural look, without surgery.\n\nWhat would you like to check first?";
 }
 
-function resultsBody() {
-  return `هذه بعض النتائج من Iconic Hair Care.
-
-المظهر طبيعي، بدون جراحة، ويتم اختيار الشكل حسب الوجه والستايل المناسب لك.
-
-Here are some Iconic Hair Care results.
-Natural look, non-surgical, and customized to your face shape and style.
-
-الخطوة التالية؟ / Next step?`;
+function resultsBody(ar) {
+  return ar
+    ? "هذه بعض النتائج الحقيقية من Iconic Hair Care.\n\nمظهر طبيعي، بدون جراحة، وبشكل يناسبك تماماً.\n\nشو تحب تعمل بعد ما شفت النتائج؟"
+    : "Here are some real results from Iconic Hair Care.\n\nNatural look, non-surgical, and designed to suit you.\n\nWhat would you like to do next?";
 }
 
-function askBranchBody(intent) {
-  const label = intent === "service" ? "Service | سيرفس" : intent === "location" ? "Location | الموقع" : "Consultation | استشارة";
-  return `تمام، اختر الفرع المناسب لـ ${label}:
-
-Great, please choose the branch for ${label}:`;
+function askBranchBody(ar, intent) {
+  const label = intent === "service" ? "Service" : "Consultation";
+  return ar
+    ? `تمام، اختر الفرع المناسب لـ ${label}:`
+    : `Great, please choose the branch for your ${label}:`;
 }
 
-function askStaffBody() {
-  return `اختر المختص المفضل للسيرفس، أو اختر أي مختص متاح.
-
-Choose your preferred service specialist, or choose any available specialist.`;
+function askStaffBody(ar) {
+  return ar
+    ? "اختر المختص المفضل للسيرفس، أو اختر أي مختص متاح:"
+    : "Choose your preferred service specialist, or choose any available specialist:";
 }
 
-function askDayBody() {
-  return `تمام، اختر اليوم المناسب:
-
-Great, please choose your preferred day:`;
+function askDayBody(ar) {
+  return ar ? "تمام، اختر اليوم المناسب:" : "Great, please choose your preferred day:";
 }
 
-function askTimeBody(dayPayload) {
-  if (isTodayPayload(dayPayload) && getAvailableTimeSlots(dayPayload).length === 0) {
-    return `مواعيد اليوم خلصت حسب توقيت دبي.
-
-Today's available slots are finished based on Dubai time.
-
-اختر بكرا أو هذا الأسبوع. / Please choose Tomorrow or This week.`;
-  }
-
-  return `تمام، اختر الوقت المفضل حسب توقيت دبي:
-
-Great, please choose your preferred time based on Dubai time:`;
+function askTimeBody(ar) {
+  return ar ? "تمام، اختر الوقت المفضل:" : "Great, please choose your preferred time:";
 }
 
-function finalSummaryBody(state) {
+function finalSummaryBody(state, ar) {
   const branch = state.branch || "Dubai";
-  const day = state.day || "Not selected | غير محدد";
-  const time = state.time || "Flexible | مرن";
+  const day = state.day || (ar ? "غير محدد" : "Not selected");
+  const time = state.time || "Flexible";
   const staff = state.staff || "";
-  const requestType = state.intent === "service" ? "Service Appointment | موعد سيرفس" : "Consultation Booking | حجز استشارة";
-
-  return `تم استلام طلبك ✅
-
-نوع الطلب: ${requestType}
-الفرع: ${branch}
-اليوم: ${day}
-الوقت: ${time}${staff ? `
-المختص: ${staff}` : ""}
-
-الفريق سيراجع الطلب ويرد عليك قريباً لتأكيد الموعد.
-
-Your request has been received ✅
-Our team will review it and confirm your appointment shortly.`;
+  const requestType = state.intent === "service" ? "Service Appointment" : "Consultation Booking";
+  return ar
+    ? `تم استلام طلبك ✅\n\nنوع الطلب: ${requestType}\nالفرع: ${branch}\nاليوم: ${day}\nالوقت: ${time}${staff ? `\nالمختص: ${staff}` : ""}\n\nالفريق سيراجع الطلب ويرد عليك قريباً للتأكيد.\n\n------------------------------\n\nYour request has been received ✅\nOur team will confirm shortly.`
+    : `Your request has been received ✅\n\nRequest type: ${requestType}\nBranch: ${branch}\nDay: ${day}\nTime: ${time}${staff ? `\nSpecialist: ${staff}` : ""}\n\nOur team will review the request and confirm shortly.`;
 }
 
-function teamBody() {
-  return `تمام 👌
-
-تم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.
-
-Done 👌
-Your conversation has been forwarded to our team. One of our specialists will assist you shortly.`;
+function teamBody(ar) {
+  return ar
+    ? "تمام 👌\n\nتم تحويل المحادثة لفريقنا، وراح يتابع معك أحد المختصين بأقرب وقت.\n\nملاحظة: تم إيقاف الردود التلقائية مؤقتاً لهذه المحادثة."
+    : "Done 👌\n\nYour conversation has been forwarded to our team. One of our specialists will assist you shortly.\n\nNote: Automatic replies have been paused for this conversation.";
 }
 
-function locationBody(branch = "Dubai") {
+function locationBody(ar, branch = "Dubai") {
   const locationUrl = branch === "Abu Dhabi" ? ABU_DHABI_LOCATION_URL : DUBAI_LOCATION_URL;
-  const branchAr = branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
-
-  return `هذا هو موقع فرع ${branchAr}:
-
-${locationUrl}
-
-This is our ${branch} branch location:
-
-${locationUrl}`;
+  return ar
+    ? `هذا هو موقع فرع ${branch === "Abu Dhabi" ? "أبوظبي" : "دبي"}:\n\n${locationUrl}`
+    : `This is our ${branch} branch location:\n\n${locationUrl}`;
 }
 
 function buildReply(text, key, hasAttachment) {
+  const ar = isArabic(text);
   const state = getState(key);
-  const lang = getPreferredLanguage(text, state);
-  const ar = lang === "ar";
-  state.lang = lang;
-
   const cleanText = (text || "").toString().trim();
   const upper = cleanText.toUpperCase();
 
   if (upper === "TEAM" || isTeam(cleanText)) {
     resetState(key);
-    return { text: teamBody(), quickReplies: [] };
+    return { text: teamBody(ar), quickReplies: [] };
   }
 
   if (upper === "BOOKING" || isBooking(cleanText)) {
-    conversationState.set(key, { intent: "booking", lang });
-    return { text: bookingBody(), quickReplies: bookingReplies() };
+    conversationState.set(key, { intent: "booking" });
+    return { text: bookingBody(ar), quickReplies: bookingReplies(ar) };
   }
 
   if (upper === "CONSULT" || isConsult(cleanText)) {
-    conversationState.set(key, { intent: "consult", lang });
-    return { text: askBranchBody("consult"), quickReplies: branchReplies() };
+    conversationState.set(key, { intent: "consult" });
+    return { text: askBranchBody(ar, "consult"), quickReplies: branchReplies(ar) };
   }
 
   if (upper === "SERVICE" || isService(cleanText)) {
-    conversationState.set(key, { intent: "service", lang });
-    return { text: askStaffBody(), quickReplies: staffReplies(ar) };
-  }
-
-  if (upper === "LOCATION" || isLocation(cleanText)) {
-    conversationState.set(key, { intent: "location", lang });
-    return { text: askBranchBody("location"), quickReplies: branchReplies() };
-  }
-
-  if (upper === "SERVICES" || isServices(cleanText)) {
-    return { text: servicesBody(), quickReplies: servicesReplies(), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
-  }
-
-  if (upper === "RESULTS" || isResults(cleanText)) {
-    return { text: resultsBody(), quickReplies: resultsReplies(), sendResultsMedia: true };
+    conversationState.set(key, { intent: "service" });
+    return { text: askStaffBody(ar), quickReplies: staffReplies(ar) };
   }
 
   const staff = payloadToStaff(upper);
   if (staff && state.intent === "service") {
     state.staff = staff;
-    return { text: askBranchBody("service"), quickReplies: branchReplies() };
+    return { text: askBranchBody(ar, "service"), quickReplies: branchReplies(ar) };
   }
 
   const branch = payloadToBranch(upper);
-  if (branch && state.intent === "location") {
-    resetState(key);
-    return { text: locationBody(branch), quickReplies: mainReplies() };
-  }
-
   if (branch && state.intent) {
     state.branch = branch;
-    return { text: askDayBody(), quickReplies: dayReplies() };
+    return { text: askDayBody(ar), quickReplies: dayReplies(ar) };
   }
 
-  const day = payloadToDay(upper);
+  const day = payloadToDay(upper, ar);
   if (day && state.intent) {
     state.day = day;
-    state.dayPayload = upper;
-
-    if (isTodayPayload(upper) && getAvailableTimeSlots(upper).length === 0) {
-      return { text: askTimeBody(upper), quickReplies: [quickReply("Tomorrow | بكرا", "DAY_TOMORROW"), quickReply("This week | أسبوع", "DAY_WEEK")] };
-    }
-
-    return { text: askTimeBody(upper), quickReplies: timeReplies(upper) };
+    return { text: askTimeBody(ar), quickReplies: timeReplies(ar) };
   }
 
   const time = payloadToTime(upper);
@@ -506,30 +351,36 @@ function buildReply(text, key, hasAttachment) {
     state.time = time;
     const done = { ...state };
     resetState(key);
-    return { text: finalSummaryBody(done), quickReplies: [] };
+    return { text: finalSummaryBody(done, ar), quickReplies: [] };
+  }
+
+  if (upper === "RESULTS" || isResults(cleanText)) {
+    return { text: resultsBody(ar), quickReplies: resultsReplies(ar), sendResultsMedia: true };
+  }
+
+  if (upper === "LOCATION" || isLocation(cleanText)) {
+    return { text: locationBody(ar, state.branch || "Dubai"), quickReplies: mainReplies(ar) };
+  }
+
+  if (upper === "SERVICES" || isServices(cleanText)) {
+    return { text: servicesBody(ar), quickReplies: servicesReplies(ar), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
   }
 
   if (hasAttachment) {
     return {
-      text: `وصلتنا الرسالة أو الملف ✅
-فريقنا رح يراجعها ويرد عليك بأقرب وقت.
-
-We received your message or file ✅
-Our team will review it and reply as soon as possible.`,
-      quickReplies: mainReplies()
+      text: ar ? "وصلتنا الرسالة أو الملف ✅\nفريقنا رح يراجعها ويرد عليك بأقرب وقت." : "We received your message or file ✅\nOur team will review it and reply as soon as possible.",
+      quickReplies: mainReplies(ar)
     };
   }
 
   if (isGreeting(cleanText)) {
-    conversationState.set(key, { lang });
-    return { text: welcomeBody(), quickReplies: mainReplies(), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
+    conversationState.set(key, {});
+    return { text: welcomeBody(ar), quickReplies: mainReplies(ar), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
   }
 
   return {
-    text: `اختر كيف فينا نساعدك:
-
-Please choose how we can help:`,
-    quickReplies: mainReplies()
+    text: ar ? "اختر كيف فينا نساعدك:" : "Please choose how we can help:",
+    quickReplies: mainReplies(ar)
   };
 }
 
