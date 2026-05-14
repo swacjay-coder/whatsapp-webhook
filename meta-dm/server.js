@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-better-replies-v2-smart-name";
+const BOT_VERSION = "iconic-meta-dm-independent-v1-ig-graph-routing-better-replies-v2-safe";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -58,7 +58,6 @@ const ABU_DHABI_LOCATION_URL = process.env.ABU_DHABI_LOCATION_URL || "https://ma
 const BUSINESS_NAME = "I C O N I C   H A I R   C A R E";
 
 const conversationState = new Map();
-const profileCache = new Map();
 
 function normalizeText(value) {
   return (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
@@ -306,11 +305,8 @@ function payloadToStaff(payload) {
   return names[payload] || "";
 }
 
-function welcomeBody(customerName = "") {
-  const safeName = (customerName || "").toString().trim();
-  const greeting = safeName ? `Hello ${safeName} 👋` : "Hello 👋";
-
-  return `${greeting}
+function welcomeBody() {
+  return `Hello 👋
 
 معك المساعد الذكي الخاص بـ
 
@@ -434,70 +430,7 @@ This is our ${branch} branch location:
 ${locationUrl}`;
 }
 
-
-function pickDisplayName(profile) {
-  const rawName =
-    profile?.name ||
-    profile?.first_name ||
-    profile?.username ||
-    profile?.user_name ||
-    "";
-
-  return rawName.toString().trim().slice(0, 40);
-}
-
-async function getCustomerDisplayName(senderId, channel) {
-  const cacheKey = `${channel}:${senderId}`;
-  const cached = profileCache.get(cacheKey);
-
-  if (cached && Date.now() - cached.at < 24 * 60 * 60 * 1000) {
-    return cached.name;
-  }
-
-  const config = getSendConfig(channel);
-  if (!senderId || !config?.token) {
-    return "";
-  }
-
-  const fields = channel === "Instagram"
-    ? "name,username,profile_pic"
-    : "first_name,last_name,profile_pic";
-
-  const graphBaseUrl = getGraphBaseUrl(channel);
-  const url = `${graphBaseUrl}/${encodeURIComponent(senderId)}?fields=${encodeURIComponent(fields)}`;
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${config.token}`
-      }
-    });
-
-    const text = await response.text();
-    let result;
-    try {
-      result = JSON.parse(text);
-    } catch (error) {
-      result = {};
-    }
-
-    let name = "";
-    if (channel === "Messenger") {
-      name = [result.first_name, result.last_name].filter(Boolean).join(" ").trim();
-    } else {
-      name = pickDisplayName(result);
-    }
-
-    profileCache.set(cacheKey, { name, at: Date.now() });
-    return name;
-  } catch (error) {
-    profileCache.set(cacheKey, { name: "", at: Date.now() });
-    return "";
-  }
-}
-
-function buildReply(text, key, hasAttachment, customerName = "") {
+function buildReply(text, key, hasAttachment) {
   const state = getState(key);
   const lang = getPreferredLanguage(text, state);
   const ar = lang === "ar";
@@ -589,7 +522,7 @@ Our team will review it and reply as soon as possible.`,
 
   if (isGreeting(cleanText)) {
     conversationState.set(key, { lang });
-    return { text: welcomeBody(customerName), quickReplies: mainReplies(), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
+    return { text: welcomeBody(), quickReplies: mainReplies(), mediaUrl: BOT_HEADER_IMAGE_URL, mediaType: "image" };
   }
 
   return {
@@ -714,9 +647,8 @@ async function handleEvent(event, channel) {
   if (!senderId) return;
 
   const incomingText = getIncomingText(event);
-  const customerName = await getCustomerDisplayName(senderId, channel);
   const key = `${channel}:${senderId}`;
-  const reply = buildReply(incomingText, key, hasAttachment(event), customerName);
+  const reply = buildReply(incomingText, key, hasAttachment(event));
 
   if (reply.mediaUrl) {
     await sendMedia(senderId, reply.mediaType || "image", reply.mediaUrl, channel);
