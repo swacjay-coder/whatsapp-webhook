@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-stable-log-cleanup";
+const BOT_VERSION = "iconic-meta-dm-v1-stable-log-cleanup-service-word-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -334,8 +334,8 @@ function isConsult(text) {
 function isService(text) {
   const value = normalizeText(text);
   return value === "service" || value === "service | سيرفس" || value === "سيرفس" || value === "خدمة" ||
-    value.includes("صيانة") || value.includes("متابعة") || value.includes("تعديل") ||
-    value.includes("fitting") || value.includes("follow up") || value.includes("adjustment") || value.includes("maintenance");
+    value.includes("متابعة") || value.includes("تعديل") ||
+    value.includes("fitting") || value.includes("follow up") || value.includes("adjustment");
 }
 
 function isServices(text) {
@@ -452,10 +452,10 @@ function welcomeBody(lang = "en") {
 
 function bookingBody(lang = "en") {
   if (isAr(lang)) {
-    return `تمام، اختر نوع الحجز المناسب لك:\n\nاستشارة: إذا كنت عميل جديد وتريد معرفة الحل الأنسب لك.\nسيرفس: إذا كنت عميل حالي وتحتاج متابعة، تركيب، تعديل، أو صيانة.`;
+    return `تمام، اختر نوع الحجز المناسب لك:\n\nاستشارة: إذا كنت عميل جديد وتريد معرفة الحل الأنسب لك.\nسيرفس: إذا كنت عميل حالي وتحتاج متابعة، تركيب، تعديل، أو سيرفس.`;
   }
 
-  return `Sure, please choose the right booking type:\n\nConsultation: for new clients who want the best solution.\nService: for existing clients who need follow-up, fitting, adjustment, or maintenance.`;
+  return `Sure, please choose the right booking type:\n\nConsultation: for new clients who want the best solution.\nService: for existing clients who need follow-up, fitting, adjustment, or service.`;
 }
 
 function servicesBody(lang = "en") {
