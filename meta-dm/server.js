@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-stable-channel-no-name-lookup";
+const BOT_VERSION = "iconic-meta-dm-v1-instagram-send-restore-no-name-how-much-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -142,6 +142,11 @@ function getTurnLanguage(text, state) {
     value.includes("team") ||
     value.includes("price") ||
     value.includes("cost") ||
+    value.includes("how much") ||
+    value.includes("much") ||
+    value.includes("pricing") ||
+    value.includes("charges") ||
+    value.includes("rate") ||
     value.includes("surgery") ||
     value.includes("natural") ||
     value.includes("pain") ||
@@ -376,7 +381,7 @@ function detectSmartIntent(text) {
   if (!value || isPayloadOnly(value.toUpperCase())) return "";
 
   const intents = [
-    { name: "price", keywords: ["السعر", "الأسعار", "كم السعر", "كم التكلفة", "التكلفة", "بكم", "قديش", "كم يكلف", "price", "cost", "how much", "pricing", "charges", "rate"] },
+    { name: "price", keywords: ["السعر", "الأسعار", "كم السعر", "كم التكلفة", "التكلفة", "بكم", "قديش", "كم يكلف", "price", "cost", "how much", "how mutch", "much", "pricing", "charges", "rate"] },
     { name: "results", keywords: ["نتائج", "النتائج", "صور", "صورة", "فيديو", "قبل وبعد", "قبل و بعد", "شوف النتائج", "results", "photos", "photo", "video", "before after", "before and after", "see results"] },
     { name: "details", keywords: ["تفاصيل", "طريقة التركيب", "كيف بيتركب", "كيف يتم التركيب", "كيف يشتغل", "اشرحلي", "شرح", "details", "how it works", "how does it work", "how is it applied", "explain", "procedure"] },
     { name: "surgery", keywords: ["جراحة", "عملية", "في عملية", "بدون جراحة", "هل يحتاج عملية", "زراعة", "surgery", "operation", "surgical", "non surgical", "non-surgical", "without surgery", "hair transplant"] },
@@ -491,34 +496,8 @@ async function fetchJsonWithTimeout(url, timeoutMs = CUSTOMER_NAME_LOOKUP_TIMEOU
 }
 
 async function getCustomerNameFromProfile(channel, senderId) {
-  if (!senderId) return "";
-
-  const config = getChannelConfig(channel);
-  if (!config?.accessToken) return "";
-
-  const fields = channel === "instagram" ? "name,username" : "name,first_name,last_name";
-  const url = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/${encodeURIComponent(senderId)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(config.accessToken)}`;
-
-  try {
-    const result = await fetchJsonWithTimeout(url);
-    if (!result.ok) {
-      console.log(`[Customer Name] skipped ${channel}`, result.status, JSON.stringify(result.data));
-      return "";
-    }
-
-    const data = result.data || {};
-    const fullName = cleanCustomerName(data.name);
-    if (fullName) return fullName;
-
-    const firstLast = cleanCustomerName(`${data.first_name || ""} ${data.last_name || ""}`);
-    if (firstLast) return firstLast;
-
-    const username = cleanCustomerName(data.username);
-    if (username) return username;
-  } catch (error) {
-    console.log(`[Customer Name] skipped ${channel}`, error.message);
-  }
-
+  // Customer name API lookup is intentionally disabled in this stable build.
+  // We only use a name if Meta includes it directly inside the incoming webhook event.
   return "";
 }
 
@@ -734,9 +713,9 @@ async function sendStaffWhatsAppText(to, body, phoneNumberId) {
 function getChannelConfig(channel) {
   if (channel === "instagram") {
     return {
-      graphVersion: FACEBOOK_GRAPH_VERSION,
-      senderId: MESSENGER_PAGE_ID || "me",
-      accessToken: MESSENGER_PAGE_ACCESS_TOKEN || INSTAGRAM_ACCESS_TOKEN
+      graphVersion: INSTAGRAM_GRAPH_VERSION,
+      senderId: INSTAGRAM_BUSINESS_ACCOUNT_ID,
+      accessToken: INSTAGRAM_ACCESS_TOKEN
     };
   }
 
