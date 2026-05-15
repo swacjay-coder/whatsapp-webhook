@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-11-smart-booking-day-language-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-12-smart-booking-time-and-specialist-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -3680,6 +3680,73 @@ function buildSmartBookingRequestMessage(draft = {}, preferredTime = "", origina
   ].join("\n");
 }
 
+function isSmartBookingAnySpecialistText(text = "") {
+  const value = normalizeSmartBookingSearchText(text);
+  if (!value) return false;
+
+  return value === "smart_staff_any" ||
+    value === "any available" ||
+    value === "any specialist" ||
+    value === "any team member" ||
+    value === "no preference" ||
+    value === "no preferred" ||
+    value === "doesnt matter" ||
+    value === "does not matter" ||
+    value === "any" ||
+    value === "اي" ||
+    value === "أي" ||
+    value === "اي مختص" ||
+    value === "أي مختص" ||
+    value === "اي موظف" ||
+    value === "أي موظف" ||
+    value === "لا يهم" ||
+    value === "ما يفرق" ||
+    value === "مافي حدا" ||
+    value === "ما في حدا" ||
+    value === "بدون تفضيل" ||
+    value.includes("any available") ||
+    value.includes("no preference") ||
+    value.includes("اي مختص") ||
+    value.includes("أي مختص") ||
+    value.includes("اي موظف") ||
+    value.includes("أي موظف") ||
+    value.includes("لا يهم") ||
+    value.includes("ما يفرق") ||
+    value.includes("بدون تفضيل");
+}
+
+function getSmartBookingStaffPreferenceButtons(language = "en") {
+  return [
+    { id: "smart_staff_any", title: language === "ar" ? "أي مختص" : "Any Available" }
+  ];
+}
+
+function buildSmartBookingAskStaffBody(draft = {}, customerName = "", preferredTime = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+  const dayLabel = getSmartBookingDayLabel(draft.preferredDay, language);
+  const timePart = preferredTime
+    ? (language === "ar" ? ` الساعة ${preferredTime}` : ` at ${preferredTime}`)
+    : "";
+
+  if (language === "ar") {
+    return [
+      cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
+      "",
+      `هل عندك مختص مفضل للموعد ${dayLabel}${timePart}؟`,
+      "اكتب اسم المختص مثل: Ahmed أو Omar.",
+      "أو اضغط: أي مختص."
+    ].join("\n");
+  }
+
+  return [
+    cleanName ? `Done ${cleanName} ✅` : "Done ✅",
+    "",
+    `Do you have a preferred specialist for ${dayLabel}${timePart}?`,
+    "Type the specialist name, for example: Ahmed or Omar.",
+    "Or tap: Any Available."
+  ].join("\n");
+}
+
 async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", profileName = "", preferredTime = "") {
   const finalDraft = mergeSmartBookingStaffIntoDraft(draft, draft.rawRequest || "");
   const isAbuDhabi = finalDraft.branch === "Abu Dhabi";
@@ -3771,6 +3838,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   const askForWeekday = async (draft) => {
     draft.waitingForWeekday = true;
     draft.waitingForTime = false;
+    draft.waitingForStaff = false;
     smartBookingDrafts[from] = draft;
     setConversationStatus(from, "Smart Booking - Choose Weekday");
     const weekdayBody = buildSmartBookingAskWeekdayBody(draft, profileName, replyLanguage);
@@ -3781,6 +3849,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
 
   const askForTime = async (draft) => {
     draft.waitingForWeekday = false;
+    draft.waitingForStaff = false;
     draft.waitingForTime = true;
     smartBookingDrafts[from] = draft;
     setConversationStatus(from, "Smart Booking - Choose Time");
@@ -3790,13 +3859,92 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     return true;
   };
 
-  if (existingDraft && detectedDay && !inputTime.ok) {
+  const askForStaff = async (draft) => {
+    draft.waitingForWeekday = false;
+    draft.waitingForTime = false;
+    draft.waitingForStaff = true;
+    smartBookingDrafts[from] = draft;
+    setConversationStatus(from, "Smart Booking - Choose Specialist");
+    const staffBody = buildSmartBookingAskStaffBody(draft, profileName, draft.preferredTime || "", replyLanguage);
+    const staffButtons = getSmartBookingStaffPreferenceButtons(replyLanguage);
+    await sendWhatsAppButtonMessage(from, staffBody, staffButtons, incomingPhoneNumberId, { replyLanguage });
+    addInboxMessage(from, "bot", formatButtonLog(staffBody, staffButtons), "Smart Booking - Choose Specialist", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Specialist" });
+    return true;
+  };
+
+  const submitSmartBooking = async (draft, selectedTime, originalSelection = "") => {
+    const finalDraft = mergeSmartBookingStaffIntoDraft(draft, `${draft.rawRequest || ""} ${originalSelection || ""}`.trim());
+    const selectedBranch = finalDraft.branch || lineConfig.branch || "Dubai";
+    finalDraft.branch = selectedBranch;
+    finalDraft.preferredTime = selectedTime;
+
+    const requestMessage = buildSmartBookingRequestMessage(finalDraft, selectedTime, finalDraft.rawRequest || originalSelection || input);
+    setConversationStatus(from, "Booking Request");
+    await saveConversationStateToGoogleSheetFromServer({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      branch: selectedBranch,
+      status: "Booking Request",
+      assignee: getBranchTeamAssignee(selectedBranch),
+      tags: ["Booking", "Smart Natural Booking V3.12", "Need Confirmation"],
+      updatedBy: "WhatsApp Smart Natural Booking V3.12"
+    });
+    await saveBookingRequestToGoogleSheetFromServer({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      customerName: profileName,
+      branch: selectedBranch,
+      message: requestMessage,
+      requestType: "WhatsApp Smart Natural Booking V3.12",
+      bookingStatus: "Pending"
+    });
+    addInboxMessage(from, "customer", requestMessage, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "WhatsApp Smart Natural Booking Submit" });
+
+    let staffNotifyResult = null;
+    try {
+      staffNotifyResult = await notifyStaffAboutSmartBooking(finalDraft, from, profileName, selectedTime);
+    } catch (error) {
+      staffNotifyResult = { ok: false, error: error?.message || String(error), routingPhoneNumberId: finalDraft.branch === "Abu Dhabi" ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID };
+      console.log("Smart booking staff notification failed:");
+      console.log(error);
+    }
+
+    const staffNotifyLogBody = buildSmartBookingStaffNotifyLogBody(staffNotifyResult, finalDraft, staffNotifyResult?.routingPhoneNumberId || "");
+    addInboxMessage(
+      from,
+      "bot",
+      staffNotifyLogBody,
+      staffNotifyResult?.ok ? "Staff Notify Sent" : "Staff Notify Failed",
+      incomingPhoneNumberId,
+      {
+        customerName: profileName,
+        messageType: staffNotifyResult?.ok ? "Smart Booking Staff Notify Sent" : "Smart Booking Staff Notify Failed"
+      }
+    );
+
+    delete smartBookingDrafts[from];
+    const confirmationBody = buildSmartBookingConfirmationBody(finalDraft, selectedTime, replyLanguage);
+    await sendWhatsAppMessage(from, confirmationBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+    addInboxMessage(from, "bot", confirmationBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Confirmation" });
+    return true;
+  };
+
+  if (existingDraft && detectedDay) {
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
     existingDraft.preferredDay = detectedDay;
     existingDraft.rawRequest = existingDraft.rawRequest || input;
+    if (inputTime.ok) existingDraft.preferredTime = inputTime.time;
 
     if (existingDraft.preferredDay === "This Week") {
       return askForWeekday(existingDraft);
+    }
+
+    if (!existingDraft.teamMember) {
+      return askForStaff(existingDraft);
+    }
+
+    if (existingDraft.preferredTime) {
+      return submitSmartBooking(existingDraft, existingDraft.preferredTime, input);
     }
 
     return askForTime(existingDraft);
@@ -3815,6 +3963,47 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     }
 
     existingDraft.preferredDay = weekday;
+    if (inputTime.ok) existingDraft.preferredTime = inputTime.time;
+
+    if (!existingDraft.teamMember) {
+      return askForStaff(existingDraft);
+    }
+
+    if (existingDraft.preferredTime) {
+      return submitSmartBooking(existingDraft, existingDraft.preferredTime, input);
+    }
+
+    return askForTime(existingDraft);
+  }
+
+  if (existingDraft && existingDraft.waitingForStaff) {
+    const detectedStaff = detectSmartBookingStaff(input || "");
+    const noPreference = isSmartBookingAnySpecialistText(input || "");
+
+    if (!detectedStaff && !noPreference) {
+      const retryStaff = buildSmartBookingAskStaffBody(existingDraft, profileName, existingDraft.preferredTime || "", replyLanguage);
+      const retryButtons = getSmartBookingStaffPreferenceButtons(replyLanguage);
+      await sendWhatsAppButtonMessage(from, retryStaff, retryButtons, incomingPhoneNumberId, { replyLanguage });
+      addInboxMessage(from, "bot", formatButtonLog(retryStaff, retryButtons), "Smart Booking - Choose Specialist", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Retry Specialist" });
+      return true;
+    }
+
+    if (detectedStaff) {
+      existingDraft.branch = detectedStaff.branch || existingDraft.branch || lineConfig.branch || "Dubai";
+      existingDraft.teamMember = detectedStaff.name || "";
+    } else {
+      existingDraft.teamMember = "Any Available";
+      existingDraft.branch = existingDraft.branch || lineConfig.branch || "Dubai";
+    }
+
+    existingDraft.waitingForStaff = false;
+    if (inputTime.ok) existingDraft.preferredTime = inputTime.time;
+    smartBookingDrafts[from] = existingDraft;
+
+    if (existingDraft.preferredTime) {
+      return submitSmartBooking(existingDraft, existingDraft.preferredTime, input);
+    }
+
     return askForTime(existingDraft);
   }
 
@@ -3829,56 +4018,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       return true;
     }
 
-    const selectedBranch = existingDraft.branch || lineConfig.branch || "Dubai";
-    const requestMessage = buildSmartBookingRequestMessage(existingDraft, parsedTime.time, existingDraft.rawRequest || input);
-    setConversationStatus(from, "Booking Request");
-    await saveConversationStateToGoogleSheetFromServer({
-      phone: from,
-      phoneNumberId: incomingPhoneNumberId,
-      branch: selectedBranch,
-      status: "Booking Request",
-      assignee: getBranchTeamAssignee(selectedBranch),
-      tags: ["Booking", "Smart Natural Booking V3.2", "Need Confirmation"],
-      updatedBy: "WhatsApp Smart Natural Booking V3.2"
-    });
-    await saveBookingRequestToGoogleSheetFromServer({
-      phone: from,
-      phoneNumberId: incomingPhoneNumberId,
-      customerName: profileName,
-      branch: selectedBranch,
-      message: requestMessage,
-      requestType: "WhatsApp Smart Natural Booking V3.2",
-      bookingStatus: "Pending"
-    });
-    addInboxMessage(from, "customer", requestMessage, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "WhatsApp Smart Natural Booking Submit" });
-
-    let staffNotifyResult = null;
-    try {
-      staffNotifyResult = await notifyStaffAboutSmartBooking(existingDraft, from, profileName, parsedTime.time);
-    } catch (error) {
-      staffNotifyResult = { ok: false, error: error?.message || String(error), routingPhoneNumberId: existingDraft.branch === "Abu Dhabi" ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID };
-      console.log("Smart booking staff notification failed:");
-      console.log(error);
-    }
-
-    const staffNotifyLogBody = buildSmartBookingStaffNotifyLogBody(staffNotifyResult, existingDraft, staffNotifyResult?.routingPhoneNumberId || "");
-    addInboxMessage(
-      from,
-      "bot",
-      staffNotifyLogBody,
-      staffNotifyResult?.ok ? "Staff Notify Sent" : "Staff Notify Failed",
-      incomingPhoneNumberId,
-      {
-        customerName: profileName,
-        messageType: staffNotifyResult?.ok ? "Smart Booking Staff Notify Sent" : "Smart Booking Staff Notify Failed"
-      }
-    );
-
-    delete smartBookingDrafts[from];
-    const confirmationBody = buildSmartBookingConfirmationBody(existingDraft, parsedTime.time, replyLanguage);
-    await sendWhatsAppMessage(from, confirmationBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
-    addInboxMessage(from, "bot", confirmationBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Confirmation" });
-    return true;
+    return submitSmartBooking(existingDraft, parsedTime.time, input);
   }
 
   const staff = detectSmartBookingStaff(input);
@@ -3887,12 +4027,14 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   const draft = {
     branch,
     preferredDay: detectedDayForNewDraft || "",
+    preferredTime: inputTime.ok ? inputTime.time : "",
     teamMember: staff?.name || "",
     rawRequest: input,
     startedAt: getDubaiTimestamp(),
     phoneNumberId: incomingPhoneNumberId,
     waitingForTime: false,
-    waitingForWeekday: false
+    waitingForWeekday: false,
+    waitingForStaff: false
   };
   smartBookingDrafts[from] = draft;
 
@@ -3909,6 +4051,14 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
 
   if (draft.preferredDay === "This Week") {
     return askForWeekday(draft);
+  }
+
+  if (!draft.teamMember) {
+    return askForStaff(draft);
+  }
+
+  if (draft.preferredTime) {
+    return submitSmartBooking(draft, draft.preferredTime, input);
   }
 
   return askForTime(draft);
