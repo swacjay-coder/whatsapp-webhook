@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-2-sidebar-icons-and-booking-actions-visible";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-3-manual-booking-flow-link";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -4375,6 +4375,127 @@ app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
     console.error("Booking customer update send failed:");
     console.error(error);
     return res.status(500).json({ ok: false, error: "Booking customer update send failed" });
+  }
+});
+
+
+// V31.5.8.60.3.7.3 - Manual booking Flow link:
+// Safe internal endpoint for staff to resend Service/Consultation WhatsApp Flows
+// by opening a protected URL with phone, type, and branch query parameters.
+app.get("/api/send-booking-flow", protectInbox, async (req, res) => {
+  try {
+    const to = normalizePhoneDigits(req.query?.phone || req.query?.to || "");
+    const requestedType = (req.query?.type || "service").toString().toLowerCase().trim();
+    const requestedBranch = (req.query?.branch || "dubai").toString().toLowerCase().trim();
+    const customerName = cleanCustomerName(req.query?.name || req.query?.customerName || "");
+
+    if (!to) {
+      return res.status(400).json({
+        ok: false,
+        error: "Missing customer phone",
+        example: "/api/send-booking-flow?phone=9715XXXXXXX&type=service&branch=dubai"
+      });
+    }
+
+    const isAbuDhabiBranch = requestedBranch.includes("abu") || requestedBranch.includes("ad");
+    const phoneNumberId = normalizePhoneNumberId(req.query?.phoneNumberId || (isAbuDhabiBranch ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID));
+    const lineConfig = getLineConfig(phoneNumberId);
+    const flowType = requestedType.includes("consult") || requestedType.includes("استشار")
+      ? "consultation"
+      : "service";
+    const requestType = flowType === "consultation"
+      ? "Consultation Booking"
+      : "Service Appointment";
+    const status = flowType === "consultation"
+      ? "Consultation Flow - Sent Manually"
+      : "Service Flow - Sent Manually";
+
+    const introMessage = [
+      "من فضلك استخدم نموذج الحجز السريع حتى نقدر نثبت لك الموعد المناسب.",
+      "",
+      "Please use the quick booking form so we can confirm the best available appointment for you."
+    ].join("\n");
+
+    const introResult = await sendWhatsAppMessage(to, introMessage, phoneNumberId);
+
+    if (introResult?.error) {
+      return res.status(500).json({
+        ok: false,
+        step: "intro_message",
+        error: introResult.error?.message || "Intro message send failed",
+        result: introResult
+      });
+    }
+
+    addInboxMessage(
+      to,
+      "staff",
+      introMessage,
+      "Human Reply",
+      phoneNumberId,
+      {
+        customerName,
+        messageType: "Manual Booking Flow Intro"
+      }
+    );
+
+    const flowSendResult = await sendWhatsAppFlowMessage(to, phoneNumberId, {
+      branch: lineConfig.branch,
+      customerName,
+      flowType,
+      requestType
+    });
+
+    if (!flowSendResult.ok) {
+      return res.status(500).json({
+        ok: false,
+        step: "booking_flow",
+        error: "Booking Flow send failed",
+        result: flowSendResult
+      });
+    }
+
+    setConversationStatus(to, status);
+
+    await saveConversationStateToGoogleSheetFromServer({
+      phone: to,
+      phoneNumberId,
+      branch: lineConfig.branch,
+      status,
+      assignee: getBranchTeamAssignee(lineConfig.branch),
+      tags: ["Booking", requestType, "Manual Flow Link"],
+      updatedBy: "Manual Send Booking Flow Link"
+    });
+
+    addInboxMessage(
+      to,
+      "bot",
+      `${requestType} Flow sent manually`,
+      status,
+      phoneNumberId,
+      {
+        customerName,
+        messageType: "Manual Booking Flow Sent"
+      }
+    );
+
+    return res.json({
+      ok: true,
+      to,
+      branch: lineConfig.branch,
+      phoneNumberId,
+      flowType,
+      requestType,
+      status,
+      result: flowSendResult
+    });
+  } catch (error) {
+    console.error("Manual booking Flow send failed:");
+    console.error(error);
+    return res.status(500).json({
+      ok: false,
+      error: "Manual booking Flow send failed"
+    });
   }
 });
 
