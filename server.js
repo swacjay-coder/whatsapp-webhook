@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-8-smart-whatsapp-booking-layer";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-8-1-smart-booking-full-times-and-staff-notify";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -3296,12 +3296,41 @@ const fastBookingDrafts = {};
 
 const smartBookingDrafts = {};
 
-function getSmartBookingTimeButtons() {
-  return [
-    { id: "smart_time_10_00", title: "10:00 AM" },
-    { id: "smart_time_13_00", title: "1:00 PM" },
-    { id: "smart_time_16_00", title: "4:00 PM" }
-  ];
+function getSmartBookingAvailableTimeOptions(preferredDay = "Tomorrow") {
+  return getBookingTimeOptionsForFlow(preferredDay).map((option, index) => ({
+    number: index + 1,
+    id: option.id,
+    title: option.title
+  }));
+}
+
+function buildSmartBookingTimeListText(preferredDay = "Tomorrow") {
+  return getSmartBookingAvailableTimeOptions(preferredDay)
+    .map((option) => `${option.number}. ${option.title}`)
+    .join("\n");
+}
+
+function getSmartBookingTimeFromText(text = "", preferredDay = "Tomorrow") {
+  const value = compactText(text);
+  if (!value) return "";
+
+  const options = getSmartBookingAvailableTimeOptions(preferredDay);
+  const numericValue = value.replace(/[^0-9٠-٩]/g, "");
+  const normalizedNumber = numericValue.replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit).toString());
+
+  if (normalizedNumber) {
+    const selectedNumber = Number(normalizedNumber);
+    const matchedByNumber = options.find((option) => option.number === selectedNumber);
+    if (matchedByNumber) return matchedByNumber.title;
+  }
+
+  const matchedByText = options.find((option) => {
+    const title = compactText(option.title);
+    const id = compactText(option.id);
+    return value === title || value === id || value.includes(title) || value.includes(id);
+  });
+
+  return matchedByText ? matchedByText.title : "";
 }
 
 function getSmartBookingWeekdayButtons() {
@@ -3310,14 +3339,6 @@ function getSmartBookingWeekdayButtons() {
     { id: "smart_day_day_after", title: "Day After" },
     { id: "smart_day_this_week", title: "This Week" }
   ];
-}
-
-function getSmartBookingTimeFromButton(text = "") {
-  const value = compactText(text);
-  if (value === "smart_time_10_00" || value === "10:00 am") return "10:00 AM";
-  if (value === "smart_time_13_00" || value === "1:00 pm") return "1:00 PM";
-  if (value === "smart_time_16_00" || value === "4:00 pm") return "4:00 PM";
-  return "";
 }
 
 function getSmartBookingDayFromButton(text = "") {
@@ -3364,6 +3385,7 @@ function isSmartBookingNaturalRequest(text = "") {
 function buildSmartBookingTimeBody(draft = {}, customerName = "", language = "en") {
   const cleanName = namePhrase(customerName);
   const branchAr = getFastBookingBranchArabic(draft.branch || "Dubai");
+  const timeList = buildSmartBookingTimeListText(draft.preferredDay || "Tomorrow");
   if (language === "ar") {
     return [
       cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
@@ -3373,7 +3395,9 @@ function buildSmartBookingTimeBody(draft = {}, customerName = "", language = "en
       `اليوم: ${draft.preferredDay || "بكرا"}`,
       draft.teamMember ? `الموظف: ${draft.teamMember}` : "",
       "",
-      "اختر الوقت المناسب:"
+      "اختر رقم الوقت المناسب:",
+      "",
+      timeList
     ].filter(Boolean).join("\n");
   }
   return [
@@ -3384,7 +3408,9 @@ function buildSmartBookingTimeBody(draft = {}, customerName = "", language = "en
     `Day: ${draft.preferredDay || "Tomorrow"}`,
     draft.teamMember ? `Team member: ${draft.teamMember}` : "",
     "",
-    "Please choose the suitable time:"
+    "Please reply with the suitable time number:",
+    "",
+    timeList
   ].filter(Boolean).join("\n");
 }
 
@@ -3450,33 +3476,36 @@ function buildSmartBookingRequestMessage(draft = {}, preferredTime = "", origina
   ].join("\n");
 }
 
-async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", profileName = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, preferredTime = "") {
-  const body = [
-    "New smart booking request received ✅",
-    "",
-    `Branch: ${draft.branch || ""}`,
-    `Customer: ${profileName || ""}`,
-    `Phone: ${customerPhone || ""}`,
-    "Source: WhatsApp Smart Booking",
-    `Day: ${draft.preferredDay || ""}`,
-    `Time: ${preferredTime || ""}`,
-    draft.teamMember ? `Team member: ${draft.teamMember}` : "Team member: ",
-    "Status: Pending",
-    "",
-    "Please check Team Inbox."
-  ].join("\n");
+async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", profileName = "", preferredTime = "") {
   const routingPhoneNumberId = draft.branch === "Abu Dhabi" ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID;
-  const { routing, numbers } = getStaffNotificationNumbers(routingPhoneNumberId);
-  for (const staffNumber of numbers) {
-    await sendStaffNotificationTextMessage(staffNumber, body, routingPhoneNumberId, routing);
-  }
+  const flowData = {
+    branch: draft.branch || getLineConfig(routingPhoneNumberId).branch,
+    customerName: profileName || "",
+    phone: customerPhone || "",
+    requestType: "WhatsApp Smart Booking",
+    serviceInterest: "WhatsApp Smart Booking",
+    preferredDay: draft.preferredDay || "",
+    preferredTime: preferredTime || "",
+    teamMember: draft.teamMember || "",
+    notes: "Source: WhatsApp Smart Booking"
+  };
+
+  console.log("[Smart Booking Staff Notify] preparing", {
+    branch: flowData.branch,
+    phoneNumberId: routingPhoneNumberId,
+    customerPhone,
+    customerName: profileName || "",
+    teamMember: draft.teamMember || ""
+  });
+
+  return notifyStaffAboutFlowBooking(flowData, customerPhone, routingPhoneNumberId, "");
 }
 
 async function handleSmartWhatsAppBooking({ from, message, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en" }) {
   const input = originalText || text || "";
   const chosenSmartDay = getSmartBookingDayFromButton(input);
-  const chosenSmartTime = getSmartBookingTimeFromButton(input);
   const existingDraft = smartBookingDrafts[from] || null;
+  const chosenSmartTime = existingDraft ? getSmartBookingTimeFromText(input, existingDraft.preferredDay || "Tomorrow") : "";
 
   if (!existingDraft && !isSmartBookingNaturalRequest(input)) {
     return false;
@@ -3486,9 +3515,8 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     existingDraft.preferredDay = chosenSmartDay;
     smartBookingDrafts[from] = existingDraft;
     const timeBody = buildSmartBookingTimeBody(existingDraft, profileName, replyLanguage);
-    const timeButtons = getSmartBookingTimeButtons();
-    await sendWhatsAppButtonMessage(from, timeBody, timeButtons, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
-    addInboxMessage(from, "bot", formatButtonLog(timeBody, timeButtons), "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Time Reply" });
+    await sendWhatsAppMessage(from, timeBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+    addInboxMessage(from, "bot", timeBody, "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Time List Reply" });
     return true;
   }
 
@@ -3515,7 +3543,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       bookingStatus: "Pending"
     });
     addInboxMessage(from, "customer", requestMessage, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "WhatsApp Smart Booking Submit" });
-    notifyStaffAboutSmartBooking(existingDraft, from, profileName, incomingPhoneNumberId, chosenSmartTime).catch((error) => {
+    notifyStaffAboutSmartBooking(existingDraft, from, profileName, chosenSmartTime).catch((error) => {
       console.log("Smart booking staff notification failed:");
       console.log(error);
     });
@@ -3523,6 +3551,15 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     const confirmationBody = buildSmartBookingConfirmationBody(existingDraft, chosenSmartTime, replyLanguage);
     await sendWhatsAppMessage(from, confirmationBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
     addInboxMessage(from, "bot", confirmationBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Confirmation" });
+    return true;
+  }
+
+  if (existingDraft) {
+    const retryBody = replyLanguage === "ar"
+      ? "من فضلك اختر رقم وقت من القائمة السابقة."
+      : "Please choose a time number from the previous list.";
+    await sendWhatsAppMessage(from, retryBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+    addInboxMessage(from, "bot", retryBody, "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Retry" });
     return true;
   }
 
@@ -3551,9 +3588,8 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
 
   setConversationStatus(from, "Smart Booking - Choose Time");
   const timeBody = buildSmartBookingTimeBody(draft, profileName, replyLanguage);
-  const timeButtons = getSmartBookingTimeButtons();
-  await sendWhatsAppButtonMessage(from, timeBody, timeButtons, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
-  addInboxMessage(from, "bot", formatButtonLog(timeBody, timeButtons), "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Time Reply" });
+  await sendWhatsAppMessage(from, timeBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+  addInboxMessage(from, "bot", timeBody, "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Time List Reply" });
   return true;
 }
 
