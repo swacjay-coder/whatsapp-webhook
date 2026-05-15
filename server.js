@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-1-smart-booking-team-member-and-staff-notify-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-2-smart-booking-preserve-history-and-direct-staff-notify";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -79,8 +79,12 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const DUBAI_PHONE_NUMBER_ID = process.env.DUBAI_PHONE_NUMBER_ID || PHONE_NUMBER_ID || "1100042333191350";
 const ABU_DHABI_PHONE_NUMBER_ID = process.env.ABU_DHABI_PHONE_NUMBER_ID || "1000146433192239";
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
-const DUBAI_STAFF_NUMBER = process.env.DUBAI_STAFF_NUMBER || STAFF_NUMBER || "";
-const ABU_DHABI_STAFF_NUMBER = process.env.ABU_DHABI_STAFF_NUMBER || STAFF_NUMBER || "";
+// Smart Booking staff notification fallbacks.
+// Render ENV still has priority, but these keep branch notifications working if an ENV is accidentally missing.
+const DEFAULT_DUBAI_STAFF_NUMBER = "971503424811";
+const DEFAULT_ABU_DHABI_STAFF_NUMBER = "971503750616";
+const DUBAI_STAFF_NUMBER = process.env.DUBAI_STAFF_NUMBER || DEFAULT_DUBAI_STAFF_NUMBER || STAFF_NUMBER || "";
+const ABU_DHABI_STAFF_NUMBER = process.env.ABU_DHABI_STAFF_NUMBER || DEFAULT_ABU_DHABI_STAFF_NUMBER || STAFF_NUMBER || "";
 const INBOX_USER = process.env.INBOX_USER || "admin";
 const INBOX_PASS = process.env.INBOX_PASS || "123456";
 
@@ -237,6 +241,28 @@ function normalizePhoneNumberId(value) {
 
 function normalizePhoneDigits(value) {
   return (value || "").toString().replace(/\D/g, "");
+}
+
+function normalizeWhatsAppRecipientDigits(value) {
+  let digits = normalizePhoneDigits(value);
+
+  if (!digits) return "";
+
+  if (digits.startsWith("00")) {
+    digits = digits.slice(2);
+  }
+
+  // UAE mobile local format, for example 0503424811 -> 971503424811.
+  if (digits.length === 10 && digits.startsWith("05")) {
+    return `971${digits.slice(1)}`;
+  }
+
+  // UAE mobile without leading 0, for example 503424811 -> 971503424811.
+  if (digits.length === 9 && digits.startsWith("5")) {
+    return `971${digits}`;
+  }
+
+  return digits;
 }
 
 // V31.5.8.60.3.2 - Staff/customer separation:
@@ -417,7 +443,7 @@ function getStaffNotificationNumbers(phoneNumberId, displayPhoneNumber = "") {
   const numbers = (routing.number || "")
     .toString()
     .split(",")
-    .map((item) => normalizePhoneDigits(item))
+    .map((item) => normalizeWhatsAppRecipientDigits(item))
     .filter(Boolean);
   return { routing, numbers: [...new Set(numbers)] };
 }
@@ -3366,13 +3392,15 @@ function buildSmartBookingStaffNotifyLogBody(notifyResult = {}, draft = {}, rout
   const firstAttempt = attempts[0] || {};
   const status = firstAttempt.status || notifyResult.status || "";
   const error = firstAttempt.result?.error?.message || firstAttempt.result?.error || notifyResult.reason || "";
+  const targetStaffNumbers = attempts.map((attempt) => attempt.staffNumber).filter(Boolean).join(", ");
 
   return [
-    ok ? "Smart booking staff notify sent ✅" : "Smart booking staff notify failed ⚠️",
+    ok ? "Smart booking staff WhatsApp notify sent ✅" : "Smart booking staff WhatsApp notify failed ⚠️",
     "",
     `Branch: ${draft.branch || ""}`,
     `Team member: ${draft.teamMember || ""}`,
     `Notify phoneNumberId: ${routingPhoneNumberId || ""}`,
+    targetStaffNumbers ? `Staff WhatsApp target: ${targetStaffNumbers}` : "",
     `Status: ${status || (ok ? "sent" : "failed")}`,
     error ? `Error: ${typeof error === "string" ? error : JSON.stringify(error)}` : "",
     attempts.length ? `Attempts: ${attempts.length}` : ""
@@ -3594,12 +3622,12 @@ async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", prof
     branch: finalDraft.branch || getLineConfig(routingPhoneNumberId).branch,
     customerName: profileName || "",
     phone: customerPhone || "",
-    requestType: "WhatsApp Smart Natural Booking V3.1",
-    serviceInterest: "WhatsApp Smart Natural Booking V3.1",
+    requestType: "WhatsApp Smart Natural Booking V3.2",
+    serviceInterest: "WhatsApp Smart Natural Booking V3.2",
     preferredDay: finalDraft.preferredDay || "",
     preferredTime: preferredTime || "",
     teamMember: finalDraft.teamMember || "",
-    notes: "Source: WhatsApp Smart Natural Booking V3.1"
+    notes: "Source: WhatsApp Smart Natural Booking V3.2"
   };
 
   console.log("[Smart Booking Staff Notify] preparing", {
@@ -3696,8 +3724,8 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       branch: selectedBranch,
       status: "Booking Request",
       assignee: getBranchTeamAssignee(selectedBranch),
-      tags: ["Booking", "Smart Natural Booking V3.1", "Need Confirmation"],
-      updatedBy: "WhatsApp Smart Natural Booking V3.1"
+      tags: ["Booking", "Smart Natural Booking V3.2", "Need Confirmation"],
+      updatedBy: "WhatsApp Smart Natural Booking V3.2"
     });
     await saveBookingRequestToGoogleSheetFromServer({
       phone: from,
@@ -3705,7 +3733,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       customerName: profileName,
       branch: selectedBranch,
       message: requestMessage,
-      requestType: "WhatsApp Smart Natural Booking V3.1",
+      requestType: "WhatsApp Smart Natural Booking V3.2",
       bookingStatus: "Pending"
     });
     addInboxMessage(from, "customer", requestMessage, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "WhatsApp Smart Natural Booking Submit" });
@@ -19628,6 +19656,21 @@ No problem. We will not send a reminder for this appointment.`;
       return res.sendStatus(200);
     }
 
+    const smartBookingHandled = await handleSmartWhatsAppBooking({
+      from,
+      message,
+      originalText,
+      text,
+      incomingPhoneNumberId,
+      lineConfig,
+      profileName,
+      replyLanguage
+    });
+
+    if (smartBookingHandled) {
+      return res.sendStatus(200);
+    }
+
     if (isDirectBookingChoiceText(originalText || text)) {
       const bookingActionText = getSmartCustomerActionText(message, originalText || text) || "Booking | حجز";
       const bookingCustomerBody = buildCustomerActionBody(profileName, bookingActionText);
@@ -19674,20 +19717,6 @@ No problem. We will not send a reminder for this appointment.`;
       return res.sendStatus(200);
     }
 
-    const smartBookingHandled = await handleSmartWhatsAppBooking({
-      from,
-      message,
-      originalText,
-      text,
-      incomingPhoneNumberId,
-      lineConfig,
-      profileName,
-      replyLanguage
-    });
-
-    if (smartBookingHandled) {
-      return res.sendStatus(200);
-    }
 
     const fastBookingHandled = await handleFastBookingButtons({
       from,
