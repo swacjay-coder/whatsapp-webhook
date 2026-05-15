@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-3-manual-booking-flow-link";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-6-main-menu-single-language-hard-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -504,6 +504,7 @@ async function sendStaffNotificationTextMessage(to, body, phoneNumberId = DUBAI_
 const inboxMessages = [];
 const conversationStatus = {};
 const conversationPhoneNumberId = {};
+const conversationLanguage = {};
 
 function getDefaultMessageType(sender, status) {
   if (sender === "customer") return "Customer Message";
@@ -809,6 +810,195 @@ function normalizeText(value) {
     .trim();
 }
 
+function hasArabicText(value) {
+  return /[\u0600-\u06FF]/.test((value || "").toString());
+}
+
+function hasEnglishText(value) {
+  return /[A-Za-z]/.test((value || "").toString());
+}
+
+function detectIncomingLanguage(value = "", fallback = "en") {
+  const textValue = (value || "").toString();
+  const hasArabic = hasArabicText(textValue);
+  const hasEnglish = hasEnglishText(textValue);
+
+  if (hasArabic && !hasEnglish) return "ar";
+  if (hasEnglish && !hasArabic) return "en";
+
+  return fallback === "ar" ? "ar" : "en";
+}
+
+function rememberConversationLanguage(phone, incomingText = "") {
+  const cleanPhone = normalizePhoneDigits(phone);
+  const currentLanguage = conversationLanguage[cleanPhone] || conversationLanguage[phone] || "en";
+  const detectedLanguage = detectIncomingLanguage(incomingText, currentLanguage);
+
+  if (cleanPhone) {
+    conversationLanguage[cleanPhone] = detectedLanguage;
+  }
+
+  if (phone) {
+    conversationLanguage[phone] = detectedLanguage;
+  }
+
+  return detectedLanguage;
+}
+
+function getConversationLanguage(phone, fallbackText = "") {
+  const cleanPhone = normalizePhoneDigits(phone);
+  const savedLanguage = conversationLanguage[cleanPhone] || conversationLanguage[phone] || "";
+  return detectIncomingLanguage(fallbackText, savedLanguage || "en");
+}
+
+function splitBilingualReplyBody(body = "", language = "en") {
+  const value = (body || "").toString();
+
+  if (!value) return value;
+
+  const separatorRegex = /\n\s*-{10,}\s*\n/;
+  const parts = value.split(separatorRegex);
+
+  if (parts.length < 2) {
+    return value;
+  }
+
+  const selected = language === "ar" ? parts[0] : parts.slice(1).join("\n\n").trim();
+  return (selected || value).trim();
+}
+
+function cleanLocalizedReplyBody(body = "", language = "en") {
+  const originalValue = (body || "").toString();
+  let value = splitBilingualReplyBody(originalValue, language);
+
+  if (language === "ar" && hasArabicText(value)) {
+    // Some older mixed replies started with "Hello Name" before the Arabic text.
+    // Keep Arabic-only output when the customer language is Arabic.
+    value = value.replace(/^Hello(?:\s+[^\n👋]+)?\s*👋\s*\n{2,}/i, "");
+  }
+
+  const hasExplicitSeparator = /\n\s*-{10,}\s*\n/.test(originalValue);
+
+  if (!hasExplicitSeparator && hasArabicText(value) && hasEnglishText(value)) {
+    const lines = value.split("\n");
+    const filteredLines = lines.filter((line) => {
+      const hasArabic = hasArabicText(line);
+      const hasEnglish = hasEnglishText(line);
+
+      if (language === "ar") {
+        return hasArabic || !hasEnglish;
+      }
+
+      return !hasArabic;
+    });
+
+    const filteredValue = filteredLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    if (filteredValue) {
+      value = filteredValue;
+    }
+  }
+
+  return value.trim();
+}
+
+function pickLocalizedButtonTitle(title = "", language = "en") {
+  const originalTitle = (title || "").toString().trim();
+  if (!originalTitle) return originalTitle;
+
+  let localizedTitle = originalTitle;
+
+  // Handles all existing button styles:
+  // "Booking | حجز", "احجز / Book", "استشارة/Consultation", "لا | No".
+  const parts = originalTitle
+    .split(/\s*[|/]\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    const arabicPart = parts.find((part) => hasArabicText(part));
+    const englishPart = parts.find((part) => hasEnglishText(part) && !hasArabicText(part));
+
+    if (language === "ar" && arabicPart) {
+      localizedTitle = arabicPart;
+    } else if (language !== "ar" && englishPart) {
+      localizedTitle = englishPart;
+    } else {
+      localizedTitle = language === "ar" ? parts[parts.length - 1] : parts[0];
+    }
+  }
+
+  const titleMap = {
+    "Booking": { ar: "حجز", en: "Booking" },
+    "حجز": { ar: "حجز", en: "Booking" },
+    "Services": { ar: "خدماتنا", en: "Services" },
+    "خدماتنا": { ar: "خدماتنا", en: "Services" },
+    "Team": { ar: "فريقنا", en: "Team" },
+    "فريقنا": { ar: "فريقنا", en: "Team" },
+    "الفريق": { ar: "الفريق", en: "Team" },
+    "Help": { ar: "ساعدني", en: "Help" },
+    "ساعدني": { ar: "ساعدني", en: "Help" },
+    "Consult": { ar: "استشارة", en: "Consult" },
+    "Consultation": { ar: "استشارة", en: "Consultation" },
+    "استشارة": { ar: "استشارة", en: "Consultation" },
+    "Service": { ar: "سيرفس", en: "Service" },
+    "سيرفس": { ar: "سيرفس", en: "Service" },
+    "Book Service": { ar: "سيرفس", en: "Book Service" },
+    "Results": { ar: "نتائج", en: "Results" },
+    "نتائج": { ar: "نتائج", en: "Results" },
+    "Location": { ar: "موقعنا", en: "Location" },
+    "موقعنا": { ar: "موقعنا", en: "Location" },
+    "الموقع": { ar: "الموقع", en: "Location" },
+    "Details": { ar: "التفاصيل", en: "Details" },
+    "التفاصيل": { ar: "التفاصيل", en: "Details" },
+    "Natural": { ar: "طبيعي", en: "Natural" },
+    "طبيعي": { ar: "طبيعي", en: "Natural" },
+    "Price": { ar: "السعر", en: "Price" },
+    "السعر": { ar: "السعر", en: "Price" },
+    "Book": { ar: "احجز", en: "Book" },
+    "احجز": { ar: "احجز", en: "Book" },
+    "Call": { ar: "اتصل", en: "Call" },
+    "اتصل": { ar: "اتصل", en: "Call" },
+    "Yes": { ar: "نعم", en: "Yes" },
+    "نعم": { ar: "نعم", en: "Yes" },
+    "أي": { ar: "نعم", en: "Yes" },
+    "No": { ar: "لا", en: "No" },
+    "لا": { ar: "لا", en: "No" },
+    "أوافق": { ar: "أوافق", en: "Agree" },
+    "لا أوافق": { ar: "لا أوافق", en: "No" }
+  };
+
+  if (titleMap[localizedTitle]) {
+    localizedTitle = titleMap[localizedTitle][language] || localizedTitle;
+  }
+
+  // Final safety: never let a reply button leave with mixed Arabic + English.
+  if (hasArabicText(localizedTitle) && hasEnglishText(localizedTitle)) {
+    const words = localizedTitle.split(/\s+/).filter(Boolean);
+    const filtered = words.filter((word) => {
+      const wordHasArabic = hasArabicText(word);
+      const wordHasEnglish = hasEnglishText(word);
+      return language === "ar" ? (wordHasArabic || !wordHasEnglish) : (!wordHasArabic);
+    }).join(" ").trim();
+
+    if (filtered) localizedTitle = filtered;
+  }
+
+  return localizedTitle.slice(0, 20);
+}
+
+function localizeReplyButtons(buttons = [], language = "en") {
+  return (buttons || []).map((button) => ({
+    ...button,
+    title: pickLocalizedButtonTitle(button.title || "", language)
+  }));
+}
+
+function localizeBotBodyForPhone(phone, body = "", fallbackText = "") {
+  const language = getConversationLanguage(phone, fallbackText);
+  return cleanLocalizedReplyBody(body, language);
+}
+
+
 function cleanCustomerName(value) {
   const name = (value || "")
     .toString()
@@ -832,6 +1022,36 @@ function buildPersonalGreeting(customerName = "") {
   }
 
   return `Hello ${cleanName} 👋`;
+}
+
+function buildMainMenuBody(customerName = "", language = "en") {
+  const cleanName = cleanCustomerName(customerName);
+
+  if (language === "ar") {
+    const greeting = cleanName ? `مرحبا ${cleanName} 👋` : "مرحبا 👋";
+    return [
+      greeting,
+      "",
+      "أهلًا بك في آيكونك هير كير.",
+      "",
+      "النتيجة الطبيعية تبدأ من اختيار صحيح.",
+      "يمكنك الآن حجز استشارة، معرفة خدماتنا، أو فتح موقع الفرع مباشرة.",
+      "",
+      "اختر ما يناسبك:"
+    ].join("\n");
+  }
+
+  const greeting = cleanName ? `Hello ${cleanName} 👋` : "Hello 👋";
+  return [
+    greeting,
+    "",
+    "Welcome to Iconic Hair Care.",
+    "",
+    "A natural result starts with the right choice.",
+    "You can book a consultation, explore our services, or open the branch location directly.",
+    "",
+    "Please choose:"
+  ].join("\n");
 }
 
 function namePhrase(customerName = "", fallback = "") {
@@ -1169,16 +1389,23 @@ function getCustomerChatLink(customerNumber) {
   return `https://wa.me/${customerNumber}`;
 }
 
-async function sendWhatsAppMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+async function sendWhatsAppMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
+  const replyLanguage = options.replyLanguage || getConversationLanguage(to);
+  const shouldLocalize = options.skipAutoLanguage
+    ? false
+    : (options.autoLocalize || Boolean(options.replyLanguage) || /\n\s*-{10,}\s*\n/.test((body || "").toString()));
+  const finalBody = shouldLocalize
+    ? cleanLocalizedReplyBody(body, replyLanguage)
+    : body;
 
   const payload = {
     messaging_product: "whatsapp",
     to,
     type: "text",
-    text: { body }
+    text: { body: finalBody }
   };
 
   console.log(`Sending WhatsApp message from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to}`);
@@ -1441,7 +1668,7 @@ async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voi
   };
 }
 
-async function sendWhatsAppVideoMessage(to, videoUrl, caption = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+async function sendWhatsAppVideoMessage(to, videoUrl, caption = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const cleanVideoUrl = (videoUrl || "").toString().trim();
@@ -1455,7 +1682,10 @@ async function sendWhatsAppVideoMessage(to, videoUrl, caption = "", phoneNumberI
   }
 
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
-  const cleanCaption = (caption || "").toString().trim().slice(0, 900);
+  const cleanCaption = cleanLocalizedReplyBody(
+    (caption || "").toString().trim(),
+    options.replyLanguage || getConversationLanguage(to)
+  ).slice(0, 900);
 
   const payload = {
     messaging_product: "whatsapp",
@@ -1512,6 +1742,14 @@ async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DUBA
         ? { type: "image", image: { link: headerImageUrl } }
         : null;
 
+  const replyLanguage = options.replyLanguage || getConversationLanguage(to);
+  const finalBody = options.skipAutoLanguage
+    ? body
+    : cleanLocalizedReplyBody(body, replyLanguage);
+  const finalButtons = options.skipAutoLanguage
+    ? buttons
+    : localizeReplyButtons(buttons, replyLanguage);
+
   const payload = {
     messaging_product: "whatsapp",
     to,
@@ -1519,9 +1757,9 @@ async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DUBA
     interactive: {
       type: "button",
       ...(header ? { header } : {}),
-      body: { text: body },
+      body: { text: finalBody },
       action: {
-        buttons: buttons.slice(0, 3).map((button, index) => ({
+        buttons: finalButtons.slice(0, 3).map((button, index) => ({
           type: "reply",
           reply: {
             id: button.id || `btn_${index + 1}`,
@@ -1684,14 +1922,14 @@ async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl,
 
   if (!cleanVideoUrl) {
     console.log("Video header skipped: missing video URL");
-    return sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { headerImageUrl: fallbackImageUrl });
+    return sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { ...options, headerImageUrl: fallbackImageUrl });
   }
 
   const cacheKey = getVideoHeaderMediaCacheKey(cleanVideoUrl, phoneNumberId, filename);
   const cachedMediaId = videoHeaderMediaCache.get(cacheKey);
 
   if (cachedMediaId) {
-    const cachedSendResult = await sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { headerVideoId: cachedMediaId });
+    const cachedSendResult = await sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { ...options, headerVideoId: cachedMediaId });
 
     if (!cachedSendResult?.error) {
       console.log("Video header sent using cached WhatsApp media id.");
@@ -1708,19 +1946,25 @@ async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl,
   if (!uploadResult.ok || !uploadResult.mediaId) {
     console.log("Video header upload failed; sending buttons with image header instead:");
     console.log(JSON.stringify(uploadResult.result || {}, null, 2));
-    return sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { headerImageUrl: fallbackImageUrl });
+    return sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { ...options, headerImageUrl: fallbackImageUrl });
   }
 
   videoHeaderMediaCache.set(cacheKey, uploadResult.mediaId);
 
-  return sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { headerVideoId: uploadResult.mediaId });
+  return sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId, { ...options, headerVideoId: uploadResult.mediaId });
 }
 
 
-async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
+
+  const replyLanguage = options.replyLanguage || getConversationLanguage(to);
+  const finalBody = options.skipAutoLanguage ? body : cleanLocalizedReplyBody(body, replyLanguage);
+  const finalDisplayText = replyLanguage === "ar" && displayText === "Open Location"
+    ? "افتح الموقع"
+    : displayText;
 
   const payload = {
     messaging_product: "whatsapp",
@@ -1729,11 +1973,11 @@ async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phone
     type: "interactive",
     interactive: {
       type: "cta_url",
-      body: { text: body },
+      body: { text: finalBody },
       action: {
         name: "cta_url",
         parameters: {
-          display_text: displayText,
+          display_text: finalDisplayText,
           url: targetUrl
         }
       }
@@ -1805,29 +2049,46 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
   const customerNameForFlow = cleanCustomerName(options.customerName || "");
   const flowGreeting = customerNameForFlow ? `Hello ${customerNameForFlow} 👋` : "Hello 👋";
 
+  const replyLanguage = options.replyLanguage || getConversationLanguage(to);
+  const localizedFlowCta = replyLanguage === "ar"
+    ? (isServiceBookingFlow ? "احجز سيرفس" : "احجز استشارة")
+    : selectedFlowCta;
+  const localizedFlowHeader = replyLanguage === "ar"
+    ? (isServiceBookingFlow ? "حجز سيرفس" : "حجز استشارة")
+    : selectedFlowHeader;
+  const localizedFlowGreeting = replyLanguage === "ar"
+    ? (customerNameForFlow ? `مرحبا ${customerNameForFlow} 👋` : "مرحبا 👋")
+    : flowGreeting;
+
   const flowBody = (isServiceBookingFlow
-    ? [
-        flowGreeting,
-        "",
-        "احجز موعد السيرفس خلال ثواني من داخل واتساب.",
-        "اختر الفرع، اليوم، الوقت، واسم الموظف المفضل إن وجد. الفريق سيؤكد الموعد النهائي بعد مراجعة التوفر.",
-        "",
-        "------------------------------",
-        "",
-        "Book your service appointment in seconds inside WhatsApp.",
-        "Choose the branch, preferred day, preferred time, and preferred team member if any. Our team will confirm the final appointment after checking availability."
-      ]
-    : [
-        flowGreeting,
-        "",
-        "احجز استشارتك خلال ثواني من داخل واتساب.",
-        "اختر اليوم والوقت المناسب، وفريقنا سيؤكد الموعد النهائي بعد مراجعة التوفر.",
-        "",
-        "------------------------------",
-        "",
-        "Book your consultation in seconds inside WhatsApp.",
-        "Choose your preferred day and time. Our team will confirm the final appointment after checking availability."
-      ]
+    ? (replyLanguage === "ar"
+        ? [
+            localizedFlowGreeting,
+            "",
+            "احجز موعد السيرفس خلال ثواني من داخل واتساب.",
+            "اختر الفرع، اليوم، الوقت، واسم الموظف المفضل إن وجد.",
+            "الفريق سيؤكد الموعد النهائي بعد مراجعة التوفر."
+          ]
+        : [
+            localizedFlowGreeting,
+            "",
+            "Book your service appointment in seconds inside WhatsApp.",
+            "Choose the branch, preferred day, preferred time, and preferred team member if any.",
+            "Our team will confirm the final appointment after checking availability."
+          ])
+    : (replyLanguage === "ar"
+        ? [
+            localizedFlowGreeting,
+            "",
+            "احجز استشارتك خلال ثواني من داخل واتساب.",
+            "اختر اليوم والوقت المناسب، وفريقنا سيؤكد الموعد النهائي بعد مراجعة التوفر."
+          ]
+        : [
+            localizedFlowGreeting,
+            "",
+            "Book your consultation in seconds inside WhatsApp.",
+            "Choose your preferred day and time. Our team will confirm the final appointment after checking availability."
+          ])
   ).join(String.fromCharCode(10));
 
   const payload = {
@@ -1844,7 +2105,7 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
           }
         : {
             type: "text",
-            text: selectedFlowHeader
+            text: localizedFlowHeader
           },
       body: {
         text: flowBody
@@ -1858,7 +2119,7 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
           flow_message_version: "3",
           flow_id: bookingFlowConfig.flowId,
           flow_token: flowToken,
-          flow_cta: selectedFlowCta,
+          flow_cta: localizedFlowCta,
           flow_action: "navigate",
           flow_action_payload: isServiceBookingFlow
             ? {
@@ -2457,33 +2718,49 @@ function buildWhatsAppFlowBookingRequestMessage(flowData = {}) {
   ].join("\n");
 }
 
-function buildWhatsAppFlowConfirmationBody(flowData = {}) {
-  const customerName = cleanCustomerName(flowData.customerName || "") || "there";
+function buildWhatsAppFlowConfirmationBody(flowData = {}, language = "en") {
+  const customerName = cleanCustomerName(flowData.customerName || "");
   const branch = flowData.branch || "Dubai";
   const branchAr = getFastBookingBranchArabic(branch);
   const preferredTime = flowData.preferredTime || "Flexible / Any available time";
   const requestType = flowData.serviceInterest || flowData.requestType || "Booking Request";
+  const isArabic = language === "ar";
+
+  if (isArabic) {
+    return [
+      `${BUSINESS_NAME_SPACED} ✨`,
+      "",
+      customerName ? `شكراً ${customerName}` : "شكراً لك",
+      "",
+      "تم استلام طلب الحجز ✅",
+      "سيقوم فريقنا بمراجعة التوفر وتأكيد الموعد النهائي قريباً.",
+      "",
+      `نوع الطلب: ${requestType}`,
+      `الفرع: ${branchAr}`,
+      `الوقت المفضل: ${preferredTime}`,
+      flowData.consultationType ? `نوع الاستشارة: ${flowData.consultationType}` : "",
+      flowData.serviceType ? `نوع الخدمة: ${flowData.serviceType}` : "",
+      flowData.teamMember ? `الموظف: ${flowData.teamMember}` : "",
+      "",
+      "الموعد حالياً بانتظار تأكيد الفريق.",
+      "بعد تأكيد الموعد، سيصلك تثبيت رسمي من Iconic Hair Care."
+    ].filter((line) => line !== "").join(String.fromCharCode(10));
+  }
 
   return [
     `${BUSINESS_NAME_SPACED} ✨`,
     "",
-    `Thank you ${customerName}`,
-    "",
-    "تم استلام طلب الحجز ✅",
-    "سيقوم فريقنا بمراجعة التوفر وتأكيد الموعد النهائي قريباً.",
+    customerName ? `Thank you ${customerName}` : "Thank you",
     "",
     "Your booking request has been received ✅",
     "Our team will check availability and confirm the exact appointment shortly.",
     "",
-    `نوع الطلب / Request type: ${requestType}`,
-    `الفرع / Branch: ${branchAr} - ${branch}`,
-    `الوقت المفضل / Preferred time: ${preferredTime}`,
-    flowData.consultationType ? `نوع الاستشارة / Consultation type: ${flowData.consultationType}` : "",
-    flowData.serviceType ? `نوع الخدمة / Service type: ${flowData.serviceType}` : "",
-    flowData.teamMember ? `الموظف / Team member: ${flowData.teamMember}` : "",
-    "",
-    "الموعد حالياً بانتظار تأكيد الفريق.",
-    "بعد تأكيد الموعد، سيصلك تثبيت رسمي من Iconic Hair Care.",
+    `Request type: ${requestType}`,
+    `Branch: ${branch}`,
+    `Preferred time: ${preferredTime}`,
+    flowData.consultationType ? `Consultation type: ${flowData.consultationType}` : "",
+    flowData.serviceType ? `Service type: ${flowData.serviceType}` : "",
+    flowData.teamMember ? `Team member: ${flowData.teamMember}` : "",
     "",
     "Your appointment is currently pending team confirmation.",
     "After the appointment is confirmed, you will receive the official confirmation from Iconic Hair Care."
@@ -2618,7 +2895,8 @@ async function handleWhatsAppFlowBookingSubmit({
     console.log(error);
   });
 
-  const confirmationBody = buildWhatsAppFlowConfirmationBody(flowData);
+  const flowReplyLanguage = getConversationLanguage(from);
+  const confirmationBody = buildWhatsAppFlowConfirmationBody(flowData, flowReplyLanguage);
 
   // V31.5.8.60.3.3:
   // Flow submit is only a booking request. Do not ask for or activate a 1-hour
@@ -4416,7 +4694,9 @@ app.get("/api/send-booking-flow", protectInbox, async (req, res) => {
       "Please use the quick booking form so we can confirm the best available appointment for you."
     ].join("\n");
 
-    const introResult = await sendWhatsAppMessage(to, introMessage, phoneNumberId);
+    const replyLanguage = getConversationLanguage(to);
+    const localizedIntroMessage = cleanLocalizedReplyBody(introMessage, replyLanguage);
+    const introResult = await sendWhatsAppMessage(to, localizedIntroMessage, phoneNumberId);
 
     if (introResult?.error) {
       return res.status(500).json({
@@ -4430,7 +4710,7 @@ app.get("/api/send-booking-flow", protectInbox, async (req, res) => {
     addInboxMessage(
       to,
       "staff",
-      introMessage,
+      localizedIntroMessage,
       "Human Reply",
       phoneNumberId,
       {
@@ -4443,7 +4723,8 @@ app.get("/api/send-booking-flow", protectInbox, async (req, res) => {
       branch: lineConfig.branch,
       customerName,
       flowType,
-      requestType
+      requestType,
+      replyLanguage
     });
 
     if (!flowSendResult.ok) {
@@ -16404,7 +16685,7 @@ function getUnreadCustomerMessageCount(c) {
       break;
     }
 
-    if (message.sender === "customer") {
+    if (shouldIncludeInLiveCustomerNotifications(message)) {
       count += 1;
     }
   }
@@ -16485,11 +16766,7 @@ function shouldIncludeInLiveCustomerNotifications(message) {
 }
 
 function liveToastDedupKey(message) {
-  return [
-    normalizePhoneDigitsClient(message.phone || ""),
-    message.phoneNumberId || "",
-    normalizeLiveBody(message.body || "").slice(0, 160)
-  ].join("|");
+  return customerNotificationKey(message);
 }
 
 function shouldShowLiveToastForMessage(message) {
@@ -17933,6 +18210,18 @@ app.post("/webhook", async (req, res) => {
         ""
       ).toString().trim();
       const iconicServicesText = normalizeText(iconicServicesRawText);
+      const iconicReplyLanguage = rememberConversationLanguage(from, iconicServicesRawText);
+      const iconicReplyOptions = {
+        headerImageUrl: BOT_HEADER_IMAGE_URL,
+        replyLanguage: iconicReplyLanguage
+      };
+      const iconicVideoReplyOptions = {
+        headerImageUrl: BOT_HEADER_IMAGE_URL,
+        replyLanguage: iconicReplyLanguage
+      };
+      const iconicLocalizedServicesBody = cleanLocalizedReplyBody(buildServicesMenuBody(profileName), iconicReplyLanguage);
+      const iconicLocalizedResultsBody = cleanLocalizedReplyBody(buildResultsFollowupBody(profileName), iconicReplyLanguage);
+      const iconicLocalizedDetailsBody = cleanLocalizedReplyBody(buildHowItWorksBody(profileName), iconicReplyLanguage);
       const iconicIsServicesRoute = (
         iconicServicesText === "services_menu" ||
         iconicServicesText === "servicesmenu" ||
@@ -17966,12 +18255,12 @@ app.post("/webhook", async (req, res) => {
           phoneNumberId: incomingPhoneNumberId,
           messageType: "Customer Services Menu Request"
         });
-        await sendWhatsAppButtonMessage(from, buildServicesMenuBody(profileName), [
+        await sendWhatsAppButtonMessage(from, iconicLocalizedServicesBody, [
           { id: "results", title: "Results | نتائج" },
           { id: "location", title: "Location | موقعنا" },
           { id: "how_it_works", title: "Details | التفاصيل" }
-        ], incomingPhoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL });
-        addInboxMessage(from, "bot", buildServicesMenuBody(profileName), "Services Menu", incomingPhoneNumberId, { customerName: profileName, messageType: "Services Menu" });
+        ], incomingPhoneNumberId, iconicReplyOptions);
+        addInboxMessage(from, "bot", iconicLocalizedServicesBody, "Services Menu", incomingPhoneNumberId, { customerName: profileName, messageType: "Services Menu" });
         return res.sendStatus(200);
       }
 
@@ -17987,15 +18276,16 @@ app.post("/webhook", async (req, res) => {
           messageType: "Customer Results Request"
         });
         const resultsVideoUrl = RESULTS_VIDEO_URL || getAutoReplyVideoUrl(req);
-        await sendWhatsAppVideoHeaderButtonMessage(from, buildResultsFollowupBody(profileName), [
+        await sendWhatsAppVideoHeaderButtonMessage(from, iconicLocalizedResultsBody, [
           { id: "how_it_works", title: "Details | التفاصيل" },
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "talk_to_team", title: "Team | فريقنا" }
         ], resultsVideoUrl, incomingPhoneNumberId, {
           headerImageUrl: BOT_HEADER_IMAGE_URL,
-          filename: "iconic-results-video.mp4"
+          filename: "iconic-results-video.mp4",
+          replyLanguage: iconicReplyLanguage
         });
-        addInboxMessage(from, "bot", buildResultsFollowupBody(profileName), "Results Video Buttons", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Video Buttons" });
+        addInboxMessage(from, "bot", iconicLocalizedResultsBody, "Results Video Buttons", incomingPhoneNumberId, { customerName: profileName, messageType: "Results Video Buttons" });
         return res.sendStatus(200);
       }
 
@@ -18010,15 +18300,16 @@ app.post("/webhook", async (req, res) => {
           phoneNumberId: incomingPhoneNumberId,
           messageType: "Customer Details Request"
         });
-        await sendWhatsAppVideoHeaderButtonMessage(from, buildHowItWorksBody(profileName), [
+        await sendWhatsAppVideoHeaderButtonMessage(from, iconicLocalizedDetailsBody, [
           { id: "booking_menu", title: "Booking | حجز" },
           { id: "results", title: "Results | نتائج" },
           { id: "talk_to_team", title: "Team | فريقنا" }
         ], DETAILS_VIDEO_URL, incomingPhoneNumberId, {
           headerImageUrl: BOT_HEADER_IMAGE_URL,
-          filename: "iconic-details-video-v60310.mp4"
+          filename: "iconic-details-video-v60310.mp4",
+          replyLanguage: iconicReplyLanguage
         });
-        addInboxMessage(from, "bot", buildHowItWorksBody(profileName), "Details Video Buttons", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Video Buttons" });
+        addInboxMessage(from, "bot", iconicLocalizedDetailsBody, "Details Video Buttons", incomingPhoneNumberId, { customerName: profileName, messageType: "Details Video Buttons" });
         return res.sendStatus(200);
       }
 
@@ -18028,6 +18319,7 @@ app.post("/webhook", async (req, res) => {
 
     const originalText = getIncomingMessageText(message);
     const text = normalizeText(originalText);
+    const replyLanguage = rememberConversationLanguage(from, originalText || text);
     const optEventDate = getDubaiTimestamp();
     const isOptInMessage = isOptInText(text);
     const isOptOutMessage = isOptOutText(text);
@@ -18045,7 +18337,7 @@ app.post("/webhook", async (req, res) => {
         updatedBy: "Resume Bot Command"
       });
       const resumeBody = "تم تشغيل البوت مرة أخرى ✅\n\n------------------------------\n\nBot has been resumed ✅";
-      await sendWhatsAppMessage(from, resumeBody, incomingPhoneNumberId);
+      await sendWhatsAppMessage(from, resumeBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
       addInboxMessage(from, "bot", resumeBody, "Bot Active", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Resumed" });
       return res.sendStatus(200);
     }
@@ -18055,7 +18347,7 @@ app.post("/webhook", async (req, res) => {
 
       if (!isConfirmedAppointmentStatus(currentAppointmentStatus)) {
         const notConfirmedBody = buildAppointmentReminderNotConfirmedBody(profileName);
-        await sendWhatsAppMessage(from, notConfirmedBody, incomingPhoneNumberId);
+        await sendWhatsAppMessage(from, notConfirmedBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
         addInboxMessage(from, "bot", notConfirmedBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Blocked - Pending Confirmation" });
         return res.sendStatus(200);
       }
@@ -18077,7 +18369,7 @@ app.post("/webhook", async (req, res) => {
 
 Done ✅
 Your 1-hour appointment reminder is active.`;
-      await sendWhatsAppMessage(from, reminderYesBody, incomingPhoneNumberId);
+      await sendWhatsAppMessage(from, reminderYesBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
       addInboxMessage(from, "bot", reminderYesBody, "Appointment Reminder Active", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Active" });
       return res.sendStatus(200);
     }
@@ -18087,7 +18379,7 @@ Your 1-hour appointment reminder is active.`;
 
       if (!isConfirmedAppointmentStatus(currentAppointmentStatus)) {
         const notConfirmedBody = buildAppointmentReminderNotConfirmedBody(profileName);
-        await sendWhatsAppMessage(from, notConfirmedBody, incomingPhoneNumberId);
+        await sendWhatsAppMessage(from, notConfirmedBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
         addInboxMessage(from, "bot", notConfirmedBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Declined Blocked - Pending Confirmation" });
         return res.sendStatus(200);
       }
@@ -18106,7 +18398,7 @@ Your 1-hour appointment reminder is active.`;
       const reminderNoBody = `${reminderName ? `تمام ${reminderName}، لن نرسل تذكير لهذا الموعد.` : "تمام، لن نرسل تذكير لهذا الموعد."}
 
 No problem. We will not send a reminder for this appointment.`;
-      await sendWhatsAppMessage(from, reminderNoBody, incomingPhoneNumberId);
+      await sendWhatsAppMessage(from, reminderNoBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
       addInboxMessage(from, "bot", reminderNoBody, "Appointment Reminder Declined", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Declined" });
       return res.sendStatus(200);
     }
@@ -18188,7 +18480,7 @@ No problem. We will not send a reminder for this appointment.`;
         "We will use this number only for 20-day service follow-up reminders from Iconic Hair Care.\n\n" +
         "To stop reminders at any time, send: STOP";
 
-      await sendWhatsAppMessage(from, optInReply, incomingPhoneNumberId);
+      await sendWhatsAppMessage(from, optInReply, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
       addInboxMessage(from, "bot", optInReply, "Opted In", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
 
       return res.sendStatus(200);
@@ -18223,7 +18515,7 @@ No problem. We will not send a reminder for this appointment.`;
         `${BUSINESS_NAME_SPACED} ✨\n\n` +
         "Service follow-up reminders have been stopped for this number ✅";
 
-      await sendWhatsAppMessage(from, optOutReply, incomingPhoneNumberId);
+      await sendWhatsAppMessage(from, optOutReply, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
       addInboxMessage(from, "bot", optOutReply, "Opted Out", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
 
       return res.sendStatus(200);
@@ -18261,7 +18553,7 @@ No problem. We will not send a reminder for this appointment.`;
         "No problem, we will not add you to service follow-up reminders now ✅\n\n" +
         "If you need any help, our team is ready to assist you.";
 
-      await sendWhatsAppMessage(from, declineReply, incomingPhoneNumberId);
+      await sendWhatsAppMessage(from, declineReply, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
       addInboxMessage(from, "bot", declineReply, "Reminder Declined", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
 
       return res.sendStatus(200);
@@ -18308,7 +18600,7 @@ No problem. We will not send a reminder for this appointment.`;
       });
 
       const teamHandoffBody = buildTeamHandoffBody(profileName);
-      await sendWhatsAppMessage(from, teamHandoffBody, incomingPhoneNumberId);
+      await sendWhatsAppMessage(from, teamHandoffBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
       addInboxMessage(
         from,
         "bot",
@@ -18355,7 +18647,8 @@ No problem. We will not send a reminder for this appointment.`;
         branch: lineConfig.branch,
         customerName: profileName,
         flowType: "service",
-        requestType: "Service Appointment"
+        requestType: "Service Appointment",
+        replyLanguage
       });
 
       if (flowSendResult.ok) {
@@ -18378,7 +18671,7 @@ No problem. We will not send a reminder for this appointment.`;
           `${BUSINESS_NAME_SPACED} ✨\n\n` +
           "The service booking form could not be opened right now. Our team will assist you inside this chat.";
 
-        await sendWhatsAppMessage(from, fallbackServiceText, incomingPhoneNumberId);
+        await sendWhatsAppMessage(from, fallbackServiceText, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
         addInboxMessage(from, "bot", fallbackServiceText, "Service Flow Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Service Booking Flow Fallback" });
       }
 
@@ -18416,7 +18709,8 @@ No problem. We will not send a reminder for this appointment.`;
         branch: lineConfig.branch,
         customerName: profileName,
         flowType: "consultation",
-        requestType: "Consultation Booking"
+        requestType: "Consultation Booking",
+        replyLanguage
       });
 
       if (flowSendResult.ok) {
@@ -18441,7 +18735,7 @@ No problem. We will not send a reminder for this appointment.`;
           `${BUSINESS_NAME_SPACED} ✨\n\n` +
           "The consultation booking form could not be opened right now. Our team will assist you inside this chat.";
 
-        await sendWhatsAppMessage(from, fallbackConsultationText, incomingPhoneNumberId);
+        await sendWhatsAppMessage(from, fallbackConsultationText, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
         addInboxMessage(from, "bot", fallbackConsultationText, "Consultation Flow Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Consultation Booking Flow Fallback" });
       }
 
@@ -18478,7 +18772,7 @@ No problem. We will not send a reminder for this appointment.`;
       const directBookingBody = buildDirectBookingChoiceBody(profileName);
       const directBookingButtons = getDirectBookingChoiceButtons();
 
-      await sendWhatsAppButtonMessage(from, directBookingBody, directBookingButtons, incomingPhoneNumberId);
+      await sendWhatsAppButtonMessage(from, directBookingBody, directBookingButtons, incomingPhoneNumberId, { replyLanguage });
       addInboxMessage(
         from,
         "bot",
@@ -18604,7 +18898,8 @@ No problem. We will not send a reminder for this appointment.`;
         locationBody,
         "Open Location",
         lineConfig.locationUrl,
-        incomingPhoneNumberId
+        incomingPhoneNumberId,
+        { replyLanguage }
       );
 
       if (locationResult.ok) {
@@ -18629,7 +18924,7 @@ No problem. We will not send a reminder for this appointment.`;
           "The location button could not be sent right now.\n\n" +
           `${lineConfig.branch} branch location:\n${lineConfig.locationUrl}`;
 
-        await sendWhatsAppMessage(from, fallbackLocationText, incomingPhoneNumberId);
+        await sendWhatsAppMessage(from, fallbackLocationText, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
         addInboxMessage(
           from,
           "bot",
@@ -18688,7 +18983,7 @@ No problem. We will not send a reminder for this appointment.`;
           "The Call Now button could not be sent right now.\n\n" +
           `You can contact our ${lineConfig.branch} branch on:\n${lineConfig.displayNumber}`;
 
-        await sendWhatsAppMessage(from, fallbackCallText, incomingPhoneNumberId);
+        await sendWhatsAppMessage(from, fallbackCallText, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
         addInboxMessage(
           from,
           "bot",
@@ -18725,7 +19020,7 @@ No problem. We will not send a reminder for this appointment.`;
 
       const videoUrl = getAutoReplyVideoUrl(req);
       const videoCaption = buildAutoVideoCaption();
-      const videoResult = await sendWhatsAppVideoMessage(from, videoUrl, videoCaption, incomingPhoneNumberId);
+      const videoResult = await sendWhatsAppVideoMessage(from, videoUrl, videoCaption, incomingPhoneNumberId, { replyLanguage });
 
       if (videoResult.ok) {
         addInboxMessage(
@@ -18743,7 +19038,7 @@ No problem. We will not send a reminder for this appointment.`;
         const afterVideoBody = buildAfterVideoBody();
         const afterVideoButtons = getConsultActionButtons();
 
-        await sendWhatsAppButtonMessage(from, afterVideoBody, afterVideoButtons, incomingPhoneNumberId);
+        await sendWhatsAppButtonMessage(from, afterVideoBody, afterVideoButtons, incomingPhoneNumberId, { replyLanguage });
         addInboxMessage(
           from,
           "bot",
@@ -18763,7 +19058,7 @@ No problem. We will not send a reminder for this appointment.`;
           `${BUSINESS_NAME_SPACED} ✨\n\n` +
           "The video could not be sent right now, but our team can share the details with you inside this chat.";
 
-        await sendWhatsAppMessage(from, videoFallbackText, incomingPhoneNumberId);
+        await sendWhatsAppMessage(from, videoFallbackText, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
         addInboxMessage(
           from,
           "bot",
@@ -18968,38 +19263,32 @@ No problem. We will not send a reminder for this appointment.`;
 
     /* القائمة الرئيسية */
     else {
-      const personalGreeting = buildPersonalGreeting(profileName);
-
-      replyText =
-        `${personalGreeting}\n\n` +
-        "أهلًا بك في Iconic Hair Care.\n\n" +
-        "النتيجة الطبيعية تبدأ من اختيار صحيح.\n" +
-        "يمكنك الآن حجز استشارة، معرفة خدماتنا، أو فتح موقع الفرع مباشرة.\n\n" +
-        "اختر ما يناسبك:\n\n" +
-        "------------------------------\n\n" +
-        "Welcome to Iconic Hair Care.\n\n" +
-        "A natural result starts with the right choice.\n" +
-        "You can book a consultation, explore our services, or open the branch location directly.\n\n" +
-        "Please choose:";
-
-      replyButtons = getMainMenuButtons();
-      replyOptions = { headerImageUrl: BOT_HEADER_IMAGE_URL };
+      replyText = buildMainMenuBody(profileName, replyLanguage);
+      replyButtons = localizeReplyButtons(getMainMenuButtons(), replyLanguage);
+      replyOptions = { headerImageUrl: BOT_HEADER_IMAGE_URL, skipAutoLanguage: true };
     }
 
     /* إرسال الرد للعميل */
+    const localizedReplyText = cleanLocalizedReplyBody(replyText, replyLanguage);
+    const localizedReplyButtons = localizeReplyButtons(replyButtons || [], replyLanguage);
+
     if (replyButtons && replyButtons.length > 0) {
-      await sendWhatsAppButtonMessage(from, replyText, replyButtons, incomingPhoneNumberId, replyOptions);
-      addInboxMessage(from, "bot", formatButtonLog(replyText, replyButtons), conversationStatus[from] || "Bot", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
+      await sendWhatsAppButtonMessage(from, localizedReplyText, localizedReplyButtons, incomingPhoneNumberId, {
+        ...(replyOptions || {}),
+        replyLanguage,
+        skipAutoLanguage: true
+      });
+      addInboxMessage(from, "bot", formatButtonLog(localizedReplyText, localizedReplyButtons), conversationStatus[from] || "Bot", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
     } else {
-      await sendWhatsAppMessage(from, replyText, incomingPhoneNumberId);
-      addInboxMessage(from, "bot", replyText, conversationStatus[from] || "Bot", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
+      await sendWhatsAppMessage(from, localizedReplyText, incomingPhoneNumberId);
+      addInboxMessage(from, "bot", localizedReplyText, conversationStatus[from] || "Bot", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
     }
 
     if (sendReminderOptInPrompt) {
-      const reminderOptInBody = buildReminderOptInBody();
-      const reminderOptInButtons = getReminderOptInButtons();
+      const reminderOptInBody = cleanLocalizedReplyBody(buildReminderOptInBody(), replyLanguage);
+      const reminderOptInButtons = localizeReplyButtons(getReminderOptInButtons(), replyLanguage);
 
-      await sendWhatsAppButtonMessage(from, reminderOptInBody, reminderOptInButtons, incomingPhoneNumberId);
+      await sendWhatsAppButtonMessage(from, reminderOptInBody, reminderOptInButtons, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
       addInboxMessage(
         from,
         "bot",
