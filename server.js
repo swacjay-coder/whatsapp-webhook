@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-9-stable-inbox-direct-staff-notify-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-10-smart-router-before-flow-and-staff-test";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -3687,6 +3687,8 @@ async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", prof
 async function handleSmartWhatsAppBooking({ from, message, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en" }) {
   const input = originalText || text || "";
   let existingDraft = smartBookingDrafts[from] || null;
+
+  console.log(`[Smart Booking Router] input=${JSON.stringify(input)} from=${from} existingDraft=${Boolean(existingDraft)} language=${replyLanguage}`);
   const chosenDayButton = getSmartBookingDayFromButton(input);
   const explicitWeekday = detectSmartBookingExplicitWeekday(input);
 
@@ -5264,6 +5266,69 @@ app.get("/api/location/test", protectInbox, async (req, res) => {
       ok: false,
       error: "Location test failed"
     });
+  }
+});
+
+
+app.get("/api/staff-notify/test", protectInbox, async (req, res) => {
+  try {
+    const branchInput = compactText(req.query.branch || "dubai");
+    const isAbuDhabi = branchInput.includes("abu") || branchInput.includes("abudhabi") || branchInput.includes("ابو");
+    const phoneNumberId = isAbuDhabi ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID;
+    const envName = isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER";
+    const rawStaffNumber = isAbuDhabi
+      ? (process.env.ABU_DHABI_STAFF_NUMBER || ABU_DHABI_STAFF_NUMBER || DEFAULT_ABU_DHABI_STAFF_NUMBER || "")
+      : (process.env.DUBAI_STAFF_NUMBER || DUBAI_STAFF_NUMBER || DEFAULT_DUBAI_STAFF_NUMBER || "");
+    const staffNumber = normalizeWhatsAppRecipientDigits(rawStaffNumber);
+    const branch = isAbuDhabi ? "Abu Dhabi" : "Dubai";
+
+    console.log(`[Staff Notify Test] preparing branch=${branch} fromPhoneNumberId=${phoneNumberId} to=${staffNumber || "MISSING"} env=${envName} raw=${rawStaffNumber || "MISSING"}`);
+
+    if (!staffNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Missing staff number",
+        branch,
+        envName,
+        rawStaffNumber,
+        phoneNumberId
+      });
+    }
+
+    const body = [
+      "Iconic staff notification test ✅",
+      "",
+      `Branch: ${branch}`,
+      `From phoneNumberId: ${phoneNumberId}`,
+      `To staff: ${staffNumber}`,
+      `ENV: ${envName}`,
+      `Time: ${getDubaiTimestamp()}`
+    ].join("\n");
+
+    const result = await sendStaffNotificationTextMessage(staffNumber, body, phoneNumberId, {
+      branch,
+      phoneNumberId,
+      envName,
+      branchEnvName: envName,
+      fallbackUsed: !process.env[envName],
+      hasNumber: true
+    });
+
+    console.log("[Staff Notify Test] result", JSON.stringify({ branch, staffNumber, phoneNumberId, envName, ok: result.ok, status: result.status, result: result.result }, null, 2));
+
+    return res.status(result.ok ? 200 : 500).json({
+      ok: result.ok,
+      branch,
+      envName,
+      staffNumber,
+      phoneNumberId,
+      status: result.status,
+      result: result.result
+    });
+  } catch (error) {
+    console.error("Staff notify test failed:");
+    console.error(error);
+    return res.status(500).json({ ok: false, error: "Staff notify test failed", message: error?.message || String(error) });
   }
 });
 
@@ -19626,6 +19691,21 @@ No problem. We will not send a reminder for this appointment.`;
       return res.sendStatus(200);
     }
 
+    const smartBookingHandled = await handleSmartWhatsAppBooking({
+      from,
+      message,
+      originalText,
+      text,
+      incomingPhoneNumberId,
+      lineConfig,
+      profileName,
+      replyLanguage
+    });
+
+    if (smartBookingHandled) {
+      return res.sendStatus(200);
+    }
+
     if (isTalkToTeamText(originalText || text)) {
       const teamActionText = getSmartCustomerActionText(message, originalText || text) || "Team | فريقنا";
       const teamCustomerBody = buildCustomerActionBody(profileName, teamActionText);
@@ -19793,21 +19873,6 @@ No problem. We will not send a reminder for this appointment.`;
         addInboxMessage(from, "bot", fallbackConsultationText, "Consultation Flow Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Consultation Booking Flow Fallback" });
       }
 
-      return res.sendStatus(200);
-    }
-
-    const smartBookingHandled = await handleSmartWhatsAppBooking({
-      from,
-      message,
-      originalText,
-      text,
-      incomingPhoneNumberId,
-      lineConfig,
-      profileName,
-      replyLanguage
-    });
-
-    if (smartBookingHandled) {
       return res.sendStatus(200);
     }
 
