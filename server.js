@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-13-newline-render-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-8-smart-whatsapp-booking-layer";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -3294,6 +3294,269 @@ async function handleWhatsAppFlowBookingSubmit({
    Does not connect to Flyksoft and does not touch reminder/cron logic. */
 const fastBookingDrafts = {};
 
+const smartBookingDrafts = {};
+
+function getSmartBookingTimeButtons() {
+  return [
+    { id: "smart_time_10_00", title: "10:00 AM" },
+    { id: "smart_time_13_00", title: "1:00 PM" },
+    { id: "smart_time_16_00", title: "4:00 PM" }
+  ];
+}
+
+function getSmartBookingWeekdayButtons() {
+  return [
+    { id: "smart_day_tomorrow", title: "Tomorrow" },
+    { id: "smart_day_day_after", title: "Day After" },
+    { id: "smart_day_this_week", title: "This Week" }
+  ];
+}
+
+function getSmartBookingTimeFromButton(text = "") {
+  const value = compactText(text);
+  if (value === "smart_time_10_00" || value === "10:00 am") return "10:00 AM";
+  if (value === "smart_time_13_00" || value === "1:00 pm") return "1:00 PM";
+  if (value === "smart_time_16_00" || value === "4:00 pm") return "4:00 PM";
+  return "";
+}
+
+function getSmartBookingDayFromButton(text = "") {
+  const value = compactText(text);
+  if (value === "smart_day_tomorrow" || value === "tomorrow" || value === "بكرا") return "Tomorrow";
+  if (value === "smart_day_day_after" || value === "day after" || value === "day after tomorrow") return "Day After Tomorrow";
+  if (value === "smart_day_this_week" || value === "this week") return "This Week";
+  return "";
+}
+
+function detectSmartBookingStaff(text = "") {
+  const value = compactText(text);
+  const staff = [
+    { name: "Osama", branch: "Abu Dhabi", keys: ["osama", "اسامة", "أسامة"] },
+    { name: "Adham", branch: "Abu Dhabi", keys: ["adham", "ادهم", "أدهم"] },
+    { name: "Bashir", branch: "Dubai", keys: ["bashir", "basheer", "بشير"] },
+    { name: "Omar", branch: "Dubai", keys: ["omar", "عمر"] },
+    { name: "Ahmed", branch: "Dubai", keys: ["ahmed", "أحمد", "احمد"] },
+    { name: "Tamer", branch: "Dubai", keys: ["tamer", "تامر"] },
+    { name: "Wael", branch: "Dubai", keys: ["wael", "وائل"] },
+    { name: "Emad", branch: "Dubai", keys: ["emad", "عماد", "اماد"] },
+    { name: "Ani", branch: "Dubai", keys: ["ani", "اني", "آني"] },
+    { name: "Hamouda", branch: "Dubai", keys: ["hamouda", "hamoda", "حمودة", "حموده"] },
+    { name: "Hudhaifa", branch: "Dubai", keys: ["hudhaifa", "huthaifa", "حذيفة", "حذيفه"] }
+  ];
+  return staff.find((item) => item.keys.some((key) => value.includes(compactText(key)))) || null;
+}
+
+function detectSmartBookingDay(text = "") {
+  const value = compactText(text);
+  if (value.includes("today") || value.includes("اليوم")) return "Today";
+  if (value.includes("tomorrow") || value.includes("بكرا") || value.includes("غدا") || value.includes("غداً")) return "Tomorrow";
+  if (value.includes("this week") || value.includes("week") || value.includes("هذا الاسبوع") || value.includes("هذا الأسبوع") || value.includes("هالأسبوع")) return "This Week";
+  return "";
+}
+
+function isSmartBookingNaturalRequest(text = "") {
+  const value = compactText(text);
+  if (!value) return false;
+  const hasBooking = value.includes("book") || value.includes("appointment") || value.includes("حجز") || value.includes("موعد") || value.includes("احجز");
+  return Boolean(hasBooking && (detectSmartBookingStaff(value) || detectSmartBookingDay(value)));
+}
+
+function buildSmartBookingTimeBody(draft = {}, customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+  const branchAr = getFastBookingBranchArabic(draft.branch || "Dubai");
+  if (language === "ar") {
+    return [
+      cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
+      "",
+      "فهمت طلبك:",
+      `الفرع: ${branchAr}`,
+      `اليوم: ${draft.preferredDay || "بكرا"}`,
+      draft.teamMember ? `الموظف: ${draft.teamMember}` : "",
+      "",
+      "اختر الوقت المناسب:"
+    ].filter(Boolean).join("\n");
+  }
+  return [
+    cleanName ? `Done ${cleanName} ✅` : "Done ✅",
+    "",
+    "I understood your request:",
+    `Branch: ${draft.branch || "Dubai"}`,
+    `Day: ${draft.preferredDay || "Tomorrow"}`,
+    draft.teamMember ? `Team member: ${draft.teamMember}` : "",
+    "",
+    "Please choose the suitable time:"
+  ].filter(Boolean).join("\n");
+}
+
+function buildSmartBookingWeekdayBody(draft = {}, customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+  const branchAr = getFastBookingBranchArabic(draft.branch || "Dubai");
+  if (language === "ar") {
+    return [
+      cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
+      "",
+      `اختر اليوم المناسب هذا الأسبوع لفرع ${branchAr}:`
+    ].join("\n");
+  }
+  return [
+    cleanName ? `Done ${cleanName} ✅` : "Done ✅",
+    "",
+    `Please choose the suitable day this week for ${draft.branch || "Dubai"}:`
+  ].join("\n");
+}
+
+function buildSmartBookingConfirmationBody(draft = {}, preferredTime = "", language = "en") {
+  const branch = draft.branch || "Dubai";
+  const branchAr = getFastBookingBranchArabic(branch);
+  if (language === "ar") {
+    return [
+      `${BUSINESS_NAME_SPACED} ✨`,
+      "",
+      "تم استلام طلب الحجز ✅",
+      "",
+      `الفرع: ${branchAr}`,
+      `اليوم: ${draft.preferredDay || ""}`,
+      `الوقت: ${preferredTime}`,
+      draft.teamMember ? `الموظف: ${draft.teamMember}` : "",
+      "",
+      "الموعد بانتظار تأكيد الفريق.",
+      "فريقنا سيراجع التوفر ويؤكد لك الموعد قريباً."
+    ].filter((line) => line !== "").join("\n");
+  }
+  return [
+    `${BUSINESS_NAME_SPACED} ✨`,
+    "",
+    "Your booking request has been received ✅",
+    "",
+    `Branch: ${branch}`,
+    `Day: ${draft.preferredDay || ""}`,
+    `Time: ${preferredTime}`,
+    draft.teamMember ? `Team member: ${draft.teamMember}` : "",
+    "",
+    "Your appointment is pending team confirmation.",
+    "Our team will check availability and confirm shortly."
+  ].filter((line) => line !== "").join("\n");
+}
+
+function buildSmartBookingRequestMessage(draft = {}, preferredTime = "", originalText = "") {
+  return [
+    "Source: WhatsApp Smart Booking",
+    `Preferred branch: ${draft.branch || ""}`,
+    `Preferred day: ${draft.preferredDay || ""}`,
+    `Preferred time: ${preferredTime || ""}`,
+    `Team member: ${draft.teamMember || ""}`,
+    "Flyksoft Status: Not added",
+    originalText ? `Customer selection: ${originalText}` : "Customer selection: Smart booking"
+  ].join("\n");
+}
+
+async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", profileName = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, preferredTime = "") {
+  const body = [
+    "New smart booking request received ✅",
+    "",
+    `Branch: ${draft.branch || ""}`,
+    `Customer: ${profileName || ""}`,
+    `Phone: ${customerPhone || ""}`,
+    "Source: WhatsApp Smart Booking",
+    `Day: ${draft.preferredDay || ""}`,
+    `Time: ${preferredTime || ""}`,
+    draft.teamMember ? `Team member: ${draft.teamMember}` : "Team member: ",
+    "Status: Pending",
+    "",
+    "Please check Team Inbox."
+  ].join("\n");
+  const routingPhoneNumberId = draft.branch === "Abu Dhabi" ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID;
+  const { routing, numbers } = getStaffNotificationNumbers(routingPhoneNumberId);
+  for (const staffNumber of numbers) {
+    await sendStaffNotificationTextMessage(staffNumber, body, routingPhoneNumberId, routing);
+  }
+}
+
+async function handleSmartWhatsAppBooking({ from, message, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en" }) {
+  const input = originalText || text || "";
+  const chosenSmartDay = getSmartBookingDayFromButton(input);
+  const chosenSmartTime = getSmartBookingTimeFromButton(input);
+  const existingDraft = smartBookingDrafts[from] || null;
+
+  if (!existingDraft && !isSmartBookingNaturalRequest(input)) {
+    return false;
+  }
+
+  if (chosenSmartDay && existingDraft) {
+    existingDraft.preferredDay = chosenSmartDay;
+    smartBookingDrafts[from] = existingDraft;
+    const timeBody = buildSmartBookingTimeBody(existingDraft, profileName, replyLanguage);
+    const timeButtons = getSmartBookingTimeButtons();
+    await sendWhatsAppButtonMessage(from, timeBody, timeButtons, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+    addInboxMessage(from, "bot", formatButtonLog(timeBody, timeButtons), "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Time Reply" });
+    return true;
+  }
+
+  if (chosenSmartTime && existingDraft) {
+    const selectedBranch = existingDraft.branch || lineConfig.branch || "Dubai";
+    const requestMessage = buildSmartBookingRequestMessage(existingDraft, chosenSmartTime, input);
+    setConversationStatus(from, "Booking Request");
+    await saveConversationStateToGoogleSheetFromServer({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      branch: selectedBranch,
+      status: "Booking Request",
+      assignee: getBranchTeamAssignee(selectedBranch),
+      tags: ["Booking", "Smart Booking", "Need Confirmation"],
+      updatedBy: "WhatsApp Smart Booking"
+    });
+    await saveBookingRequestToGoogleSheetFromServer({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      customerName: profileName,
+      branch: selectedBranch,
+      message: requestMessage,
+      requestType: "WhatsApp Smart Booking",
+      bookingStatus: "Pending"
+    });
+    addInboxMessage(from, "customer", requestMessage, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "WhatsApp Smart Booking Submit" });
+    notifyStaffAboutSmartBooking(existingDraft, from, profileName, incomingPhoneNumberId, chosenSmartTime).catch((error) => {
+      console.log("Smart booking staff notification failed:");
+      console.log(error);
+    });
+    delete smartBookingDrafts[from];
+    const confirmationBody = buildSmartBookingConfirmationBody(existingDraft, chosenSmartTime, replyLanguage);
+    await sendWhatsAppMessage(from, confirmationBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+    addInboxMessage(from, "bot", confirmationBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Confirmation" });
+    return true;
+  }
+
+  const staff = detectSmartBookingStaff(input);
+  const preferredDay = detectSmartBookingDay(input) || "Tomorrow";
+  const branch = staff?.branch || lineConfig.branch || "Dubai";
+  const draft = {
+    branch,
+    preferredDay,
+    teamMember: staff?.name || "",
+    startedAt: getDubaiTimestamp(),
+    phoneNumberId: incomingPhoneNumberId
+  };
+  smartBookingDrafts[from] = draft;
+
+  addInboxMessage(from, "customer", buildCustomerActionBody(profileName, input), "Smart Booking", incomingPhoneNumberId, { customerName: profileName, messageType: "Customer Smart Booking Request" });
+
+  if (preferredDay === "This Week") {
+    setConversationStatus(from, "Smart Booking - Choose Day");
+    const dayBody = buildSmartBookingWeekdayBody(draft, profileName, replyLanguage);
+    const dayButtons = getSmartBookingWeekdayButtons();
+    await sendWhatsAppButtonMessage(from, dayBody, dayButtons, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+    addInboxMessage(from, "bot", formatButtonLog(dayBody, dayButtons), "Smart Booking - Choose Day", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Day Reply" });
+    return true;
+  }
+
+  setConversationStatus(from, "Smart Booking - Choose Time");
+  const timeBody = buildSmartBookingTimeBody(draft, profileName, replyLanguage);
+  const timeButtons = getSmartBookingTimeButtons();
+  await sendWhatsAppButtonMessage(from, timeBody, timeButtons, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+  addInboxMessage(from, "bot", formatButtonLog(timeBody, timeButtons), "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Time Reply" });
+  return true;
+}
+
 function getFastBookingBranchButtons() {
   return [
     { id: "fast_book_dubai", title: "Dubai" },
@@ -3568,7 +3831,8 @@ async function handleFastBookingButtons({
   text,
   incomingPhoneNumberId,
   lineConfig,
-  profileName
+  profileName,
+  replyLanguage = "en"
 }) {
   const startedFastBooking = isFastBookingStartText(originalText || text);
   const chosenBranch = getFastBookingBranchChoice(originalText || text);
@@ -19183,6 +19447,21 @@ No problem. We will not send a reminder for this appointment.`;
       return res.sendStatus(200);
     }
 
+    const smartBookingHandled = await handleSmartWhatsAppBooking({
+      from,
+      message,
+      originalText,
+      text,
+      incomingPhoneNumberId,
+      lineConfig,
+      profileName,
+      replyLanguage
+    });
+
+    if (smartBookingHandled) {
+      return res.sendStatus(200);
+    }
+
     const fastBookingHandled = await handleFastBookingButtons({
       from,
       message,
@@ -19190,7 +19469,8 @@ No problem. We will not send a reminder for this appointment.`;
       text,
       incomingPhoneNumberId,
       lineConfig,
-      profileName
+      profileName,
+      replyLanguage
     });
 
     if (fastBookingHandled) {
