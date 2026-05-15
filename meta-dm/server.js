@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-booking-context-smart-intents";
+const BOT_VERSION = "iconic-meta-dm-v1-booking-context-smart-intents-safe-name-v1";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -161,6 +161,52 @@ function getTurnLanguage(text, state) {
 
 function isAr(lang) {
   return lang === "ar";
+}
+
+function cleanCustomerName(value) {
+  const raw = (value || "").toString().trim();
+  if (!raw) return "";
+
+  const normalized = raw.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+
+  const blocked = ["instagram", "facebook", "user", "unknown", "undefined", "null"];
+  if (blocked.includes(normalized.toLowerCase())) return "";
+  if (/^\d+$/.test(normalized)) return "";
+  if (normalized.length > 40) return "";
+
+  return normalized;
+}
+
+function getCustomerNameFromEvent(event, entry) {
+  const candidates = [
+    event?.sender?.name,
+    [event?.sender?.first_name, event?.sender?.last_name].filter(Boolean).join(" "),
+    event?.sender?.username,
+    event?.from?.name,
+    [event?.from?.first_name, event?.from?.last_name].filter(Boolean).join(" "),
+    event?.from?.username,
+    event?.message?.from?.name,
+    event?.message?.from?.username,
+    event?.user?.name,
+    event?.profile?.name,
+    event?.profile?.username,
+    entry?.user?.name,
+    entry?.profile?.name,
+    entry?.profile?.username
+  ];
+
+  for (const candidate of candidates) {
+    const name = cleanCustomerName(candidate);
+    if (name) return name;
+  }
+
+  return "";
+}
+
+function nameSuffix(name) {
+  const clean = cleanCustomerName(name);
+  return clean ? ` ${clean}` : "";
 }
 
 function quickReply(title, payload) {
@@ -362,25 +408,27 @@ function isMarhabaGreeting(text) {
   return value.includes("مرحبا") || value === "هلا" || value === "هاي";
 }
 
-function greetingBody(text, lang = "en") {
+function greetingBody(text, lang = "en", customerName = "") {
+  const name = nameSuffix(customerName);
+
   if (isSalamGreeting(text)) {
-    return `وعليكم السلام ورحمة الله 👋
+    return `وعليكم السلام ورحمة الله${name} 👋
 كيف فينا نساعدك اليوم؟
 
 اختار من القائمة، أو اكتب سؤالك مباشرة.`;
   }
 
   if (isMarhabaGreeting(text)) {
-    return `مرااحب، كيفك اليوم؟ 👋
+    return `مرااحب${name}، كيفك اليوم؟ 👋
 اختار من القائمة كيف فينا نساعدك، أو اكتب سؤالك مباشرة.`;
   }
 
   if (isAr(lang)) {
-    return `أهلًا وسهلًا 👋
+    return `أهلًا وسهلًا${name} 👋
 اختار من القائمة، أو اكتب سؤالك مباشرة وأنا رح حاول أساعدك.`;
   }
 
-  return `Hello 👋
+  return `Hello${name} 👋
 Please choose from the menu, or type your question directly and I’ll do my best to help.`;
 }
 
@@ -836,9 +884,11 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
   return true;
 }
 
-function welcomeBody(lang = "en") {
+function welcomeBody(lang = "en", customerName = "") {
+  const name = nameSuffix(customerName);
+
   if (isAr(lang)) {
-    return `مرحبا 👋
+    return `مرحبا${name} 👋
 
 أنا مساعد Iconic Hair Care الذكي.
 
@@ -847,7 +897,7 @@ function welcomeBody(lang = "en") {
 إذا ما قدرت أساعدك، بحوّلك لفريقنا.`;
   }
 
-  return `Hello 👋
+  return `Hello${name} 👋
 
 I’m the smart assistant for Iconic Hair Care.
 
@@ -1243,7 +1293,7 @@ async function sendDetailsContent(channel, recipientId, lang) {
 async function handlePayload({ channel, senderId, payload, state, lang }) {
   if (payload === "MAIN_MENU") {
     resetState(senderId);
-    await sendText(channel, senderId, welcomeBody(lang), mainReplies(lang));
+    await sendText(channel, senderId, welcomeBody(lang, state.customerName), mainReplies(lang));
     return true;
   }
 
@@ -1444,6 +1494,9 @@ async function handleIncomingEvent(entry, event) {
   const channel = getChannelFromEntry(entry, event);
   const text = getMessageText(event);
   const state = getState(senderId);
+  const customerName = getCustomerNameFromEvent(event, entry);
+  if (customerName) state.customerName = customerName;
+
   const lang = getTurnLanguage(text, state);
   state.lang = lang;
 
@@ -1454,7 +1507,7 @@ async function handleIncomingEvent(entry, event) {
   }
 
   if (isGreeting(text)) {
-    await sendText(channel, senderId, greetingBody(text, lang), mainReplies(lang));
+    await sendText(channel, senderId, greetingBody(text, lang, state.customerName), mainReplies(lang));
     return;
   }
 
