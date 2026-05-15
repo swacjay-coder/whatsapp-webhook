@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-booking-context-smart-intents-safe-name-v1";
+const BOT_VERSION = "iconic-meta-dm-v1-safe-name-diagnostic-v1";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -110,6 +110,9 @@ const ABU_DHABI_STAFF_NUMBER = (
 ).toString().replace(/\D/g, "");
 
 const conversationState = new Map();
+let nameDiagnosticPrinted = false;
+
+const NAME_DIAGNOSTIC_ENABLED = (process.env.NAME_DIAGNOSTIC_ENABLED || "true").toString().toLowerCase() !== "false";
 
 function normalizeText(value) {
   return (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
@@ -176,6 +179,59 @@ function cleanCustomerName(value) {
   if (normalized.length > 40) return "";
 
   return normalized;
+}
+
+function safeKeys(value) {
+  if (!value || typeof value !== "object") return [];
+  return Object.keys(value).slice(0, 20);
+}
+
+function maskIdentifier(value) {
+  const raw = (value || "").toString();
+  if (!raw) return "";
+  if (raw.length <= 8) return raw;
+  return `${raw.slice(0, 4)}...${raw.slice(-4)}`;
+}
+
+function extractNameCandidates(event, entry) {
+  return {
+    senderName: cleanCustomerName(event?.sender?.name),
+    senderFirstLast: cleanCustomerName([event?.sender?.first_name, event?.sender?.last_name].filter(Boolean).join(" ")),
+    senderUsername: cleanCustomerName(event?.sender?.username),
+    fromName: cleanCustomerName(event?.from?.name),
+    fromFirstLast: cleanCustomerName([event?.from?.first_name, event?.from?.last_name].filter(Boolean).join(" ")),
+    fromUsername: cleanCustomerName(event?.from?.username),
+    messageFromName: cleanCustomerName(event?.message?.from?.name),
+    messageFromUsername: cleanCustomerName(event?.message?.from?.username),
+    userName: cleanCustomerName(event?.user?.name),
+    profileName: cleanCustomerName(event?.profile?.name),
+    profileUsername: cleanCustomerName(event?.profile?.username),
+    entryUserName: cleanCustomerName(entry?.user?.name),
+    entryProfileName: cleanCustomerName(entry?.profile?.name),
+    entryProfileUsername: cleanCustomerName(entry?.profile?.username)
+  };
+}
+
+function logNameDiagnosticOnce({ channel, entry, event }) {
+  if (!NAME_DIAGNOSTIC_ENABLED || nameDiagnosticPrinted) return;
+  nameDiagnosticPrinted = true;
+
+  const diagnostic = {
+    channel,
+    entryObject: entry?.object || "",
+    entryMessagingProduct: entry?.messaging_product || "",
+    entryKeys: safeKeys(entry),
+    eventKeys: safeKeys(event),
+    senderKeys: safeKeys(event?.sender),
+    fromKeys: safeKeys(event?.from),
+    recipientKeys: safeKeys(event?.recipient),
+    messageKeys: safeKeys(event?.message),
+    senderId: maskIdentifier(event?.sender?.id || event?.from?.id || event?.sender_id),
+    recipientId: maskIdentifier(event?.recipient?.id),
+    nameCandidates: extractNameCandidates(event, entry)
+  };
+
+  console.log(`[Name Diagnostic] ${JSON.stringify(diagnostic)}`);
 }
 
 function getCustomerNameFromEvent(event, entry) {
@@ -1494,6 +1550,7 @@ async function handleIncomingEvent(entry, event) {
   const channel = getChannelFromEntry(entry, event);
   const text = getMessageText(event);
   const state = getState(senderId);
+  logNameDiagnosticOnce({ channel, entry, event });
   const customerName = getCustomerNameFromEvent(event, entry);
   if (customerName) state.customerName = customerName;
 
