@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-2-smart-booking-preserve-history-and-direct-staff-notify";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-3-smart-booking-inbox-history-display-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -19070,6 +19070,160 @@ updateLiveNotificationUi();
 
 loadMessages();
 setInterval(loadMessages, 5000);
+</script>
+
+<script>
+(function() {
+  "use strict";
+  function escapeIconicHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, function(ch) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch];
+    });
+  }
+
+  function normalizeIconicTime(value) {
+    var date = new Date(value || 0);
+    var time = date.getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function buildIconicFallbackConversations(messages) {
+    var grouped = {};
+    (messages || []).forEach(function(message) {
+      var phone = String(message.phone || "").trim();
+      if (!phone) return;
+      var phoneNumberId = String(message.phoneNumberId || "").trim();
+      var key = phone + "|" + phoneNumberId;
+      if (!grouped[key]) {
+        grouped[key] = {
+          key: key,
+          phone: phone,
+          phoneNumberId: phoneNumberId,
+          branch: message.branch || "",
+          status: message.status || "Open",
+          customerName: message.customerName || "Customer",
+          messages: []
+        };
+      }
+      if (message.customerName && grouped[key].customerName === "Customer") grouped[key].customerName = message.customerName;
+      if (message.branch) grouped[key].branch = message.branch;
+      if (message.status) grouped[key].status = message.status;
+      grouped[key].messages.push(message);
+    });
+
+    return Object.keys(grouped).map(function(key) {
+      var conversation = grouped[key];
+      conversation.messages.sort(function(a, b) { return normalizeIconicTime(a.time) - normalizeIconicTime(b.time); });
+      conversation.latest = conversation.messages[conversation.messages.length - 1] || {};
+      return conversation;
+    }).sort(function(a, b) { return normalizeIconicTime(b.latest.time) - normalizeIconicTime(a.latest.time); });
+  }
+
+  function renderIconicFallbackChat(conversation) {
+    var chatTitle = document.getElementById("chatTitle");
+    var chatBody = document.getElementById("chatBody");
+    var inputTo = document.getElementById("to");
+    var inputLine = document.getElementById("phoneNumberId");
+    var customerProfilePhone = document.getElementById("customerProfilePhone");
+    var customerProfileBranch = document.getElementById("customerProfileBranch");
+    var customerProfileStatus = document.getElementById("customerProfileStatus");
+
+    if (chatTitle) chatTitle.textContent = conversation.customerName || conversation.phone || "Customer";
+    if (inputTo) inputTo.value = conversation.phone || "";
+    if (inputLine) inputLine.value = conversation.phoneNumberId || "";
+    if (customerProfilePhone) customerProfilePhone.textContent = conversation.phone || "—";
+    if (customerProfileBranch) customerProfileBranch.textContent = conversation.branch || "—";
+    if (customerProfileStatus) customerProfileStatus.textContent = conversation.status || "Open";
+
+    if (!chatBody) return;
+    chatBody.innerHTML = '<div class="chat-watermark"><img src="/assets/iconic-chat-background-logo.png" alt="Iconic Hair Care watermark" /></div>' +
+      conversation.messages.map(function(message) {
+        var sender = String(message.sender || "bot").toLowerCase();
+        var cls = sender === "customer" ? "customer" : (sender === "staff" ? "staff" : "bot");
+        var body = String(message.body || "").replace(/\n/g, "<br>");
+        return '<div class="bubble-row ' + cls + '">' +
+          '<div class="bubble ' + cls + '">' +
+            '<div>' + body + '</div>' +
+            '<div class="bubble-info"><span>' + escapeIconicHtml(sender) + '</span><span>' + escapeIconicHtml(message.time || "") + '</span></div>' +
+          '</div>' +
+        '</div>';
+      }).join("");
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function renderIconicFallbackList(conversations) {
+    var list = document.getElementById("conversationList");
+    var footer = document.getElementById("conversationFooterText");
+    if (!list) return;
+    if (!conversations.length) {
+      list.innerHTML = '<div class="empty">No conversations yet.</div>';
+      if (footer) footer.textContent = "Showing 0 - 0 of 0";
+      return;
+    }
+
+    list.innerHTML = conversations.map(function(conversation, index) {
+      var latest = conversation.latest || {};
+      var preview = String(latest.body || "").replace(/\s+/g, " ").trim();
+      if (preview.length > 76) preview = preview.slice(0, 76) + "...";
+      var displayName = conversation.customerName || conversation.phone || "Customer";
+      var initials = displayName.replace(/[^A-Za-z0-9\u0600-\u06FF]/g, "").slice(0, 2) || "IC";
+      return '<button type="button" class="conversation-card reference-conversation-card' + (index === 0 ? " active" : "") + '" data-fallback-index="' + index + '">' +
+        '<div class="avatar reference-avatar">' + escapeIconicHtml(initials.toUpperCase()) + '</div>' +
+        '<div class="conversation-main reference-conversation-main">' +
+          '<div class="conv-top reference-card-top">' +
+            '<div class="conv-identity reference-card-identity">' +
+              '<div class="conv-name reference-card-name">' + escapeIconicHtml(displayName) + '</div>' +
+              '<div class="conv-preview reference-card-preview">' + escapeIconicHtml(preview) + '</div>' +
+            '</div>' +
+            '<div class="reference-card-side"><div class="conv-time reference-card-time">' + escapeIconicHtml(latest.time || "") + '</div></div>' +
+          '</div>' +
+          '<div class="conv-footer reference-card-footer"><div class="badges reference-card-badges"><span class="branch">' + escapeIconicHtml(conversation.branch || "") + '</span><span class="status open">' + escapeIconicHtml(conversation.status || "Open") + '</span></div><span class="message-count-badge">' + conversation.messages.length + '</span></div>' +
+        '</div>' +
+      '</button>';
+    }).join("");
+
+    if (footer) footer.textContent = "Showing 1 - " + conversations.length + " of " + conversations.length;
+
+    Array.prototype.forEach.call(list.querySelectorAll(".conversation-card"), function(button) {
+      button.addEventListener("click", function() {
+        Array.prototype.forEach.call(list.querySelectorAll(".conversation-card"), function(other) { other.classList.remove("active"); });
+        button.classList.add("active");
+        var index = Number(button.getAttribute("data-fallback-index") || 0);
+        renderIconicFallbackChat(conversations[index]);
+      });
+    });
+
+    renderIconicFallbackChat(conversations[0]);
+  }
+
+  function shouldRunIconicFallback() {
+    var list = document.getElementById("conversationList");
+    if (!list) return false;
+    var text = String(list.textContent || "").toLowerCase();
+    return text.indexOf("loading conversations") !== -1 || text.indexOf("no conversations yet") !== -1 || text.indexOf("failed to load messages") !== -1 || !list.querySelector(".conversation-card");
+  }
+
+  function loadIconicFallbackInbox() {
+    if (!shouldRunIconicFallback()) return;
+    fetch("/api/messages", { cache: "no-store" })
+      .then(function(response) { return response.json(); })
+      .then(function(data) {
+        var messages = Array.isArray(data.messages) ? data.messages : [];
+        if (!messages.length) return;
+        renderIconicFallbackList(buildIconicFallbackConversations(messages));
+        console.log("[Iconic Inbox Fallback] conversations rendered:", messages.length);
+      })
+      .catch(function(error) {
+        console.log("[Iconic Inbox Fallback] failed", error);
+      });
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    setTimeout(loadIconicFallbackInbox, 1500);
+    setTimeout(loadIconicFallbackInbox, 4000);
+  });
+  setTimeout(loadIconicFallbackInbox, 5000);
+})();
 </script>
 </body>
 </html>`);
