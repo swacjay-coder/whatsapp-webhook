@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-11-internal-test-bot-reply-notification-safe";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-12-smart-bilingual-intents";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -762,17 +762,28 @@ function buildTeamHandoffBody(customerName = "") {
     "To reactivate the automatic replies later, type: resume bot";
 }
 
-function buildDirectBookingChoiceBody(customerName = "") {
+function buildDirectBookingChoiceBody(customerName = "", language = "en") {
   const cleanName = namePhrase(customerName);
-  const intro = cleanName ? `أكيد ${cleanName}، اختر نوع الحجز المناسب لك:` : "أكيد، اختر نوع الحجز المناسب لك:";
 
-  return `${intro}\n\n` +
-    "إذا كنت عميل حالي وتريد خدمة / متابعة / تركيب / تعديل، اختر سيرفس.\n\n" +
-    "إذا كنت عميل جديد وتريد معرفة الحل الأنسب، اختر استشارة.\n\n" +
-    "------------------------------\n\n" +
-    "Sure, please choose the right booking type:\n\n" +
-    "If you are an existing client and need service / follow-up / fitting / adjustment, choose Service.\n\n" +
-    "If you are a new client and want to know the best solution, choose Consultation.";
+  if (language === "ar") {
+    const intro = cleanName ? `أكيد ${cleanName}، اختر نوع الحجز المناسب لك:` : "أكيد، اختر نوع الحجز المناسب لك:";
+    return [
+      intro,
+      "",
+      "إذا كنت عميل حالي وتريد خدمة / متابعة / تركيب / تعديل، اختر سيرفس.",
+      "",
+      "إذا كنت عميل جديد وتريد معرفة الحل الأنسب، اختر استشارة."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName}, please choose the right booking type:` : "Sure, please choose the right booking type:";
+  return [
+    intro,
+    "",
+    "If you are an existing client and need service / follow-up / fitting / adjustment, choose Service.",
+    "",
+    "If you are a new client and want to know the best solution, choose Consultation."
+  ].join("\n");
 }
 
 function getDirectBookingChoiceButtons() {
@@ -1166,6 +1177,264 @@ function buildHowItWorksBody(customerName = "", language = "en") {
     "",
     "What would you like to do now?"
   ].join("\n");
+}
+
+
+function getIntentTextParts(text = "") {
+  const value = compactText(text);
+  return {
+    value,
+    raw: (text || "").toString().toLowerCase()
+  };
+}
+
+function hasAnyIntentPhrase(text = "", phrases = []) {
+  const { value } = getIntentTextParts(text);
+  if (!value) return false;
+  return phrases.some((phrase) => {
+    const cleanPhrase = compactText(phrase);
+    return cleanPhrase && value.includes(cleanPhrase);
+  });
+}
+
+function hasAnyIntentWord(text = "", words = []) {
+  const { value } = getIntentTextParts(text);
+  if (!value) return false;
+  return words.some((word) => {
+    const cleanWord = compactText(word);
+    if (!cleanWord) return false;
+
+    if (/^[a-z0-9 ]+$/.test(cleanWord)) {
+      const escaped = cleanWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+      return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(value);
+    }
+
+    return value.includes(cleanWord);
+  });
+}
+
+function isPriceIntentText(text = "") {
+  const value = compactText(text);
+  return value === "3" || value === "٣" ||
+    hasAnyIntentPhrase(value, [
+      "how much", "how much is it", "how much does it cost", "what is the price", "what's the price",
+      "price list", "send price", "tell me price", "need price", "i need price", "i want price",
+      "pricing", "prices", "price", "cost", "costs", "charge", "charges", "fees", "fee", "rate", "rates",
+      "quotation", "quote", "estimate", "offer", "offers", "discount", "package", "packages",
+      "كم السعر", "كم سعر", "شو السعر", "ما هو السعر", "بكم", "قديش", "كام", "كم يكلف", "التكلفة", "تكلفة",
+      "سعر", "السعر", "اسعار", "الاسعار", "الأسعار", "عرض", "عروض", "باكدج", "باقة", "خصم"
+    ]);
+}
+
+function isBookingIntentText(text = "") {
+  const value = compactText(text);
+  return value === "1" || value === "١" ||
+    hasAnyIntentPhrase(value, [
+      "booking_menu", "booking", "book", "book now", "book appointment", "book consultation", "appointment",
+      "reserve", "reservation", "schedule", "make appointment", "need appointment", "i want appointment",
+      "حجز", "الحجز", "احجز", "احجز موعد", "موعد", "بدي موعد", "اريد موعد", "ابغى موعد", "حجز موعد"
+    ]);
+}
+
+function isServicesIntentText(text = "") {
+  const value = compactText(text);
+  return value === "2" || value === "٢" ||
+    hasAnyIntentPhrase(value, [
+      "services", "service", "what services", "hair replacement", "hair system", "hair fixing", "hair installation",
+      "non surgical", "solution", "solutions", "treatment", "details", "more info", "information", "info",
+      "خدمات", "الخدمات", "خدمتنا", "خدماتنا", "تركيب شعر", "بديل الشعر", "الشعر المستعار", "حل الشعر", "حلول", "تفاصيل", "معلومات"
+    ]);
+}
+
+function isNaturalLookIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "natural", "natural look", "undetectable", "invisible", "real look", "does it show", "will it show", "is it obvious",
+    "طبيعي", "طبيعية", "مظهر طبيعي", "يبين", "واضح", "مو واضح", "ما يبين", "شكله طبيعي", "طبيعي 100"
+  ]);
+}
+
+function isConsultationIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "private_consult", "consult", "consultation", "consultant", "advise", "advice", "recommend", "recommendation",
+    "assessment", "check my case", "my case", "privacy", "private", "confidential",
+    "استشارة", "استشاره", "استشير", "يناسبني", "حالتي", "خصوصية", "خاص", "خاصة", "سري", "سرية", "افضل حل", "أنسب حل", "انسب حل"
+  ]);
+}
+
+function isLocationIntentText(text = "") {
+  const value = compactText(text);
+  return value === "5" || value === "٥" ||
+    hasAnyIntentPhrase(value, [
+      "location_branch", "open_location", "location", "locations", "map", "maps", "google maps", "address", "where", "branch", "branches", "dubai", "abu dhabi",
+      "موقع", "الموقع", "لوكيشن", "الخريطة", "عنوان", "وين", "فرع", "فروع", "دبي", "ابوظبي", "أبوظبي"
+    ]);
+}
+
+function isCallIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "call_branch", "call", "phone", "number", "contact", "contact number", "can you call", "call me", "speak", "talk",
+    "اتصل", "اتصال", "رقم", "تواصل", "كلموني", "اتصلوا", "اتصلو", "احكي", "اكلم", "كلم"
+  ]);
+}
+
+function isWorkingHoursIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "working hours", "hours", "open", "opening", "close", "closing", "time", "timing", "available today", "are you open",
+    "دوام", "الدوام", "ساعات العمل", "متى تفتح", "متى تسكر", "فاتحين", "مفتوح", "الوقت", "اوقات", "أوقات"
+  ]);
+}
+
+function buildSmartServicesDeepBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
+    return [
+      intro,
+      "",
+      "خلينا نختصر عليك الطريق.",
+      "",
+      "اختر أكثر نقطة تهمك الآن، وسنعطيك توجيه واضح بدون كلام عام:",
+      "",
+      "1️⃣ مظهر طبيعي وغير واضح",
+      "2️⃣ معرفة السعر حسب حالتك",
+      "3️⃣ استشارة خاصة مع الفريق",
+      "",
+      "إذا تحب تشوف صور أو فيديو قصير عن الخدمة، اكتب: صورة أو فيديو."
+    ].join("\\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName} ✨` : "Sure ✨";
+  return [
+    intro,
+    "",
+    "Let us guide you clearly.",
+    "",
+    "Choose what matters most right now, and we will direct you to the right next step:",
+    "",
+    "1️⃣ Natural, undetectable look",
+    "2️⃣ Price based on your case",
+    "3️⃣ Private team consultation",
+    "",
+    "To see photos or a short video, type: photo or video."
+  ].join("\\n");
+}
+
+function buildPriceIntentBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `أكيد ${cleanName}، السعر يعتمد على الحالة.` : "أكيد، السعر يعتمد على الحالة.";
+    return [
+      intro,
+      "",
+      "ما نعطي رقم عشوائي قبل ما نعرف المساحة المطلوبة، الكثافة، ونوع الحل المناسب.",
+      "",
+      "حتى نعطيك توجيه صحيح، اكتب لنا:",
+      "• هل تريد تغطية خفيفة أو حل كامل؟",
+      "• أي فرع يناسبك: دبي أو أبوظبي؟",
+      "",
+      "أو احجز استشارة سريعة والفريق يشرح لك السعر المناسب لحالتك."
+    ].join("\\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName}, the price depends on the case.` : "Sure, the price depends on the case.";
+  return [
+    intro,
+    "",
+    "We do not give a random number before understanding the required area, density, and best solution for you.",
+    "",
+    "To guide you correctly, please send:",
+    "• Light coverage or full solution?",
+    "• Which branch suits you: Dubai or Abu Dhabi?",
+    "",
+    "Or book a quick consultation and our team will explain the right price for your case."
+  ].join("\\n");
+}
+
+function buildNaturalIntentBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName}، هذا أهم سؤال.` : "تمام، هذا أهم سؤال.";
+    return [
+      intro,
+      "",
+      "المظهر الطبيعي يعتمد على لون مناسب، كثافة مدروسة، وتوزيع ينسجم مع شكل الوجه.",
+      "",
+      "هدفنا نتيجة مرتبة وطبيعية بدون مبالغة أو شكل واضح.",
+      "",
+      "أفضل خطوة: احجز استشارة قصيرة حتى يحدد الفريق الأنسب لك بخصوصية كاملة."
+    ].join("\\n");
+  }
+
+  const intro = cleanName ? `Great question ${cleanName}.` : "Great question.";
+  return [
+    intro,
+    "",
+    "A natural result depends on the right color, balanced density, and a design that matches your face shape.",
+    "",
+    "Our goal is a refined look that feels natural, not obvious or overdone.",
+    "",
+    "Best next step: book a short private consultation so our team can guide you properly."
+  ].join("\\n");
+}
+
+function buildConsultationIntentBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName} ✅` : "تمام ✅";
+    return [
+      intro,
+      "",
+      "تم استلام طلب الاستشارة.",
+      "",
+      "فريق Iconic Hair Care يقدر يساعدك بسرية ويشرح لك الحل الأنسب حسب حالتك.",
+      "",
+      "اختر حجز استشارة أو تواصل مع الفريق."
+    ].join("\\n");
+  }
+
+  const intro = cleanName ? `Done ${cleanName} ✅` : "Done ✅";
+  return [
+    intro,
+    "",
+    "Your consultation request has been received.",
+    "",
+    "The Iconic Hair Care team can guide you privately and explain the best solution for your case.",
+    "",
+    "Choose Book Consultation or talk to the team."
+  ].join("\\n");
+}
+
+function buildWorkingHoursBody(phoneNumberId = DUBAI_PHONE_NUMBER_ID, language = "en") {
+  const lineConfig = getLineConfig(phoneNumberId);
+  const branchNameAr = getArabicBranchName(lineConfig.branch);
+
+  if (language === "ar") {
+    return [
+      "Iconic Hair Care ✨",
+      "",
+      "ساعات العمل:",
+      "10:00 صباحاً إلى 7:00 مساءً",
+      "",
+      `فرع ${branchNameAr}:`,
+      lineConfig.displayNumber,
+      lineConfig.locationUrl
+    ].join("\\n");
+  }
+
+  return [
+    "Iconic Hair Care ✨",
+    "",
+    "Working hours:",
+    "10:00 AM to 7:00 PM",
+    "",
+    `${lineConfig.branch} branch:`,
+    lineConfig.displayNumber,
+    lineConfig.locationUrl
+  ].join("\\n");
 }
 
 function getArabicBranchName(branch) {
@@ -3752,11 +4021,7 @@ function getAutoIntentWorkflow(text) {
 
   const hasAny = (items) => items.some((item) => value.includes(item));
 
-  if (
-    value === "1" ||
-    value === "١" ||
-    hasAny(["book_appointment", "حجز موعد", "احجز", "موعد", "appointment", "book consultation", "book appointment", "book"])
-  ) {
+  if (isBookingIntentText(value)) {
     return {
       status: "Booking Request",
       tags: ["Booking", "Need Details"],
@@ -3765,9 +4030,7 @@ function getAutoIntentWorkflow(text) {
     };
   }
 
-  if (
-    hasAny(["private_consult", "consult", "consultation", "استشارة", "خاص", "خاصة"])
-  ) {
+  if (isConsultationIntentText(value)) {
     return {
       status: "Consultation Request",
       tags: ["Consultation", "Need Details"],
@@ -3776,11 +4039,7 @@ function getAutoIntentWorkflow(text) {
     };
   }
 
-  if (
-    value === "6" ||
-    value === "٦" ||
-    hasAny(["talk_to_team", "موظف", "فريق", "support", "team", "human"])
-  ) {
+  if (isTalkToTeamText(value)) {
     return {
       status: "Talk to Team",
       tags: ["Human Support", "Need Details"],
@@ -3789,9 +4048,7 @@ function getAutoIntentWorkflow(text) {
     };
   }
 
-  if (
-    hasAny(["call_branch", "call", "اتصل", "اتصال"])
-  ) {
+  if (isCallIntentText(value)) {
     return {
       status: "Call Requested",
       tags: ["Call Requested", "Need Details"],
@@ -3800,11 +4057,7 @@ function getAutoIntentWorkflow(text) {
     };
   }
 
-  if (
-    value === "3" ||
-    value === "٣" ||
-    hasAny(["price_info", "price", "prices", "cost", "سعر", "السعر", "الاسعار", "الأسعار"])
-  ) {
+  if (isPriceIntentText(value)) {
     return {
       status: "Price Question",
       tags: ["Price", "Need Details"],
@@ -3813,9 +4066,7 @@ function getAutoIntentWorkflow(text) {
     };
   }
 
-  if (
-    hasAny(["location_branch", "open_location", "location", "locations", "map", "maps", "موقع", "الموقع", "فرع", "فروع"])
-  ) {
+  if (isLocationIntentText(value)) {
     return {
       status: "Location Requested",
       tags: ["Location"],
@@ -3824,9 +4075,7 @@ function getAutoIntentWorkflow(text) {
     };
   }
 
-  if (
-    hasAny(["natural_look", "natural", "طبيعي", "طبيعية", "مظهر طبيعي"])
-  ) {
+  if (isNaturalLookIntentText(value)) {
     return {
       status: "Service Interest",
       tags: ["Service Interest", "Natural Look"],
@@ -3835,11 +4084,7 @@ function getAutoIntentWorkflow(text) {
     };
   }
 
-  if (
-    value === "2" ||
-    value === "٢" ||
-    hasAny(["services", "service", "خدمات", "الخدمات"])
-  ) {
+  if (isServicesIntentText(value)) {
     return {
       status: "Service Interest",
       tags: ["Service Interest"],
@@ -18380,27 +18625,19 @@ app.post("/webhook", async (req, res) => {
       const iconicLocalizedServicesBody = buildServicesMenuBody(profileName, iconicReplyLanguage);
       const iconicLocalizedResultsBody = buildResultsFollowupBody(profileName, iconicReplyLanguage);
       const iconicLocalizedDetailsBody = buildHowItWorksBody(profileName, iconicReplyLanguage);
-      const iconicIsServicesRoute = (
-        iconicServicesText === "services_menu" ||
+      const iconicIsServicesRoute = iconicServicesText === "services_menu" ||
         iconicServicesText === "servicesmenu" ||
         iconicServicesText === "services" ||
-        iconicServicesText.includes("services") ||
-        iconicServicesText.includes("خدمات")
-      );
-      const iconicIsResultsRoute = (
-        iconicServicesText === "results" ||
-        iconicServicesText.includes("result") ||
-        iconicServicesText.includes("نتائج")
-      );
-      const iconicIsHowItWorksRoute = (
-        iconicServicesText === "how_it_works" ||
-        iconicServicesText.includes("details") ||
-        iconicServicesText.includes("تفاصيل") ||
-        iconicServicesText === "how | كيف يعمل" ||
-        iconicServicesText === "howitworks" ||
-        (iconicServicesText.includes("how") && iconicServicesText.includes("work")) ||
-        iconicServicesText.includes("كيف")
-      );
+        iconicServicesText === "خدمات" ||
+        iconicServicesText === "الخدمات" ||
+        iconicServicesText === "خدماتنا";
+      const iconicIsResultsRoute = !isPriceIntentText(iconicServicesText) &&
+        !isBookingIntentText(iconicServicesText) &&
+        !isLocationIntentText(iconicServicesText) &&
+        !isCallIntentText(iconicServicesText) &&
+        (isAutoVideoRequestText(iconicServicesText) || iconicServicesText === "results" || iconicServicesText.includes("result") || iconicServicesText.includes("نتائج"));
+      const iconicIsHowItWorksRoute = iconicServicesText === "how_it_works" || iconicServicesText === "howitworks" ||
+        hasAnyIntentPhrase(iconicServicesText, ["details", "how it works", "how does it work", "process", "steps", "تفاصيل", "كيف", "كيف يعمل", "طريقة", "الطريقة"]);
 
       if (iconicIsServicesRoute) {
         logCustomerActionForInbox({
@@ -18927,10 +19164,10 @@ No problem. We will not send a reminder for this appointment.`;
         updatedBy: "Direct Booking Intent"
       });
 
-      const directBookingBody = buildDirectBookingChoiceBody(profileName);
-      const directBookingButtons = getDirectBookingChoiceButtons();
+      const directBookingBody = buildDirectBookingChoiceBody(profileName, replyLanguage);
+      const directBookingButtons = localizeReplyButtons(getDirectBookingChoiceButtons(), replyLanguage);
 
-      await sendWhatsAppButtonMessage(from, directBookingBody, directBookingButtons, incomingPhoneNumberId, { replyLanguage });
+      await sendWhatsAppButtonMessage(from, directBookingBody, directBookingButtons, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
       addInboxMessage(
         from,
         "bot",
@@ -19035,19 +19272,15 @@ No problem. We will not send a reminder for this appointment.`;
         `📍 ${lineConfig.branch} branch location:\n${lineConfig.locationUrl}`;
     }
 
+    /* ساعات العمل / الدوام */
+    else if (isWorkingHoursIntentText(originalText || text)) {
+      setConversationStatus(from, "Working Hours Requested");
+      replyText = buildWorkingHoursBody(incomingPhoneNumberId, replyLanguage);
+      replyButtons = getActionButtons();
+    }
+
     /* زر الموقع الحقيقي — يرسل CTA URL يفتح Google Maps حسب الفرع تلقائياً */
-    else if (
-      text.includes("location_branch") ||
-      text.includes("open_location") ||
-      text.includes("location") ||
-      text.includes("locations") ||
-      text.includes("map") ||
-      text.includes("maps") ||
-      text.includes("موقع") ||
-      text.includes("الموقع") ||
-      text.includes("فرع") ||
-      text.includes("فروع")
-    ) {
+    else if (isLocationIntentText(originalText || text)) {
       setConversationStatus(from, "Location Requested");
 
       const locationBody = buildLocationMessageBody(incomingPhoneNumberId);
@@ -19100,12 +19333,7 @@ No problem. We will not send a reminder for this appointment.`;
     }
 
     /* زر الاتصال الحقيقي — يرسل تمبلت فيه Call Now حسب الفرع تلقائياً */
-    else if (
-      text.includes("call") ||
-      text.includes("call_branch") ||
-      text.includes("اتصل") ||
-      text.includes("اتصال")
-    ) {
+    else if (isCallIntentText(originalText || text)) {
       setConversationStatus(from, "Call Requested");
 
       const callTemplateName = getCallNowTemplateName(incomingPhoneNumberId);
@@ -19173,7 +19401,12 @@ No problem. We will not send a reminder for this appointment.`;
     }
 
     /* V31.5 — إرسال فيديو تلقائي عند طلب الصور أو الميديا */
-    else if (isAutoVideoRequestText(text)) {
+    else if (isAutoVideoRequestText(text) &&
+      !isPriceIntentText(originalText || text) &&
+      !isBookingIntentText(originalText || text) &&
+      !isLocationIntentText(originalText || text) &&
+      !isCallIntentText(originalText || text)
+    ) {
       setConversationStatus(from, "Media Requested");
 
       const videoUrl = getAutoReplyVideoUrl(req);
@@ -19256,149 +19489,61 @@ No problem. We will not send a reminder for this appointment.`;
     else if (isServiceMenuText(originalText || text)) {
       setConversationStatus(from, "Service Appointment");
 
-      replyText =
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        `تمام ${profileName || ""} 👌\n\n` +
-        "هذا الخيار مخصص للعملاء الحاليين لحجز موعد سيرفس، متابعة، تركيب، أو Service visit.\n\n" +
-        "------------------------------\n\n" +
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Please choose this option if you are an existing client and would like to book a service appointment, follow-up, fitting, or service visit.";
+      replyText = replyLanguage === "ar"
+        ? [
+            (profileName ? `تمام ${profileName} 👌` : "تمام 👌"),
+            "",
+            "هذا الخيار مخصص للعملاء الحاليين لحجز موعد سيرفس، متابعة، تركيب، أو زيارة خدمة."
+          ].join("\n")
+        : [
+            (profileName ? `Sure ${profileName} 👌` : "Sure 👌"),
+            "",
+            "This option is for existing clients who want to book a service appointment, follow-up, fitting, or service visit."
+          ].join("\n");
 
       replyButtons = getServiceSubMenuButtons();
     }
 
     /* 2 — الخدمات: بوابة ذكية أعمق */
-    else if (
-      text === "2" ||
-      text === "٢" ||
-      text.includes("service") ||
-      text.includes("services") ||
-      text.includes("خدمات") ||
-      text.includes("الخدمات")
+    else if (isServicesIntentText(originalText || text) &&
+      !isPriceIntentText(originalText || text) &&
+      !isNaturalLookIntentText(originalText || text) &&
+      !isConsultationIntentText(originalText || text)
     ) {
       setConversationStatus(from, "Service Interest");
 
-      replyText =
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "خلينا نختصر عليك الطريق.\n\n" +
-        "اختر أكثر نقطة تهمك الآن، وسنعطيك توجيه واضح بدون كلام عام:\n\n" +
-        "1️⃣ مظهر طبيعي وغير واضح\n" +
-        "2️⃣ معرفة السعر حسب حالتك\n" +
-        "3️⃣ استشارة خاصة مع الفريق\n\n" +
-        "إذا تحب تشوف صور أو فيديو قصير عن الخدمة، فقط اكتب: صورة أو فيديو، وسيصلك المحتوى مباشرة.\n\n" +
-        "------------------------------\n\n" +
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Let us guide you clearly.\n\n" +
-        "Choose what matters most right now, and we will direct you to the right next step:\n\n" +
-        "1️⃣ Natural, undetectable look\n" +
-        "2️⃣ Price based on your case\n" +
-        "3️⃣ Private team consultation\n\n" +
-        "If you would like to see photos or a short video about the service, just type: photo or video, and we will send it to you directly.";
-
+      replyText = buildSmartServicesDeepBody(profileName, replyLanguage);
       replyButtons = getServicesDeepMenuButtons();
     }
 
     /* مظهر طبيعي */
-    else if (
-      text.includes("natural") ||
-      text.includes("طبيعي") ||
-      text.includes("طبيعية") ||
-      text.includes("مظهر طبيعي")
-    ) {
+    else if (isNaturalLookIntentText(originalText || text)) {
       setConversationStatus(from, "Service Interest");
 
-      replyText =
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "تمام، هذا أهم سؤال.\n\n" +
-        "المظهر الطبيعي لا يعتمد على الشعر فقط، بل على 3 أشياء: لون مناسب، كثافة مدروسة، وتوزيع ينسجم مع شكل الوجه.\n\n" +
-        "هدفنا أن تكون النتيجة مرتبة وطبيعية بدون مبالغة أو شكل واضح.\n\n" +
-        "أفضل خطوة: احجز استشارة قصيرة حتى يحدد الفريق الأنسب لك بخصوصية كاملة.\n\n" +
-        "------------------------------\n\n" +
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Great question.\n\n" +
-        "A natural result depends on the right color, balanced density, and a design that matches your face shape.\n\n" +
-        "Our goal is a refined look that feels natural, not overdone.\n\n" +
-        "Best next step: book a short private consultation so the team can guide you properly.";
-
+      replyText = buildNaturalIntentBody(profileName, replyLanguage);
       replyButtons = getActionButtons();
     }
 
     /* السعر */
-    else if (
-      text === "3" ||
-      text === "٣" ||
-      text.includes("price") ||
-      text.includes("prices") ||
-      text.includes("cost") ||
-      text.includes("offer") ||
-      text.includes("offers") ||
-      text.includes("سعر") ||
-      text.includes("السعر") ||
-      text.includes("الاسعار") ||
-      text.includes("الأسعار") ||
-      text.includes("عرض") ||
-      text.includes("عروض")
-    ) {
+    else if (isPriceIntentText(originalText || text)) {
       setConversationStatus(from, "Price Question");
 
-      replyText =
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "أكيد، السعر لازم يكون واضح — لكن ما نعطي رقم عشوائي قبل فهم الحالة.\n\n" +
-        "الفرق بالسعر يكون عادة حسب المساحة المطلوبة، الكثافة، نوع الحل، والتفاصيل المناسبة لشكل العميل.\n\n" +
-        "حتى نعطيك توجيه صحيح، اكتب لنا:\n" +
-        "• هل تريد تغطية خفيفة أو حل كامل؟\n" +
-        "• الوقت المناسب للتواصل؟\n\n" +
-        "أو اضغط اتصال للتحدث مباشرة مع الفريق.\n\n" +
-        "------------------------------\n\n" +
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Sure, price should be clear — but we do not give a random number before understanding the case.\n\n" +
-        "It depends on the area, density, solution type, and the details that fit you best.\n\n" +
-        "Please send:\n" +
-        "• Light coverage or full solution?\n" +
-        "• Best time to contact you?\n\n" +
-        "Or tap Call to speak directly with the team.";
-
+      replyText = buildPriceIntentBody(profileName, replyLanguage);
       replyButtons = getConsultActionButtons();
     }
 
     /* استشارة خاصة */
-    else if (
-      text.includes("consult") ||
-      text.includes("استشارة") ||
-      text.includes("خاص") ||
-      text.includes("خاصة")
-    ) {
+    else if (isConsultationIntentText(originalText || text)) {
       setConversationStatus(from, "Consultation Request");
 
-      replyText =
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "تم استلام طلب الاستشارة بنجاح ✅\n\n" +
-        "تم تحويل محادثتك إلى فريق الاستشارات في Iconic Hair Care، وسيتم الرد عليك في أقرب وقت ممكن بسرية واهتمام.\n\n" +
-        "يمكنك إرسال أي ملاحظة إضافية هنا، وسيقوم الفريق بمراجعتها قبل التواصل معك.\n\n" +
-        "------------------------------\n\n" +
-        `${BUSINESS_NAME_SPACED} ✨\n\n` +
-        "Your consultation request has been received successfully ✅\n\n" +
-        "Your conversation has been forwarded to the Iconic Hair Care consultation team, and they will reply as soon as possible with privacy and care.\n\n" +
-        "You may send any additional note here, and our team will review it before contacting you.";
-
+      replyText = buildConsultationIntentBody(profileName, replyLanguage);
       replyButtons = getConsultActionButtons();
       sendReminderOptInPrompt = true;
     }
 
     /* 5 — الموقع وساعات العمل */
-    else if (
-      text === "5" ||
-      text === "٥" ||
-      text.includes("location") ||
-      text.includes("locations") ||
-      text.includes("map") ||
-      text.includes("موقع") ||
-      text.includes("الموقع") ||
-      text.includes("فرع") ||
-      text.includes("فروع")
-    ) {
+    else if (isLocationIntentText(originalText || text)) {
       replyText = buildLocationMessageBody(incomingPhoneNumberId);
-
       replyButtons = null;
     }
 
