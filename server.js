@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-smart-natural-booking-v3";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-1-smart-booking-team-member-and-staff-notify-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -3296,25 +3296,87 @@ const fastBookingDrafts = {};
 
 const smartBookingDrafts = {};
 
+function normalizeSmartBookingSearchText(value = "") {
+  return compactText(value)
+    .normalize("NFD")
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/[^a-z0-9\u0600-\u06FF]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getSmartBookingStaffCatalog() {
   return [
     { name: "Osama", branch: "Abu Dhabi", keys: ["osama", "اسامة", "أسامة"] },
     { name: "Adham", branch: "Abu Dhabi", keys: ["adham", "ادهم", "أدهم"] },
-    { name: "Ahmed", branch: "Dubai", keys: ["ahmed", "أحمد", "احمد"] },
-    { name: "Tamer", branch: "Dubai", keys: ["tamer", "تامر"] },
-    { name: "Wael", branch: "Dubai", keys: ["wael", "وائل"] },
+    { name: "Ahmed", branch: "Dubai", keys: ["ahmed", "ahmad", "mr ahmed", "أحمد", "احمد"] },
+    { name: "Tamer", branch: "Dubai", keys: ["tamer", "tamir", "تامر"] },
+    { name: "Wael", branch: "Dubai", keys: ["wael", "wa'il", "وائل"] },
     { name: "Bashir", branch: "Dubai", keys: ["bashir", "basheer", "بشير"] },
-    { name: "Omar", branch: "Dubai", keys: ["omar", "عمر"] },
-    { name: "Emad", branch: "Dubai", keys: ["emad", "عماد", "اماد"] },
-    { name: "Ani", branch: "Dubai", keys: ["ani", "اني", "آني"] },
+    { name: "Omar", branch: "Dubai", keys: ["omar", "omer", "عمر"] },
+    { name: "Emad", branch: "Dubai", keys: ["emad", "imad", "عماد", "اماد"] },
+    { name: "Ani", branch: "Dubai", keys: ["ani", "annie", "اني", "آني"] },
     { name: "Hamouda", branch: "Dubai", keys: ["hamouda", "hamoda", "حمودة", "حموده"] },
-    { name: "Hudhaifa", branch: "Dubai", keys: ["hudhaifa", "huthaifa", "حذيفة", "حذيفه"] }
+    { name: "Hudhaifa", branch: "Dubai", keys: ["hudhaifa", "huthaifa", "huzayfa", "حذيفة", "حذيفه"] }
   ];
 }
 
 function detectSmartBookingStaff(text = "") {
-  const value = compactText(text);
-  return getSmartBookingStaffCatalog().find((item) => item.keys.some((key) => value.includes(compactText(key)))) || null;
+  const value = normalizeSmartBookingSearchText(text);
+  if (!value) return null;
+
+  return getSmartBookingStaffCatalog().find((item) => {
+    return item.keys.some((key) => {
+      const cleanKey = normalizeSmartBookingSearchText(key);
+      if (!cleanKey) return false;
+
+      if (/^[a-z0-9 ]+$/.test(cleanKey)) {
+        const escaped = cleanKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+        return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(value);
+      }
+
+      return value.includes(cleanKey);
+    });
+  }) || null;
+}
+
+function mergeSmartBookingStaffIntoDraft(draft = {}, text = "") {
+  const detectedStaff = detectSmartBookingStaff(text || draft.rawRequest || "");
+  if (!detectedStaff) {
+    return draft;
+  }
+
+  return {
+    ...draft,
+    branch: detectedStaff.branch || draft.branch || "Dubai",
+    teamMember: detectedStaff.name || draft.teamMember || "",
+    staffDetectedFrom: text ? "latest_message" : (draft.staffDetectedFrom || "draft")
+  };
+}
+
+function buildSmartBookingStaffNotifyLogBody(notifyResult = {}, draft = {}, routingPhoneNumberId = "") {
+  const ok = Boolean(notifyResult?.ok);
+  const attempts = Array.isArray(notifyResult?.results) ? notifyResult.results : [];
+  const firstAttempt = attempts[0] || {};
+  const status = firstAttempt.status || notifyResult.status || "";
+  const error = firstAttempt.result?.error?.message || firstAttempt.result?.error || notifyResult.reason || "";
+
+  return [
+    ok ? "Smart booking staff notify sent ✅" : "Smart booking staff notify failed ⚠️",
+    "",
+    `Branch: ${draft.branch || ""}`,
+    `Team member: ${draft.teamMember || ""}`,
+    `Notify phoneNumberId: ${routingPhoneNumberId || ""}`,
+    `Status: ${status || (ok ? "sent" : "failed")}`,
+    error ? `Error: ${typeof error === "string" ? error : JSON.stringify(error)}` : "",
+    attempts.length ? `Attempts: ${attempts.length}` : ""
+  ].filter(Boolean).join("\n");
 }
 
 function detectSmartBookingDay(text = "") {
@@ -3526,46 +3588,69 @@ function buildSmartBookingRequestMessage(draft = {}, preferredTime = "", origina
 }
 
 async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", profileName = "", preferredTime = "") {
-  const routingPhoneNumberId = draft.branch === "Abu Dhabi" ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID;
+  const finalDraft = mergeSmartBookingStaffIntoDraft(draft, draft.rawRequest || "");
+  const routingPhoneNumberId = finalDraft.branch === "Abu Dhabi" ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID;
   const flowData = {
-    branch: draft.branch || getLineConfig(routingPhoneNumberId).branch,
+    branch: finalDraft.branch || getLineConfig(routingPhoneNumberId).branch,
     customerName: profileName || "",
     phone: customerPhone || "",
-    requestType: "WhatsApp Smart Natural Booking V3",
-    serviceInterest: "WhatsApp Smart Natural Booking V3",
-    preferredDay: draft.preferredDay || "",
+    requestType: "WhatsApp Smart Natural Booking V3.1",
+    serviceInterest: "WhatsApp Smart Natural Booking V3.1",
+    preferredDay: finalDraft.preferredDay || "",
     preferredTime: preferredTime || "",
-    teamMember: draft.teamMember || "",
-    notes: "Source: WhatsApp Smart Natural Booking V3"
+    teamMember: finalDraft.teamMember || "",
+    notes: "Source: WhatsApp Smart Natural Booking V3.1"
   };
+
   console.log("[Smart Booking Staff Notify] preparing", {
     branch: flowData.branch,
     phoneNumberId: routingPhoneNumberId,
     env: flowData.branch === "Abu Dhabi" ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER",
     customerPhone,
     customerName: profileName || "",
-    teamMember: draft.teamMember || ""
+    teamMember: flowData.teamMember || ""
   });
-  return notifyStaffAboutFlowBooking(flowData, customerPhone, routingPhoneNumberId, "");
+
+  const result = await notifyStaffAboutFlowBooking(flowData, customerPhone, routingPhoneNumberId, "");
+
+  console.log("[Smart Booking Staff Notify] result", JSON.stringify({
+    ok: result?.ok,
+    branch: flowData.branch,
+    phoneNumberId: routingPhoneNumberId,
+    teamMember: flowData.teamMember || "",
+    result
+  }, null, 2));
+
+  return { ...result, routingPhoneNumberId, flowData };
 }
 
 async function handleSmartWhatsAppBooking({ from, message, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en" }) {
   const input = originalText || text || "";
-  const existingDraft = smartBookingDrafts[from] || null;
+  let existingDraft = smartBookingDrafts[from] || null;
   const chosenDayButton = getSmartBookingDayFromButton(input);
   const explicitWeekday = detectSmartBookingExplicitWeekday(input);
+
+  if (existingDraft) {
+    existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
+    smartBookingDrafts[from] = existingDraft;
+  }
 
   if (!existingDraft && !isSmartBookingNaturalRequest(input)) return false;
 
   if (existingDraft && (chosenDayButton || explicitWeekday)) {
+    existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
     existingDraft.preferredDay = explicitWeekday || chosenDayButton;
     smartBookingDrafts[from] = existingDraft;
     if (existingDraft.preferredDay === "This Week") {
+      existingDraft.waitingForWeekday = true;
+      smartBookingDrafts[from] = existingDraft;
       const weekdayBody = buildSmartBookingAskWeekdayBody(existingDraft, profileName, replyLanguage);
       await sendWhatsAppMessage(from, weekdayBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
       addInboxMessage(from, "bot", weekdayBody, "Smart Booking - Choose Weekday", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Weekday" });
       return true;
     }
+    existingDraft.waitingForTime = true;
+    smartBookingDrafts[from] = existingDraft;
     const askTimeBody = buildSmartBookingAskTimeBody(existingDraft, profileName, replyLanguage);
     await sendWhatsAppMessage(from, askTimeBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
     addInboxMessage(from, "bot", askTimeBody, "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Time" });
@@ -3573,6 +3658,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   }
 
   if (existingDraft && existingDraft.waitingForWeekday) {
+    existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
     const weekday = explicitWeekday;
     if (!weekday) {
       const retryDay = replyLanguage === "ar" ? "اكتب اليوم المناسب مثل: الاثنين أو Tuesday." : "Please type the suitable day, like Monday or الثلاثاء.";
@@ -3582,6 +3668,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     }
     existingDraft.preferredDay = weekday;
     existingDraft.waitingForWeekday = false;
+    existingDraft.waitingForTime = true;
     smartBookingDrafts[from] = existingDraft;
     const askTimeBody = buildSmartBookingAskTimeBody(existingDraft, profileName, replyLanguage);
     await sendWhatsAppMessage(from, askTimeBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
@@ -3590,6 +3677,8 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   }
 
   if (existingDraft && existingDraft.waitingForTime) {
+    existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
+    smartBookingDrafts[from] = existingDraft;
     const parsedTime = getSmartBookingTimeFromText(input);
     if (!parsedTime.ok) {
       const invalidBody = buildSmartBookingInvalidTimeBody(parsedTime.reason, replyLanguage);
@@ -3599,7 +3688,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     }
 
     const selectedBranch = existingDraft.branch || lineConfig.branch || "Dubai";
-    const requestMessage = buildSmartBookingRequestMessage(existingDraft, parsedTime.time, input);
+    const requestMessage = buildSmartBookingRequestMessage(existingDraft, parsedTime.time, existingDraft.rawRequest || input);
     setConversationStatus(from, "Booking Request");
     await saveConversationStateToGoogleSheetFromServer({
       phone: from,
@@ -3607,8 +3696,8 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       branch: selectedBranch,
       status: "Booking Request",
       assignee: getBranchTeamAssignee(selectedBranch),
-      tags: ["Booking", "Smart Natural Booking V3", "Need Confirmation"],
-      updatedBy: "WhatsApp Smart Natural Booking V3"
+      tags: ["Booking", "Smart Natural Booking V3.1", "Need Confirmation"],
+      updatedBy: "WhatsApp Smart Natural Booking V3.1"
     });
     await saveBookingRequestToGoogleSheetFromServer({
       phone: from,
@@ -3616,14 +3705,33 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       customerName: profileName,
       branch: selectedBranch,
       message: requestMessage,
-      requestType: "WhatsApp Smart Natural Booking V3",
+      requestType: "WhatsApp Smart Natural Booking V3.1",
       bookingStatus: "Pending"
     });
     addInboxMessage(from, "customer", requestMessage, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "WhatsApp Smart Natural Booking Submit" });
-    notifyStaffAboutSmartBooking(existingDraft, from, profileName, parsedTime.time).catch((error) => {
+
+    let staffNotifyResult = null;
+    try {
+      staffNotifyResult = await notifyStaffAboutSmartBooking(existingDraft, from, profileName, parsedTime.time);
+    } catch (error) {
+      staffNotifyResult = { ok: false, error: error?.message || String(error), routingPhoneNumberId: existingDraft.branch === "Abu Dhabi" ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID };
       console.log("Smart booking staff notification failed:");
       console.log(error);
-    });
+    }
+
+    const staffNotifyLogBody = buildSmartBookingStaffNotifyLogBody(staffNotifyResult, existingDraft, staffNotifyResult?.routingPhoneNumberId || "");
+    addInboxMessage(
+      from,
+      "bot",
+      staffNotifyLogBody,
+      staffNotifyResult?.ok ? "Staff Notify Sent" : "Staff Notify Failed",
+      incomingPhoneNumberId,
+      {
+        customerName: profileName,
+        messageType: staffNotifyResult?.ok ? "Smart Booking Staff Notify Sent" : "Smart Booking Staff Notify Failed"
+      }
+    );
+
     delete smartBookingDrafts[from];
     const confirmationBody = buildSmartBookingConfirmationBody(existingDraft, parsedTime.time, replyLanguage);
     await sendWhatsAppMessage(from, confirmationBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
@@ -3638,6 +3746,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     branch,
     preferredDay: detectedDay || "",
     teamMember: staff?.name || "",
+    rawRequest: input,
     startedAt: getDubaiTimestamp(),
     phoneNumberId: incomingPhoneNumberId,
     waitingForTime: false,
