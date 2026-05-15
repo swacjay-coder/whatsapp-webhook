@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-10-smart-router-before-flow-and-staff-test";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-11-smart-booking-day-language-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -3408,43 +3408,106 @@ function buildSmartBookingStaffNotifyLogBody(notifyResult = {}, draft = {}, rout
 }
 
 function detectSmartBookingDay(text = "") {
-  const value = compactText(text);
-  if (value.includes("today") || value.includes("اليوم")) return "Today";
-  if (value.includes("tomorrow") || value.includes("بكرا") || value.includes("غدا") || value.includes("غداً")) return "Tomorrow";
-  if (value.includes("day after") || value.includes("بعد بكرا") || value.includes("بعد غد") || value.includes("بعد غدا")) return "Day After Tomorrow";
-  if (value.includes("this week") || value.includes("week") || value.includes("هذا الاسبوع") || value.includes("هذا الأسبوع") || value.includes("هالأسبوع")) return "This Week";
+  const value = normalizeSmartBookingSearchText(text);
+  if (!value) return "";
+
+  if (value.includes("today") || value.includes("اليوم") || value === "اليوم") return "Today";
+  if (
+    value.includes("tomorrow") ||
+    value.includes("بكرا") ||
+    value.includes("بكره") ||
+    value.includes("بكرة") ||
+    value.includes("غدا") ||
+    value.includes("غداً")
+  ) return "Tomorrow";
+  if (
+    value.includes("day after tomorrow") ||
+    value.includes("day after") ||
+    value.includes("بعد بكرا") ||
+    value.includes("بعد بكره") ||
+    value.includes("بعد بكرة") ||
+    value.includes("بعد غد") ||
+    value.includes("بعد غدا")
+  ) return "Day After Tomorrow";
+  if (
+    value.includes("this week") ||
+    value.includes("week") ||
+    value.includes("هذا الاسبوع") ||
+    value.includes("هالاسبوع") ||
+    value.includes("هالاسبوع") ||
+    value.includes("هالأسبوع") ||
+    value.includes("الاسبوع")
+  ) return "This Week";
   return "";
 }
 
 function detectSmartBookingExplicitWeekday(text = "") {
-  const value = compactText(text);
+  const value = normalizeSmartBookingSearchText(text);
+  if (!value) return "";
+
   const days = [
-    { value: "Saturday", keys: ["saturday", "السبت", "سبت"] },
-    { value: "Sunday", keys: ["sunday", "الأحد", "الاحد", "احد"] },
-    { value: "Monday", keys: ["monday", "الاثنين", "اتنين", "اثنين"] },
-    { value: "Tuesday", keys: ["tuesday", "الثلاثاء", "تلاتاء", "ثلاثاء"] },
-    { value: "Wednesday", keys: ["wednesday", "الأربعاء", "الاربعاء", "اربعاء"] },
-    { value: "Thursday", keys: ["thursday", "الخميس", "خميس"] },
-    { value: "Friday", keys: ["friday", "الجمعة", "جمعه", "جمعة"] }
+    { value: "Saturday", keys: ["saturday", "sat", "السبت", "سبت"] },
+    { value: "Sunday", keys: ["sunday", "sun", "الاحد", "الأحد", "احد"] },
+    { value: "Monday", keys: ["monday", "mon", "الاثنين", "الإثنين", "اتنين", "الاتنين", "إتنين", "اثنين", "الإتنين"] },
+    { value: "Tuesday", keys: ["tuesday", "tue", "الثلاثاء", "تلاتاء", "ثلاثاء", "التلاتاء"] },
+    { value: "Wednesday", keys: ["wednesday", "wed", "الاربعاء", "الأربعاء", "اربعاء"] },
+    { value: "Thursday", keys: ["thursday", "thu", "الخميس", "خميس"] },
+    { value: "Friday", keys: ["friday", "fri", "الجمعه", "الجمعة", "جمعه", "جمعة"] }
   ];
-  const matched = days.find((day) => day.keys.some((key) => value.includes(compactText(key))));
+
+  const matched = days.find((day) => {
+    return day.keys.some((key) => {
+      const cleanKey = normalizeSmartBookingSearchText(key);
+      return cleanKey && value.includes(cleanKey);
+    });
+  });
+
   return matched ? matched.value : "";
 }
 
 function getSmartBookingDayFromButton(text = "") {
-  const value = compactText(text);
-  if (value === "smart_day_tomorrow" || value === "tomorrow" || value === "بكرا") return "Tomorrow";
-  if (value === "smart_day_day_after" || value === "day after" || value === "day after tomorrow") return "Day After Tomorrow";
-  if (value === "smart_day_this_week" || value === "this week" || value === "هذا الأسبوع" || value === "هذا الاسبوع") return "This Week";
+  const value = normalizeSmartBookingSearchText(text);
+  if (!value) return "";
+
+  if (value === "smart_day_tomorrow" || value === "tomorrow" || value === "بكرا" || value === "بكره" || value === "بكرة") return "Tomorrow";
+  if (value === "smart_day_day_after" || value === "day after" || value === "day after tomorrow" || value === "بعد بكرا" || value === "بعد بكره" || value === "بعد بكرة") return "Day After Tomorrow";
+  if (value === "smart_day_this_week" || value === "this week" || value === "هذا الاسبوع" || value === "هالاسبوع" || value === "هالأسبوع") return "This Week";
   return "";
 }
 
-function getSmartBookingWeekdayButtons() {
+function getSmartBookingWeekdayButtons(language = "en") {
+  if (language === "ar") {
+    return [
+      { id: "smart_day_tomorrow", title: "بكرا" },
+      { id: "smart_day_day_after", title: "بعد بكرا" },
+      { id: "smart_day_this_week", title: "هذا الأسبوع" }
+    ];
+  }
+
   return [
-    { id: "smart_day_tomorrow", title: "Tomorrow | بكرا" },
-    { id: "smart_day_day_after", title: "Day After | بعد بكرا" },
-    { id: "smart_day_this_week", title: "This Week | هذا الأسبوع" }
+    { id: "smart_day_tomorrow", title: "Tomorrow" },
+    { id: "smart_day_day_after", title: "Day After" },
+    { id: "smart_day_this_week", title: "This Week" }
   ];
+}
+
+function getSmartBookingDayLabel(day = "", language = "en") {
+  const value = (day || "").toString().trim();
+  const labels = {
+    Today: { ar: "اليوم", en: "today" },
+    Tomorrow: { ar: "بكرا", en: "tomorrow" },
+    "Day After Tomorrow": { ar: "بعد بكرا", en: "the day after tomorrow" },
+    "This Week": { ar: "هذا الأسبوع", en: "this week" },
+    Saturday: { ar: "السبت", en: "Saturday" },
+    Sunday: { ar: "الأحد", en: "Sunday" },
+    Monday: { ar: "الاثنين", en: "Monday" },
+    Tuesday: { ar: "الثلاثاء", en: "Tuesday" },
+    Wednesday: { ar: "الأربعاء", en: "Wednesday" },
+    Thursday: { ar: "الخميس", en: "Thursday" },
+    Friday: { ar: "الجمعة", en: "Friday" }
+  };
+
+  return labels[value]?.[language === "ar" ? "ar" : "en"] || value || (language === "ar" ? "اليوم المختار" : "the selected day");
 }
 
 function getSmartBookingTimeFromText(text = "") {
@@ -3517,43 +3580,43 @@ function buildSmartBookingAskWeekdayBody(draft = {}, customerName = "", language
       cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
       "",
       "اكتب اليوم المناسب هذا الأسبوع.",
-      "مثال: الاثنين أو Tuesday"
+      "مثال: الاثنين أو الثلاثاء"
     ].join("\n");
   }
   return [
     cleanName ? `Done ${cleanName} ✅` : "Done ✅",
     "",
     "Please type the suitable day this week.",
-    "Example: Monday or الثلاثاء"
+    "Example: Monday or Tuesday"
   ].join("\n");
 }
 
 function buildSmartBookingAskTimeBody(draft = {}, customerName = "", language = "en") {
   const cleanName = namePhrase(customerName);
   const staffText = draft.teamMember ? ` ${language === "ar" ? "مع" : "with"} ${draft.teamMember}` : "";
-  const dayAr = draft.preferredDay === "Tomorrow" ? "بكرا" : draft.preferredDay === "Today" ? "اليوم" : draft.preferredDay === "Day After Tomorrow" ? "بعد بكرا" : draft.preferredDay || "هذا الأسبوع";
-  const dayEn = draft.preferredDay || "the selected day";
+  const dayLabel = getSmartBookingDayLabel(draft.preferredDay, language);
+
   if (language === "ar") {
     return [
       cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
       "",
-      `اكتب الوقت المناسب لك ${dayAr}${staffText}.`,
+      `اكتب الوقت المناسب لك ${dayLabel}${staffText}.`,
       "آخر موعد متاح هو 6:30 مساءً.",
       "",
       "مثال:",
-      "1:00 PM",
+      "2:00 PM",
       "أو",
-      "Flexible"
+      "أي وقت مناسب"
     ].join("\n");
   }
   return [
     cleanName ? `Done ${cleanName} ✅` : "Done ✅",
     "",
-    `Please type the suitable time for ${dayEn}${staffText}.`,
+    `Please type the suitable time for ${dayLabel}${staffText}.`,
     "Last available appointment is 6:30 PM.",
     "",
     "Example:",
-    "1:00 PM",
+    "2:00 PM",
     "or",
     "Flexible"
   ].join("\n");
@@ -3563,7 +3626,7 @@ function buildSmartBookingInvalidTimeBody(reason = "", language = "en") {
   if (language === "ar") {
     if (reason === "too_late") return "آخر موعد متاح هو 6:30 مساءً. اكتب وقت قبل أو عند 6:30 PM.";
     if (reason === "too_early") return "أول موعد متاح هو 10:00 صباحاً. اكتب وقت بين 10:00 AM و 6:30 PM.";
-    return "ما قدرت أحدد الوقت. اكتب الوقت بهذا الشكل: 1:00 PM أو اكتب Flexible.";
+    return "ما قدرت أحدد الوقت. اكتب الوقت بهذا الشكل: 2:00 PM أو اكتب: أي وقت مناسب.";
   }
   if (reason === "too_late") return "Last available appointment is 6:30 PM. Please type a time before or at 6:30 PM.";
   if (reason === "too_early") return "First available appointment is 10:00 AM. Please type a time between 10:00 AM and 6:30 PM.";
@@ -3573,6 +3636,8 @@ function buildSmartBookingInvalidTimeBody(reason = "", language = "en") {
 function buildSmartBookingConfirmationBody(draft = {}, preferredTime = "", language = "en") {
   const branch = draft.branch || "Dubai";
   const branchAr = getFastBookingBranchArabic(branch);
+  const dayLabel = getSmartBookingDayLabel(draft.preferredDay, language);
+
   if (language === "ar") {
     return [
       `${BUSINESS_NAME_SPACED} ✨`,
@@ -3580,7 +3645,7 @@ function buildSmartBookingConfirmationBody(draft = {}, preferredTime = "", langu
       "تم استلام طلب الحجز ✅",
       "",
       `الفرع: ${branchAr}`,
-      `اليوم: ${draft.preferredDay || ""}`,
+      `اليوم: ${dayLabel}`,
       `الوقت: ${preferredTime}`,
       draft.teamMember ? `الموظف: ${draft.teamMember}` : "",
       "",
@@ -3594,7 +3659,7 @@ function buildSmartBookingConfirmationBody(draft = {}, preferredTime = "", langu
     "Your booking request has been received ✅",
     "",
     `Branch: ${branch}`,
-    `Day: ${draft.preferredDay || ""}`,
+    `Day: ${dayLabel}`,
     `Time: ${preferredTime}`,
     draft.teamMember ? `Team member: ${draft.teamMember}` : "",
     "",
@@ -3688,9 +3753,13 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   const input = originalText || text || "";
   let existingDraft = smartBookingDrafts[from] || null;
 
-  console.log(`[Smart Booking Router] input=${JSON.stringify(input)} from=${from} existingDraft=${Boolean(existingDraft)} language=${replyLanguage}`);
   const chosenDayButton = getSmartBookingDayFromButton(input);
   const explicitWeekday = detectSmartBookingExplicitWeekday(input);
+  const naturalDay = detectSmartBookingDay(input);
+  const detectedDay = explicitWeekday || chosenDayButton || naturalDay;
+  const inputTime = getSmartBookingTimeFromText(input);
+
+  console.log(`[Smart Booking Router] input=${JSON.stringify(input)} from=${from} existingDraft=${Boolean(existingDraft)} language=${replyLanguage} detectedDay=${detectedDay || ""} time=${inputTime.ok ? inputTime.time : ""}`);
 
   if (existingDraft) {
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
@@ -3699,43 +3768,54 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
 
   if (!existingDraft && !isSmartBookingNaturalRequest(input)) return false;
 
-  if (existingDraft && (chosenDayButton || explicitWeekday)) {
-    existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
-    existingDraft.preferredDay = explicitWeekday || chosenDayButton;
-    smartBookingDrafts[from] = existingDraft;
-    if (existingDraft.preferredDay === "This Week") {
-      existingDraft.waitingForWeekday = true;
-      smartBookingDrafts[from] = existingDraft;
-      const weekdayBody = buildSmartBookingAskWeekdayBody(existingDraft, profileName, replyLanguage);
-      await sendWhatsAppMessage(from, weekdayBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
-      addInboxMessage(from, "bot", weekdayBody, "Smart Booking - Choose Weekday", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Weekday" });
-      return true;
-    }
-    existingDraft.waitingForTime = true;
-    smartBookingDrafts[from] = existingDraft;
-    const askTimeBody = buildSmartBookingAskTimeBody(existingDraft, profileName, replyLanguage);
+  const askForWeekday = async (draft) => {
+    draft.waitingForWeekday = true;
+    draft.waitingForTime = false;
+    smartBookingDrafts[from] = draft;
+    setConversationStatus(from, "Smart Booking - Choose Weekday");
+    const weekdayBody = buildSmartBookingAskWeekdayBody(draft, profileName, replyLanguage);
+    await sendWhatsAppMessage(from, weekdayBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+    addInboxMessage(from, "bot", weekdayBody, "Smart Booking - Choose Weekday", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Weekday" });
+    return true;
+  };
+
+  const askForTime = async (draft) => {
+    draft.waitingForWeekday = false;
+    draft.waitingForTime = true;
+    smartBookingDrafts[from] = draft;
+    setConversationStatus(from, "Smart Booking - Choose Time");
+    const askTimeBody = buildSmartBookingAskTimeBody(draft, profileName, replyLanguage);
     await sendWhatsAppMessage(from, askTimeBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
     addInboxMessage(from, "bot", askTimeBody, "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Time" });
     return true;
+  };
+
+  if (existingDraft && detectedDay && !inputTime.ok) {
+    existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
+    existingDraft.preferredDay = detectedDay;
+    existingDraft.rawRequest = existingDraft.rawRequest || input;
+
+    if (existingDraft.preferredDay === "This Week") {
+      return askForWeekday(existingDraft);
+    }
+
+    return askForTime(existingDraft);
   }
 
   if (existingDraft && existingDraft.waitingForWeekday) {
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
-    const weekday = explicitWeekday;
+    const weekday = detectedDay;
     if (!weekday) {
-      const retryDay = replyLanguage === "ar" ? "اكتب اليوم المناسب مثل: الاثنين أو Tuesday." : "Please type the suitable day, like Monday or الثلاثاء.";
+      const retryDay = replyLanguage === "ar"
+        ? "اكتب اليوم المناسب مثل: الاثنين أو الثلاثاء."
+        : "Please type the suitable day, like Monday or Tuesday.";
       await sendWhatsAppMessage(from, retryDay, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
       addInboxMessage(from, "bot", retryDay, "Smart Booking - Choose Weekday", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Retry Weekday" });
       return true;
     }
+
     existingDraft.preferredDay = weekday;
-    existingDraft.waitingForWeekday = false;
-    existingDraft.waitingForTime = true;
-    smartBookingDrafts[from] = existingDraft;
-    const askTimeBody = buildSmartBookingAskTimeBody(existingDraft, profileName, replyLanguage);
-    await sendWhatsAppMessage(from, askTimeBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
-    addInboxMessage(from, "bot", askTimeBody, "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Time" });
-    return true;
+    return askForTime(existingDraft);
   }
 
   if (existingDraft && existingDraft.waitingForTime) {
@@ -3802,11 +3882,11 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   }
 
   const staff = detectSmartBookingStaff(input);
-  const detectedDay = detectSmartBookingExplicitWeekday(input) || detectSmartBookingDay(input);
+  const detectedDayForNewDraft = detectedDay;
   const branch = staff?.branch || lineConfig.branch || "Dubai";
   const draft = {
     branch,
-    preferredDay: detectedDay || "",
+    preferredDay: detectedDayForNewDraft || "",
     teamMember: staff?.name || "",
     rawRequest: input,
     startedAt: getDubaiTimestamp(),
@@ -3821,29 +3901,17 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   if (!draft.preferredDay) {
     setConversationStatus(from, "Smart Booking - Choose Day");
     const askDayBody = buildSmartBookingAskDayBody(draft, profileName, replyLanguage);
-    const dayButtons = getSmartBookingWeekdayButtons();
+    const dayButtons = getSmartBookingWeekdayButtons(replyLanguage);
     await sendWhatsAppButtonMessage(from, askDayBody, dayButtons, incomingPhoneNumberId, { replyLanguage });
     addInboxMessage(from, "bot", formatButtonLog(askDayBody, dayButtons), "Smart Booking - Choose Day", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Day" });
     return true;
   }
 
   if (draft.preferredDay === "This Week") {
-    draft.waitingForWeekday = true;
-    smartBookingDrafts[from] = draft;
-    setConversationStatus(from, "Smart Booking - Choose Weekday");
-    const weekdayBody = buildSmartBookingAskWeekdayBody(draft, profileName, replyLanguage);
-    await sendWhatsAppMessage(from, weekdayBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
-    addInboxMessage(from, "bot", weekdayBody, "Smart Booking - Choose Weekday", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Weekday" });
-    return true;
+    return askForWeekday(draft);
   }
 
-  draft.waitingForTime = true;
-  smartBookingDrafts[from] = draft;
-  setConversationStatus(from, "Smart Booking - Choose Time");
-  const askTimeBody = buildSmartBookingAskTimeBody(draft, profileName, replyLanguage);
-  await sendWhatsAppMessage(from, askTimeBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
-  addInboxMessage(from, "bot", askTimeBody, "Smart Booking - Choose Time", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Time" });
-  return true;
+  return askForTime(draft);
 }
 
 function getFastBookingBranchButtons() {
