@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-12-smart-bilingual-intents";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-13-newline-render-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -1301,7 +1301,7 @@ function buildSmartServicesDeepBody(customerName = "", language = "en") {
       "3️⃣ استشارة خاصة مع الفريق",
       "",
       "إذا تحب تشوف صور أو فيديو قصير عن الخدمة، اكتب: صورة أو فيديو."
-    ].join("\\n");
+    ].join("\n");
   }
 
   const intro = cleanName ? `Sure ${cleanName} ✨` : "Sure ✨";
@@ -1317,7 +1317,7 @@ function buildSmartServicesDeepBody(customerName = "", language = "en") {
     "3️⃣ Private team consultation",
     "",
     "To see photos or a short video, type: photo or video."
-  ].join("\\n");
+  ].join("\n");
 }
 
 function buildPriceIntentBody(customerName = "", language = "en") {
@@ -1335,7 +1335,7 @@ function buildPriceIntentBody(customerName = "", language = "en") {
       "• أي فرع يناسبك: دبي أو أبوظبي؟",
       "",
       "أو احجز استشارة سريعة والفريق يشرح لك السعر المناسب لحالتك."
-    ].join("\\n");
+    ].join("\n");
   }
 
   const intro = cleanName ? `Sure ${cleanName}, the price depends on the case.` : "Sure, the price depends on the case.";
@@ -1349,7 +1349,7 @@ function buildPriceIntentBody(customerName = "", language = "en") {
     "• Which branch suits you: Dubai or Abu Dhabi?",
     "",
     "Or book a quick consultation and our team will explain the right price for your case."
-  ].join("\\n");
+  ].join("\n");
 }
 
 function buildNaturalIntentBody(customerName = "", language = "en") {
@@ -1365,7 +1365,7 @@ function buildNaturalIntentBody(customerName = "", language = "en") {
       "هدفنا نتيجة مرتبة وطبيعية بدون مبالغة أو شكل واضح.",
       "",
       "أفضل خطوة: احجز استشارة قصيرة حتى يحدد الفريق الأنسب لك بخصوصية كاملة."
-    ].join("\\n");
+    ].join("\n");
   }
 
   const intro = cleanName ? `Great question ${cleanName}.` : "Great question.";
@@ -1377,7 +1377,7 @@ function buildNaturalIntentBody(customerName = "", language = "en") {
     "Our goal is a refined look that feels natural, not obvious or overdone.",
     "",
     "Best next step: book a short private consultation so our team can guide you properly."
-  ].join("\\n");
+  ].join("\n");
 }
 
 function buildConsultationIntentBody(customerName = "", language = "en") {
@@ -1393,7 +1393,7 @@ function buildConsultationIntentBody(customerName = "", language = "en") {
       "فريق Iconic Hair Care يقدر يساعدك بسرية ويشرح لك الحل الأنسب حسب حالتك.",
       "",
       "اختر حجز استشارة أو تواصل مع الفريق."
-    ].join("\\n");
+    ].join("\n");
   }
 
   const intro = cleanName ? `Done ${cleanName} ✅` : "Done ✅";
@@ -1405,7 +1405,7 @@ function buildConsultationIntentBody(customerName = "", language = "en") {
     "The Iconic Hair Care team can guide you privately and explain the best solution for your case.",
     "",
     "Choose Book Consultation or talk to the team."
-  ].join("\\n");
+  ].join("\n");
 }
 
 function buildWorkingHoursBody(phoneNumberId = DUBAI_PHONE_NUMBER_ID, language = "en") {
@@ -1422,7 +1422,7 @@ function buildWorkingHoursBody(phoneNumberId = DUBAI_PHONE_NUMBER_ID, language =
       `فرع ${branchNameAr}:`,
       lineConfig.displayNumber,
       lineConfig.locationUrl
-    ].join("\\n");
+    ].join("\n");
   }
 
   return [
@@ -1434,7 +1434,7 @@ function buildWorkingHoursBody(phoneNumberId = DUBAI_PHONE_NUMBER_ID, language =
     `${lineConfig.branch} branch:`,
     lineConfig.displayNumber,
     lineConfig.locationUrl
-  ].join("\\n");
+  ].join("\n");
 }
 
 function getArabicBranchName(branch) {
@@ -17374,7 +17374,7 @@ function showBrowserLiveNotification(message, newCount) {
 
   try {
     const notification = new Notification(newCount > 1 ? newCount + " new Iconic messages" : "New Iconic message", {
-      body: branch + " • " + phone + "\\n" + bodyText,
+      body: branch + " • " + phone + "\n" + bodyText,
       tag: getMessageConversationKey(message),
       silent: true
     });
