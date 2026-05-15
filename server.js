@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-8-smart-booking-language-split-stable-inbox";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-9-stable-inbox-direct-staff-notify-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -3617,39 +3617,71 @@ function buildSmartBookingRequestMessage(draft = {}, preferredTime = "", origina
 
 async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", profileName = "", preferredTime = "") {
   const finalDraft = mergeSmartBookingStaffIntoDraft(draft, draft.rawRequest || "");
-  const routingPhoneNumberId = finalDraft.branch === "Abu Dhabi" ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID;
+  const isAbuDhabi = finalDraft.branch === "Abu Dhabi";
+  const routingPhoneNumberId = isAbuDhabi ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID;
+  const envName = isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER";
+  const rawStaffNumber = isAbuDhabi
+    ? (process.env.ABU_DHABI_STAFF_NUMBER || ABU_DHABI_STAFF_NUMBER || DEFAULT_ABU_DHABI_STAFF_NUMBER || "")
+    : (process.env.DUBAI_STAFF_NUMBER || DUBAI_STAFF_NUMBER || DEFAULT_DUBAI_STAFF_NUMBER || "");
+  const staffNumber = normalizeWhatsAppRecipientDigits(rawStaffNumber);
+
   const flowData = {
     branch: finalDraft.branch || getLineConfig(routingPhoneNumberId).branch,
     customerName: profileName || "",
     phone: customerPhone || "",
-    requestType: "WhatsApp Smart Natural Booking V3.2",
-    serviceInterest: "WhatsApp Smart Natural Booking V3.2",
+    requestType: "WhatsApp Smart Natural Booking V3.9.9",
+    serviceInterest: "WhatsApp Smart Natural Booking V3.9.9",
     preferredDay: finalDraft.preferredDay || "",
     preferredTime: preferredTime || "",
     teamMember: finalDraft.teamMember || "",
-    notes: "Source: WhatsApp Smart Natural Booking V3.2"
+    notes: "Source: WhatsApp Smart Natural Booking V3.9.9"
   };
 
-  console.log("[Smart Booking Staff Notify] preparing", {
+  console.log(`[Smart Booking Direct Staff Notify] preparing branch=${flowData.branch} fromPhoneNumberId=${routingPhoneNumberId} to=${staffNumber || "MISSING"} env=${envName} raw=${rawStaffNumber || "MISSING"} teamMember=${flowData.teamMember || ""}`);
+
+  if (!staffNumber) {
+    console.log(`[Smart Booking Direct Staff Notify] skipped branch=${flowData.branch} reason=missing_staff_number env=${envName}`);
+    return {
+      ok: false,
+      skipped: true,
+      reason: "missing_staff_number",
+      routingPhoneNumberId,
+      flowData,
+      results: []
+    };
+  }
+
+  const routing = {
+    number: staffNumber,
     branch: flowData.branch,
     phoneNumberId: routingPhoneNumberId,
-    env: flowData.branch === "Abu Dhabi" ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER",
-    customerPhone,
-    customerName: profileName || "",
-    teamMember: flowData.teamMember || ""
-  });
+    envName,
+    branchEnvName: envName,
+    fallbackUsed: !process.env[envName],
+    hasNumber: true
+  };
 
-  const result = await notifyStaffAboutFlowBooking(flowData, customerPhone, routingPhoneNumberId, "");
+  const body = buildStaffBookingNotificationBody(flowData, customerPhone);
+  const directResult = await sendStaffNotificationTextMessage(staffNumber, body, routingPhoneNumberId, routing);
 
-  console.log("[Smart Booking Staff Notify] result", JSON.stringify({
-    ok: result?.ok,
+  console.log("[Smart Booking Direct Staff Notify] result", JSON.stringify({
+    ok: directResult?.ok,
+    status: directResult?.status,
     branch: flowData.branch,
     phoneNumberId: routingPhoneNumberId,
+    envName,
+    staffNumber,
     teamMember: flowData.teamMember || "",
-    result
+    result: directResult?.result || null
   }, null, 2));
 
-  return { ...result, routingPhoneNumberId, flowData };
+  return {
+    ok: Boolean(directResult?.ok),
+    direct: true,
+    routingPhoneNumberId,
+    flowData,
+    results: [{ staffNumber, ...directResult }]
+  };
 }
 
 async function handleSmartWhatsAppBooking({ from, message, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en" }) {
