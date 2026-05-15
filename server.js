@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-6-main-menu-single-language-hard-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-8-full-single-language-bot-cycle";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -227,7 +227,7 @@ function protectInbox(req, res, next) {
 }
 
 
-const BUSINESS_NAME_SPACED = "I C O N I C   H A I R   C A R E";
+const BUSINESS_NAME_SPACED = "Iconic Hair Care";
 const DUBAI_LOCATION_URL = process.env.DUBAI_LOCATION_URL || "https://maps.app.goo.gl/4MXKKF6faQx4WQSy9";
 const ABU_DHABI_LOCATION_URL = process.env.ABU_DHABI_LOCATION_URL || "https://maps.app.goo.gl/twg5JEuP6JgKWP1s7";
 
@@ -851,6 +851,29 @@ function getConversationLanguage(phone, fallbackText = "") {
   return detectIncomingLanguage(fallbackText, savedLanguage || "en");
 }
 
+function setConversationLanguage(phone, language = "en") {
+  const finalLanguage = language === "ar" ? "ar" : "en";
+  const cleanPhone = normalizePhoneDigits(phone);
+
+  if (cleanPhone) {
+    conversationLanguage[cleanPhone] = finalLanguage;
+  }
+
+  if (phone) {
+    conversationLanguage[phone] = finalLanguage;
+  }
+
+  return finalLanguage;
+}
+
+function getMessageReplyLanguage(phone, message = null, rawText = "") {
+  const cleanPhone = normalizePhoneDigits(phone);
+  const savedLanguage = conversationLanguage[cleanPhone] || conversationLanguage[phone] || "";
+  const languageSource = (getIncomingMessageLanguageSource(message) || rawText || getIncomingMessageText(message) || "").toString();
+  const detectedLanguage = detectIncomingLanguage(languageSource, savedLanguage || "en");
+  return setConversationLanguage(phone, detectedLanguage);
+}
+
 function splitBilingualReplyBody(body = "", language = "en") {
   const value = (body || "").toString();
 
@@ -1032,7 +1055,7 @@ function buildMainMenuBody(customerName = "", language = "en") {
     return [
       greeting,
       "",
-      "أهلًا بك في آيكونك هير كير.",
+      "أهلًا بك في Iconic Hair Care.",
       "",
       "النتيجة الطبيعية تبدأ من اختيار صحيح.",
       "يمكنك الآن حجز استشارة، معرفة خدماتنا، أو فتح موقع الفرع مباشرة.",
@@ -1059,41 +1082,86 @@ function namePhrase(customerName = "", fallback = "") {
   return cleanName || fallback || "";
 }
 
-function buildServicesMenuBody(customerName = "") {
+function buildServicesMenuBody(customerName = "", language = "en") {
   const cleanName = namePhrase(customerName);
-  const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
 
-  return `${intro}\n\n` +
-    "في Iconic Hair Care نقدم حلول Hair Replacement بمظهر طبيعي 100%، بدون جراحة.\n\n" +
-    "You can explore our services, see real results, or learn how the process works with our team.\n\n" +
-    "شو تحب تشوف أولاً؟\n" +
-    "What would you like to check first?";
+  if (language === "ar") {
+    const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
+    return [
+      intro,
+      "",
+      "في Iconic Hair Care نقدم حلول Hair Replacement بمظهر طبيعي 100% وبدون جراحة.",
+      "",
+      "يمكنك مشاهدة النتائج، فتح موقع الفرع، أو معرفة تفاصيل الخدمة.",
+      "",
+      "شو تحب تشوف أولاً؟"
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName} ✨` : "Sure ✨";
+  return [
+    intro,
+    "",
+    "At Iconic Hair Care, we provide natural-looking Hair Replacement solutions with no surgery.",
+    "",
+    "You can see real results, open the branch location, or learn more about the service.",
+    "",
+    "What would you like to check first?"
+  ].join("\n");
 }
 
-function buildResultsFollowupBody(customerName = "") {
+function buildResultsFollowupBody(customerName = "", language = "en") {
   const cleanName = namePhrase(customerName);
-  const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
 
-  return `${intro}\n\n` +
-    "هذه بعض النتائج الحقيقية من Iconic Hair Care.\n" +
-    "مظهر طبيعي، بدون جراحة، وبشكل يناسبك تماماً.\n\n" +
-    "Here are some real results from Iconic Hair Care.\n" +
-    "Natural look, non-surgical, and designed to suit you.\n\n" +
-    "شو تحب تعمل بعد ما شفت النتائج؟\n" +
-    "What would you like to do next?";
+  if (language === "ar") {
+    const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
+    return [
+      intro,
+      "",
+      "هذه بعض النتائج الحقيقية من Iconic Hair Care.",
+      "مظهر طبيعي، بدون جراحة، وبشكل يناسبك تماماً.",
+      "",
+      "شو تحب تعمل بعد ما شفت النتائج؟"
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName} ✨` : "Sure ✨";
+  return [
+    intro,
+    "",
+    "Here are some real results from Iconic Hair Care.",
+    "Natural look, non-surgical, and designed to suit you.",
+    "",
+    "What would you like to do next?"
+  ].join("\n");
 }
 
-function buildHowItWorksBody(customerName = "") {
+function buildHowItWorksBody(customerName = "", language = "en") {
   const cleanName = namePhrase(customerName);
-  const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
 
-  return `${intro}\n\n` +
-    "الخطوات بسيطة ومريحة:\n" +
-    "نبدأ بفهم الشكل الذي يناسبك، ثم نختار اللوك الأقرب لطبيعة شعرك، وبعدها يتم التطبيق بمظهر طبيعي بدون جراحة.\n\n" +
-    "The process is simple and comfortable:\n" +
-    "We start by understanding the look that suits you, choose the closest natural style for your hair, then apply it with a natural, non-surgical result.\n\n" +
-    "شو تحب تعمل الآن؟\n" +
-    "What would you like to do now?";
+  if (language === "ar") {
+    const intro = cleanName ? `أكيد ${cleanName} ✨` : "أكيد ✨";
+    return [
+      intro,
+      "",
+      "الخطوات بسيطة ومريحة:",
+      "نبدأ بفهم الشكل الذي يناسبك، ثم نختار اللوك الأقرب لطبيعة شعرك.",
+      "بعدها يتم التطبيق بمظهر طبيعي وبدون جراحة.",
+      "",
+      "شو تحب تعمل الآن؟"
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName} ✨` : "Sure ✨";
+  return [
+    intro,
+    "",
+    "The process is simple and comfortable:",
+    "We start by understanding the look that suits you, then choose the closest natural style for your hair.",
+    "After that, the application is done with a natural, non-surgical result.",
+    "",
+    "What would you like to do now?"
+  ].join("\n");
 }
 
 function getArabicBranchName(branch) {
@@ -1253,6 +1321,36 @@ function getIncomingMessageText(message) {
   }
 
   // V30.10: use image caption as text input only when a customer sends an image with caption.
+  if (message.type === "image") {
+    return message.image?.caption || "";
+  }
+
+  return "";
+}
+
+// V31.5.8.60.3.7.7 - Button language source fix:
+// WhatsApp button/list replies can send an English internal id such as "services"
+// even when the visible button title is Arabic. For language detection, always
+// prefer the visible title/text; keep ids only for routing/action matching.
+function getIncomingMessageLanguageSource(message) {
+  if (!message) return "";
+
+  if (message.type === "interactive") {
+    return message.interactive?.button_reply?.title ||
+      message.interactive?.list_reply?.title ||
+      message.interactive?.button_reply?.id ||
+      message.interactive?.list_reply?.id ||
+      "";
+  }
+
+  if (message.type === "button") {
+    return message.button?.text || message.button?.payload || "";
+  }
+
+  if (message.type === "text") {
+    return message.text?.body || "";
+  }
+
   if (message.type === "image") {
     return message.image?.caption || "";
   }
@@ -3187,7 +3285,7 @@ function buildFastBookingRequestMessage(branch, preferredTime, originalText = ""
     `Preferred time: ${preferredTime}`,
     "Flyksoft Status: Not added",
     originalText ? `Customer selection: ${originalText}` : "Customer selection: Fast booking button"
-  ].join("\\n");
+  ].join("\n");
 }
 
 async function handleFastBookingButtons({
@@ -3249,7 +3347,8 @@ async function handleFastBookingButtons({
 
       const flowSendResult = await sendWhatsAppFlowMessage(from, incomingPhoneNumberId, {
         branch: lineConfig.branch,
-        customerName: profileName
+        customerName: profileName,
+        replyLanguage
       });
 
       if (flowSendResult.ok) {
@@ -4602,9 +4701,12 @@ app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
     }
 
     const updateButtons = Array.isArray(messageBuild.buttons) ? messageBuild.buttons : [];
-    const sendResult = updateButtons.length > 0
-      ? await sendWhatsAppButtonMessage(to, messageBuild.body, updateButtons, phoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL })
-      : await sendWhatsAppMessage(to, messageBuild.body, phoneNumberId);
+    const replyLanguage = getConversationLanguage(to);
+    const localizedUpdateBody = cleanLocalizedReplyBody(messageBuild.body, replyLanguage);
+    const localizedUpdateButtons = localizeReplyButtons(updateButtons, replyLanguage);
+    const sendResult = localizedUpdateButtons.length > 0
+      ? await sendWhatsAppButtonMessage(to, localizedUpdateBody, localizedUpdateButtons, phoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL, replyLanguage, skipAutoLanguage: true })
+      : await sendWhatsAppMessage(to, localizedUpdateBody, phoneNumberId, { replyLanguage, skipAutoLanguage: true });
 
     if (sendResult?.error) {
       return res.status(500).json({
@@ -4696,7 +4798,7 @@ app.get("/api/send-booking-flow", protectInbox, async (req, res) => {
 
     const replyLanguage = getConversationLanguage(to);
     const localizedIntroMessage = cleanLocalizedReplyBody(introMessage, replyLanguage);
-    const introResult = await sendWhatsAppMessage(to, localizedIntroMessage, phoneNumberId);
+    const introResult = await sendWhatsAppMessage(to, localizedIntroMessage, phoneNumberId, { replyLanguage, skipAutoLanguage: true });
 
     if (introResult?.error) {
       return res.status(500).json({
@@ -18210,7 +18312,7 @@ app.post("/webhook", async (req, res) => {
         ""
       ).toString().trim();
       const iconicServicesText = normalizeText(iconicServicesRawText);
-      const iconicReplyLanguage = rememberConversationLanguage(from, iconicServicesRawText);
+      const iconicReplyLanguage = getMessageReplyLanguage(from, message, iconicServicesRawText);
       const iconicReplyOptions = {
         headerImageUrl: BOT_HEADER_IMAGE_URL,
         replyLanguage: iconicReplyLanguage
@@ -18219,9 +18321,9 @@ app.post("/webhook", async (req, res) => {
         headerImageUrl: BOT_HEADER_IMAGE_URL,
         replyLanguage: iconicReplyLanguage
       };
-      const iconicLocalizedServicesBody = cleanLocalizedReplyBody(buildServicesMenuBody(profileName), iconicReplyLanguage);
-      const iconicLocalizedResultsBody = cleanLocalizedReplyBody(buildResultsFollowupBody(profileName), iconicReplyLanguage);
-      const iconicLocalizedDetailsBody = cleanLocalizedReplyBody(buildHowItWorksBody(profileName), iconicReplyLanguage);
+      const iconicLocalizedServicesBody = buildServicesMenuBody(profileName, iconicReplyLanguage);
+      const iconicLocalizedResultsBody = buildResultsFollowupBody(profileName, iconicReplyLanguage);
+      const iconicLocalizedDetailsBody = buildHowItWorksBody(profileName, iconicReplyLanguage);
       const iconicIsServicesRoute = (
         iconicServicesText === "services_menu" ||
         iconicServicesText === "servicesmenu" ||
@@ -18319,7 +18421,7 @@ app.post("/webhook", async (req, res) => {
 
     const originalText = getIncomingMessageText(message);
     const text = normalizeText(originalText);
-    const replyLanguage = rememberConversationLanguage(from, originalText || text);
+    const replyLanguage = getMessageReplyLanguage(from, message, originalText || text);
     const optEventDate = getDubaiTimestamp();
     const isOptInMessage = isOptInText(text);
     const isOptOutMessage = isOptOutText(text);
