@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-safe-name-diagnostic-v1";
+const BOT_VERSION = "iconic-meta-dm-v1-booking-context-smart-intents-welcome-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -110,9 +110,6 @@ const ABU_DHABI_STAFF_NUMBER = (
 ).toString().replace(/\D/g, "");
 
 const conversationState = new Map();
-let nameDiagnosticPrinted = false;
-
-const NAME_DIAGNOSTIC_ENABLED = (process.env.NAME_DIAGNOSTIC_ENABLED || "true").toString().toLowerCase() !== "false";
 
 function normalizeText(value) {
   return (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
@@ -164,105 +161,6 @@ function getTurnLanguage(text, state) {
 
 function isAr(lang) {
   return lang === "ar";
-}
-
-function cleanCustomerName(value) {
-  const raw = (value || "").toString().trim();
-  if (!raw) return "";
-
-  const normalized = raw.replace(/\s+/g, " ").trim();
-  if (!normalized) return "";
-
-  const blocked = ["instagram", "facebook", "user", "unknown", "undefined", "null"];
-  if (blocked.includes(normalized.toLowerCase())) return "";
-  if (/^\d+$/.test(normalized)) return "";
-  if (normalized.length > 40) return "";
-
-  return normalized;
-}
-
-function safeKeys(value) {
-  if (!value || typeof value !== "object") return [];
-  return Object.keys(value).slice(0, 20);
-}
-
-function maskIdentifier(value) {
-  const raw = (value || "").toString();
-  if (!raw) return "";
-  if (raw.length <= 8) return raw;
-  return `${raw.slice(0, 4)}...${raw.slice(-4)}`;
-}
-
-function extractNameCandidates(event, entry) {
-  return {
-    senderName: cleanCustomerName(event?.sender?.name),
-    senderFirstLast: cleanCustomerName([event?.sender?.first_name, event?.sender?.last_name].filter(Boolean).join(" ")),
-    senderUsername: cleanCustomerName(event?.sender?.username),
-    fromName: cleanCustomerName(event?.from?.name),
-    fromFirstLast: cleanCustomerName([event?.from?.first_name, event?.from?.last_name].filter(Boolean).join(" ")),
-    fromUsername: cleanCustomerName(event?.from?.username),
-    messageFromName: cleanCustomerName(event?.message?.from?.name),
-    messageFromUsername: cleanCustomerName(event?.message?.from?.username),
-    userName: cleanCustomerName(event?.user?.name),
-    profileName: cleanCustomerName(event?.profile?.name),
-    profileUsername: cleanCustomerName(event?.profile?.username),
-    entryUserName: cleanCustomerName(entry?.user?.name),
-    entryProfileName: cleanCustomerName(entry?.profile?.name),
-    entryProfileUsername: cleanCustomerName(entry?.profile?.username)
-  };
-}
-
-function logNameDiagnosticOnce({ channel, entry, event }) {
-  if (!NAME_DIAGNOSTIC_ENABLED || nameDiagnosticPrinted) return;
-  nameDiagnosticPrinted = true;
-
-  const diagnostic = {
-    channel,
-    entryObject: entry?.object || "",
-    entryMessagingProduct: entry?.messaging_product || "",
-    entryKeys: safeKeys(entry),
-    eventKeys: safeKeys(event),
-    senderKeys: safeKeys(event?.sender),
-    fromKeys: safeKeys(event?.from),
-    recipientKeys: safeKeys(event?.recipient),
-    messageKeys: safeKeys(event?.message),
-    senderId: maskIdentifier(event?.sender?.id || event?.from?.id || event?.sender_id),
-    recipientId: maskIdentifier(event?.recipient?.id),
-    nameCandidates: extractNameCandidates(event, entry)
-  };
-
-  console.log(`[Name Diagnostic] ${JSON.stringify(diagnostic)}`);
-}
-
-function getCustomerNameFromEvent(event, entry) {
-  const candidates = [
-    event?.sender?.name,
-    [event?.sender?.first_name, event?.sender?.last_name].filter(Boolean).join(" "),
-    event?.sender?.username,
-    event?.from?.name,
-    [event?.from?.first_name, event?.from?.last_name].filter(Boolean).join(" "),
-    event?.from?.username,
-    event?.message?.from?.name,
-    event?.message?.from?.username,
-    event?.user?.name,
-    event?.profile?.name,
-    event?.profile?.username,
-    entry?.user?.name,
-    entry?.profile?.name,
-    entry?.profile?.username
-  ];
-
-  for (const candidate of candidates) {
-    const name = cleanCustomerName(candidate);
-    if (name) return name;
-  }
-
-  return "";
-}
-
-function nameSuffix(name) {
-  const clean = cleanCustomerName(name);
-  return clean ? ` ${clean}` : "";
 }
 
 function quickReply(title, payload) {
@@ -464,27 +362,25 @@ function isMarhabaGreeting(text) {
   return value.includes("مرحبا") || value === "هلا" || value === "هاي";
 }
 
-function greetingBody(text, lang = "en", customerName = "") {
-  const name = nameSuffix(customerName);
-
+function greetingBody(text, lang = "en") {
   if (isSalamGreeting(text)) {
-    return `وعليكم السلام ورحمة الله${name} 👋
+    return `وعليكم السلام ورحمة الله 👋
 كيف فينا نساعدك اليوم؟
 
 اختار من القائمة، أو اكتب سؤالك مباشرة.`;
   }
 
   if (isMarhabaGreeting(text)) {
-    return `مرااحب${name}، كيفك اليوم؟ 👋
+    return `مرااحب، كيفك اليوم؟ 👋
 اختار من القائمة كيف فينا نساعدك، أو اكتب سؤالك مباشرة.`;
   }
 
   if (isAr(lang)) {
-    return `أهلًا وسهلًا${name} 👋
+    return `أهلًا وسهلًا 👋
 اختار من القائمة، أو اكتب سؤالك مباشرة وأنا رح حاول أساعدك.`;
   }
 
-  return `Hello${name} 👋
+  return `Hello 👋
 Please choose from the menu, or type your question directly and I’ll do my best to help.`;
 }
 
@@ -940,20 +836,18 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
   return true;
 }
 
-function welcomeBody(lang = "en", customerName = "") {
-  const name = nameSuffix(customerName);
-
+function welcomeBody(lang = "en") {
   if (isAr(lang)) {
-    return `مرحبا${name} 👋
+    return `مرحبا 👋
 
 أنا مساعد Iconic Hair Care الذكي.
 
-اختار أحد الخيارات من القائمة، أو اكتب سؤالك مباشرة وأنا رح حاول أجاوبك.
+اختار أحد الخيارات من القائمة، أو اكتب سؤالك مباشرة وأنا بحاول أجاوبك.
 
-إذا ما قدرت أساعدك، بحوّلك لفريقنا.`;
+إذا ما قدرت أساعدك، بحوّلك لفريقنا حتى يتابع معك.`;
   }
 
-  return `Hello${name} 👋
+  return `Hello 👋
 
 I’m the smart assistant for Iconic Hair Care.
 
@@ -1349,7 +1243,7 @@ async function sendDetailsContent(channel, recipientId, lang) {
 async function handlePayload({ channel, senderId, payload, state, lang }) {
   if (payload === "MAIN_MENU") {
     resetState(senderId);
-    await sendText(channel, senderId, welcomeBody(lang, state.customerName), mainReplies(lang));
+    await sendText(channel, senderId, welcomeBody(lang), mainReplies(lang));
     return true;
   }
 
@@ -1550,10 +1444,6 @@ async function handleIncomingEvent(entry, event) {
   const channel = getChannelFromEntry(entry, event);
   const text = getMessageText(event);
   const state = getState(senderId);
-  logNameDiagnosticOnce({ channel, entry, event });
-  const customerName = getCustomerNameFromEvent(event, entry);
-  if (customerName) state.customerName = customerName;
-
   const lang = getTurnLanguage(text, state);
   state.lang = lang;
 
@@ -1564,7 +1454,7 @@ async function handleIncomingEvent(entry, event) {
   }
 
   if (isGreeting(text)) {
-    await sendText(channel, senderId, greetingBody(text, lang, state.customerName), mainReplies(lang));
+    await sendText(channel, senderId, greetingBody(text, lang), mainReplies(lang));
     return;
   }
 
