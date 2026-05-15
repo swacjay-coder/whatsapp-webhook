@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-4-smart-booking-stable-inbox-history-logic";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-5-smart-booking-safe-inbox-history-render";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -19070,6 +19070,236 @@ updateLiveNotificationUi();
 
 loadMessages();
 setInterval(loadMessages, 5000);
+</script>
+
+
+<script>
+(function() {
+  // V31.5.8.60.3.9.5 - Safe Inbox History Renderer
+  // Separate safety script: if the main Team Inbox script stalls on "Loading conversations...",
+  // this renderer reads /api/messages directly and displays the saved history without touching backend data.
+  const SAFE_INBOX_BOOT_DELAY_MS = 1600;
+
+  function byId(id) { return document.getElementById(id); }
+  function esc(value) {
+    return (value || "").toString()
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+  function shortText(value, max) {
+    const text = (value || "").toString().replace(/\s+/g, " ").trim();
+    return text.length <= max ? text : text.slice(0, Math.max(0, max - 1)) + "…";
+  }
+  function timeValue(message) {
+    const direct = new Date(message && message.time ? message.time : 0).getTime();
+    return Number.isNaN(direct) ? 0 : direct;
+  }
+  function keyFor(message) {
+    return [message.phone || "unknown", message.phoneNumberId || "", message.branch || ""].join("::");
+  }
+  function branchClass(branch) {
+    return branch === "Abu Dhabi" ? "branch branch-abu" : "branch branch-dubai";
+  }
+  function senderLabel(sender) {
+    if (sender === "customer") return "Customer";
+    if (sender === "staff") return "Team";
+    if (sender === "bot") return "Bot";
+    return "Message";
+  }
+  function senderBadge(sender) {
+    const label = senderLabel(sender);
+    const cls = sender === "customer" ? "sender-customer" : sender === "staff" ? "sender-staff" : "sender-bot";
+    return '<span class="sender-badge ' + cls + '">' + esc(label) + '</span>';
+  }
+  function avatarText(value) {
+    const digits = (value || "").toString().replace(/\D/g, "");
+    return digits ? digits.slice(-2) : "IC";
+  }
+  function displayNameForConversation(conversation) {
+    const withName = (conversation.messages || []).find(function(message) {
+      return (message.customerName || "").toString().trim();
+    });
+    return withName ? (withName.customerName || "").toString().trim() : (conversation.phone || "Unknown customer");
+  }
+  function normalizeStatus(message) {
+    const sender = message.sender || "";
+    if (sender === "customer") return "Customer Reply";
+    if (sender === "staff") return "Human Reply";
+    if (sender === "bot") return "Bot Reply";
+    return message.status || "Open";
+  }
+  function buildConversations(messages) {
+    const map = new Map();
+    (messages || []).forEach(function(message) {
+      const key = keyFor(message);
+      if (!map.has(key)) {
+        map.set(key, {
+          key: key,
+          phone: message.phone || "unknown",
+          phoneNumberId: message.phoneNumberId || "",
+          branch: message.branch || "Dubai",
+          messages: []
+        });
+      }
+      const conversation = map.get(key);
+      conversation.messages.push(message);
+      if (message.phoneNumberId) conversation.phoneNumberId = message.phoneNumberId;
+      if (message.branch) conversation.branch = message.branch;
+    });
+    return Array.from(map.values()).map(function(conversation) {
+      conversation.messages = conversation.messages.slice().sort(function(a, b) { return timeValue(b) - timeValue(a); });
+      conversation.latest = conversation.messages[0] || {};
+      conversation.status = conversation.latest.status || normalizeStatus(conversation.latest);
+      return conversation;
+    }).sort(function(a, b) { return timeValue(b.latest) - timeValue(a.latest); });
+  }
+  function messageHtml(message) {
+    const sender = message.sender === "customer" ? "customer" : (message.sender === "staff" ? "staff" : "bot");
+    const body = (message.body || "").toString();
+    return '<div class="bubble-row ' + sender + '">' +
+      '<div class="bubble ' + sender + '">' +
+        esc(body).replace(/\n/g, "<br>") +
+        '<div class="bubble-info">' + senderBadge(message.sender || "") + '<span>' + esc(message.time || "") + '</span></div>' +
+      '</div>' +
+    '</div>';
+  }
+  function renderSafeInbox(conversations) {
+    const list = byId("conversationList");
+    const chatBody = byId("chatBody");
+    const chatTitle = byId("chatTitle");
+    const chatMeta = byId("chatMeta");
+    const chatAvatar = byId("chatAvatar");
+    const footer = byId("conversationFooterText");
+    const search = byId("searchBox");
+    const branchFilter = byId("branchFilter");
+    const inputTo = byId("to");
+    const inputLine = byId("phoneNumberId");
+    if (!list || !chatBody) return;
+
+    let activeKey = "";
+    function currentFiltered() {
+      const query = search ? (search.value || "").toLowerCase().trim() : "";
+      const branch = branchFilter ? (branchFilter.value || "") : "";
+      return conversations.filter(function(conversation) {
+        if (branch && conversation.branch !== branch) return false;
+        if (!query) return true;
+        const hay = [conversation.phone, conversation.branch, conversation.status]
+          .concat((conversation.messages || []).map(function(message) {
+            return [message.body, message.customerName, message.status, message.messageType, message.sender].join(" ");
+          })).join(" ").toLowerCase();
+        return hay.includes(query);
+      });
+    }
+    function updateCounts(filtered) {
+      const total = filtered.length;
+      if (footer) footer.textContent = total ? "Showing 1 - " + total + " of " + total : "Showing 0 - 0 of 0";
+      const tabDubai = byId("tabDubaiCount");
+      const tabAbu = byId("tabAbuCount");
+      const sideDubai = byId("sideDubaiCount");
+      const sideAbu = byId("sideAbuCount");
+      const dubai = conversations.filter(function(c) { return c.branch !== "Abu Dhabi"; }).length;
+      const abu = conversations.filter(function(c) { return c.branch === "Abu Dhabi"; }).length;
+      [tabDubai, sideDubai].forEach(function(el) { if (el) el.textContent = String(dubai); });
+      [tabAbu, sideAbu].forEach(function(el) { if (el) el.textContent = String(abu); });
+    }
+    function renderChat(conversation) {
+      if (!conversation) {
+        if (chatTitle) chatTitle.textContent = "Select a conversation";
+        chatBody.innerHTML = '<div class="chat-watermark"><img src="/assets/iconic-chat-background-logo.png" alt="Iconic Hair Care watermark" /></div><div class="empty">No conversation selected.</div>';
+        return;
+      }
+      const name = displayNameForConversation(conversation);
+      if (chatTitle) chatTitle.textContent = name;
+      if (chatAvatar) chatAvatar.textContent = avatarText(name || conversation.phone);
+      if (chatMeta) {
+        chatMeta.innerHTML = '<span class="' + branchClass(conversation.branch) + '">' + esc(conversation.branch || "Dubai") + '</span>' +
+          '<span class="status status-open">' + esc(conversation.status || "Open") + '</span>' +
+          '<span class="tag-chip">Safe history renderer</span>';
+      }
+      if (inputTo) inputTo.value = conversation.phone || "";
+      if (inputLine) inputLine.value = conversation.phoneNumberId || "";
+      chatBody.innerHTML = '<div class="chat-watermark"><img src="/assets/iconic-chat-background-logo.png" alt="Iconic Hair Care watermark" /></div>' +
+        (conversation.messages || []).slice().reverse().map(messageHtml).join("");
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+    function renderList() {
+      const filtered = currentFiltered();
+      updateCounts(filtered);
+      if (!filtered.length) {
+        list.innerHTML = '<div class="empty">No conversations found.</div>';
+        renderChat(null);
+        return;
+      }
+      if (!activeKey || !filtered.some(function(c) { return c.key === activeKey; })) {
+        activeKey = filtered[0].key;
+      }
+      list.innerHTML = filtered.map(function(conversation) {
+        const latest = conversation.latest || {};
+        const name = displayNameForConversation(conversation);
+        const preview = senderLabel(latest.sender) + ': ' + ((latest.body || latest.messageType || "").toString().replace(/\s+/g, " ").trim());
+        const active = conversation.key === activeKey ? " active" : "";
+        return '<button type="button" class="conversation-card reference-conversation-card' + active + '" data-safe-key="' + esc(conversation.key) + '">' +
+          '<div class="avatar reference-avatar">' + esc(avatarText(name || conversation.phone)) + '</div>' +
+          '<div class="conversation-main reference-conversation-main">' +
+            '<div class="conv-top reference-card-top">' +
+              '<div class="conv-identity reference-card-identity">' +
+                '<div class="conv-name reference-card-name">' + esc(name) + '</div>' +
+                '<div class="conv-preview reference-card-preview">' + esc(shortText(preview, 76)) + '</div>' +
+              '</div>' +
+              '<div class="reference-card-side"><div class="conv-time reference-card-time">' + esc(latest.time || "") + '</div></div>' +
+            '</div>' +
+            '<div class="conv-footer reference-card-footer">' +
+              '<div class="badges reference-card-badges"><span class="' + branchClass(conversation.branch) + '">' + esc(conversation.branch || "Dubai") + '</span><span class="status status-open">' + esc(conversation.status || "Open") + '</span></div>' +
+              '<span class="message-count-badge">' + esc(String((conversation.messages || []).length)) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</button>';
+      }).join("");
+      Array.from(list.querySelectorAll("[data-safe-key]")).forEach(function(button) {
+        button.addEventListener("click", function() {
+          activeKey = button.getAttribute("data-safe-key") || "";
+          renderList();
+        });
+      });
+      renderChat(filtered.find(function(c) { return c.key === activeKey; }) || filtered[0]);
+    }
+    if (search && !search.dataset.safeInboxBound) {
+      search.dataset.safeInboxBound = "yes";
+      search.addEventListener("input", renderList);
+    }
+    if (branchFilter && !branchFilter.dataset.safeInboxBound) {
+      branchFilter.dataset.safeInboxBound = "yes";
+      branchFilter.addEventListener("change", renderList);
+    }
+    window.__iconicSafeInboxRender = renderList;
+    renderList();
+  }
+  async function bootSafeInbox() {
+    const list = byId("conversationList");
+    if (!list) return;
+    const stillLoading = /Loading conversations/i.test(list.textContent || "");
+    const hasCards = Boolean(list.querySelector(".conversation-card"));
+    if (!stillLoading && hasCards) return;
+    try {
+      const response = await fetch("/api/messages?safeInboxTs=" + Date.now(), { cache: "no-store" });
+      const data = await response.json();
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      if (!messages.length) {
+        list.innerHTML = '<div class="empty">No conversations returned from /api/messages.</div>';
+        return;
+      }
+      renderSafeInbox(buildConversations(messages));
+      console.log("[Safe Inbox History Renderer] rendered conversations:", messages.length);
+    } catch (error) {
+      console.error("[Safe Inbox History Renderer] failed", error);
+      list.innerHTML = '<div class="empty">Failed to load saved conversations from /api/messages.</div>';
+    }
+  }
+  window.setTimeout(bootSafeInbox, SAFE_INBOX_BOOT_DELAY_MS);
+})();
 </script>
 
 </body>
