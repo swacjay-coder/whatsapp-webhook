@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-stable-log-cleanup-service-word-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-stable-greeting-week-flow-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -142,6 +142,12 @@ function getTurnLanguage(text, state) {
     value.includes("team") ||
     value.includes("price") ||
     value.includes("cost") ||
+    value.includes("how much") ||
+    value.includes("how mutch") ||
+    value.includes("much") ||
+    value.includes("pricing") ||
+    value.includes("charges") ||
+    value.includes("rate") ||
     value.includes("surgery") ||
     value.includes("natural") ||
     value.includes("pain") ||
@@ -224,6 +230,28 @@ function dayReplies(lang = "en") {
   return isAr(lang)
     ? [quickReply("اليوم", "DAY_TODAY"), quickReply("بكرا", "DAY_TOMORROW"), quickReply("هذا الأسبوع", "DAY_WEEK")]
     : [quickReply("Today", "DAY_TODAY"), quickReply("Tomorrow", "DAY_TOMORROW"), quickReply("This week", "DAY_WEEK")];
+}
+
+function weekDayReplies(lang = "en") {
+  return isAr(lang)
+    ? [
+        quickReply("الاثنين", "WEEKDAY_MON"),
+        quickReply("الثلاثاء", "WEEKDAY_TUE"),
+        quickReply("الأربعاء", "WEEKDAY_WED"),
+        quickReply("الخميس", "WEEKDAY_THU"),
+        quickReply("الجمعة", "WEEKDAY_FRI"),
+        quickReply("السبت", "WEEKDAY_SAT"),
+        quickReply("الأحد", "WEEKDAY_SUN")
+      ]
+    : [
+        quickReply("Monday", "WEEKDAY_MON"),
+        quickReply("Tuesday", "WEEKDAY_TUE"),
+        quickReply("Wednesday", "WEEKDAY_WED"),
+        quickReply("Thursday", "WEEKDAY_THU"),
+        quickReply("Friday", "WEEKDAY_FRI"),
+        quickReply("Saturday", "WEEKDAY_SAT"),
+        quickReply("Sunday", "WEEKDAY_SUN")
+      ];
 }
 
 function getDubaiMinutesNow() {
@@ -316,7 +344,42 @@ function includesAny(value, keywords) {
 
 function isGreeting(text) {
   const value = normalizeText(text);
-  return !value || ["hi", "hello", "hey", "مرحبا", "هلا", "السلام عليكم", "هاي", "menu", "start", "القائمة"].includes(value);
+  return !value ||
+    ["hi", "hello", "hey", "مرحبا", "هلا", "السلام عليكم", "سلام عليكم", "هاي", "menu", "start", "القائمة"].includes(value) ||
+    value.includes("السلام عليكم") ||
+    value.includes("سلام عليكم") ||
+    value.includes("مرحبا") ||
+    value.includes("هلا");
+}
+
+function isSalamGreeting(text) {
+  const value = normalizeText(text);
+  return value.includes("السلام عليكم") || value.includes("سلام عليكم");
+}
+
+function isMarhabaGreeting(text) {
+  const value = normalizeText(text);
+  return value.includes("مرحبا") || value === "هلا" || value === "هاي";
+}
+
+function greetingBody(text, lang = "en") {
+  if (isSalamGreeting(text)) {
+    return `وعليكم السلام ورحمة الله 👋
+كيف فينا نساعدك اليوم؟`;
+  }
+
+  if (isMarhabaGreeting(text)) {
+    return `مرااحب، كيفك اليوم؟ 👋
+اختار من القائمة كيف فينا نساعدك:`;
+  }
+
+  if (isAr(lang)) {
+    return `أهلًا وسهلًا 👋
+كيف فينا نساعدك اليوم؟`;
+  }
+
+  return `Hello 👋
+How can we help you today?`;
 }
 
 function isBooking(text) {
@@ -376,7 +439,7 @@ function detectSmartIntent(text) {
   if (!value || isPayloadOnly(value.toUpperCase())) return "";
 
   const intents = [
-    { name: "price", keywords: ["السعر", "الأسعار", "كم السعر", "كم التكلفة", "التكلفة", "بكم", "قديش", "كم يكلف", "price", "cost", "how much", "pricing", "charges", "rate"] },
+    { name: "price", keywords: ["السعر", "الأسعار", "كم السعر", "كم التكلفة", "التكلفة", "بكم", "قديش", "كم يكلف", "price", "cost", "how much", "how mutch", "much", "pricing", "charges", "rate"] },
     { name: "results", keywords: ["نتائج", "النتائج", "صور", "صورة", "فيديو", "قبل وبعد", "قبل و بعد", "شوف النتائج", "results", "photos", "photo", "video", "before after", "before and after", "see results"] },
     { name: "details", keywords: ["تفاصيل", "طريقة التركيب", "كيف بيتركب", "كيف يتم التركيب", "كيف يشتغل", "اشرحلي", "شرح", "details", "how it works", "how does it work", "how is it applied", "explain", "procedure"] },
     { name: "surgery", keywords: ["جراحة", "عملية", "في عملية", "بدون جراحة", "هل يحتاج عملية", "زراعة", "surgery", "operation", "surgical", "non surgical", "non-surgical", "without surgery", "hair transplant"] },
@@ -396,6 +459,19 @@ function payloadToBranch(payload) {
   if (payload === "BRANCH_ABUDHABI") return "Abu Dhabi";
   if (payload === "BRANCH_DUBAI") return "Dubai";
   return "";
+}
+
+function payloadToWeekDay(payload) {
+  const days = {
+    WEEKDAY_MON: "Monday | الاثنين",
+    WEEKDAY_TUE: "Tuesday | الثلاثاء",
+    WEEKDAY_WED: "Wednesday | الأربعاء",
+    WEEKDAY_THU: "Thursday | الخميس",
+    WEEKDAY_FRI: "Friday | الجمعة",
+    WEEKDAY_SAT: "Saturday | السبت",
+    WEEKDAY_SUN: "Sunday | الأحد"
+  };
+  return days[payload] || "";
 }
 
 function payloadToDay(payload) {
@@ -525,6 +601,12 @@ function askStaffBody(branch = "Dubai", lang = "en") {
 
 function askDayBody(lang = "en") {
   return isAr(lang) ? `تمام، اختر اليوم المناسب:` : `Great, please choose your preferred day:`;
+}
+
+function askWeekDayBody(lang = "en") {
+  return isAr(lang)
+    ? `تمام، اختر اليوم المناسب خلال هذا الأسبوع:`
+    : `Great, please choose the day that suits you this week:`;
 }
 
 function askTimeBody(dayPayload, lang = "en") {
@@ -836,6 +918,22 @@ async function handlePayload({ channel, senderId, payload, state, lang }) {
     return true;
   }
 
+  if (payload === "DAY_WEEK") {
+    state.dayPayload = "DAY_WEEK";
+    state.lang = lang;
+    await sendText(channel, senderId, askWeekDayBody(lang), weekDayReplies(lang));
+    return true;
+  }
+
+  const weekDay = payloadToWeekDay(payload);
+  if (weekDay) {
+    state.day = weekDay;
+    state.dayPayload = "DAY_WEEK";
+    state.lang = lang;
+    await sendText(channel, senderId, askTimeBody("DAY_WEEK", lang), timeReplies("DAY_WEEK", lang));
+    return true;
+  }
+
   const day = payloadToDay(payload);
   if (day) {
     state.day = day;
@@ -946,7 +1044,7 @@ async function handleIncomingEvent(entry, event) {
   }
 
   if (isGreeting(text)) {
-    await sendText(channel, senderId, welcomeBody(lang), mainReplies(lang));
+    await sendText(channel, senderId, greetingBody(text, lang), mainReplies(lang));
     return;
   }
 
