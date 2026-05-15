@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-booking-context-smart-intents-welcome-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-booking-context-smart-intents-greeting-copy-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -365,23 +365,45 @@ function isMarhabaGreeting(text) {
 function greetingBody(text, lang = "en") {
   if (isSalamGreeting(text)) {
     return `وعليكم السلام ورحمة الله 👋
-كيف فينا نساعدك اليوم؟
 
-اختار من القائمة، أو اكتب سؤالك مباشرة.`;
+أنا مساعد Iconic Hair Care الذكي.
+
+فيك تختار من القائمة، أو تكتب سؤالك مباشرة مثل:
+السعر، النتائج، طريقة التركيب، أو حجز موعد.
+
+إذا قدرت أساعدك برد عليك فورًا، وإذا احتجت متابعة من الفريق بحوّلك لهم.`;
   }
 
   if (isMarhabaGreeting(text)) {
     return `مرااحب، كيفك اليوم؟ 👋
-اختار من القائمة كيف فينا نساعدك، أو اكتب سؤالك مباشرة.`;
+
+أنا مساعد Iconic Hair Care الذكي.
+
+فيك تختار من القائمة، أو تكتب سؤالك مباشرة مثل:
+السعر، النتائج، طريقة التركيب، أو حجز موعد.
+
+إذا قدرت أساعدك برد عليك فورًا، وإذا احتجت متابعة من الفريق بحوّلك لهم.`;
   }
 
   if (isAr(lang)) {
-    return `أهلًا وسهلًا 👋
-اختار من القائمة، أو اكتب سؤالك مباشرة وأنا رح حاول أساعدك.`;
+    return `مرحبا 👋
+
+أنا مساعد Iconic Hair Care الذكي.
+
+فيك تختار من القائمة، أو تكتب سؤالك مباشرة مثل:
+السعر، النتائج، طريقة التركيب، أو حجز موعد.
+
+إذا قدرت أساعدك برد عليك فورًا، وإذا احتجت متابعة من الفريق بحوّلك لهم.`;
   }
 
   return `Hello 👋
-Please choose from the menu, or type your question directly and I’ll do my best to help.`;
+
+I’m the smart assistant for Iconic Hair Care.
+
+You can choose from the menu, or type your question directly, such as:
+price, results, how it works, or booking an appointment.
+
+If I can help, I’ll reply right away. If you need support from our team, I’ll connect you with them.`;
 }
 
 function isBooking(text) {
