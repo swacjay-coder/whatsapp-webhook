@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-8-full-single-language-bot-cycle";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-10-notify-once-per-new-message";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -242,7 +242,9 @@ function normalizePhoneDigits(value) {
 // V31.5.8.60.3.2 - Staff/customer separation:
 // Numbers used for staff notifications or internal tests must never be treated
 // as customer conversations, reminder opt-ins, or live customer notifications.
-const DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS = "971569979163";
+// V31.5.8.60.3.7.9: Also suppress the owner/internal test number ending 395
+// from Team Inbox unread counters and live notifications.
+const DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS = "971569979163,395";
 
 function splitPhoneListToDigits(value) {
   return (value || "")
@@ -263,6 +265,7 @@ function getSuppressedCustomerNotificationNumbers() {
     process.env.DUBAI_STAFF_NOTIFICATION_NUMBER,
     process.env.ABU_DHABI_STAFF_NOTIFICATION_NUMBER,
     process.env.SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS,
+    process.env.SUPPRESSED_CUSTOMER_NOTIFICATION_SUFFIXES,
     process.env.INTERNAL_NOTIFICATION_NUMBERS,
     DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS
   ].forEach((value) => {
@@ -15628,12 +15631,19 @@ try {
 
 let liveNotificationsReady = false;
 let knownCustomerMessageKeys = new Set();
+let notifiedCustomerMessageKeys = new Set();
+try {
+  notifiedCustomerMessageKeys = new Set(JSON.parse(localStorage.getItem("iconic_notified_customer_message_keys") || "[]"));
+} catch (e) {
+  notifiedCustomerMessageKeys = new Set();
+}
 let liveAlertCount = 0;
 let liveNotificationsEnabled = localStorage.getItem("iconic_live_notifications_enabled") === "yes";
 let liveNotificationAudioContext = null;
 const INTERNAL_NOTIFICATION_PHONE_DIGITS = new Set(${JSON.stringify(getSuppressedCustomerNotificationNumbers())});
 const LIVE_TOAST_DEDUP_WINDOW_MS = 12000;
 const LIVE_TOAST_MAX_VISIBLE = 3;
+const MAX_PERSISTED_NOTIFICATION_KEYS = 900;
 const recentLiveToastMap = new Map();
 
 let statusOverrideMap = {};
@@ -16898,6 +16908,38 @@ function customerNotificationKey(message) {
     (message.body || "").toString().slice(0, 80)
   ].join("|");
 }
+function saveNotifiedCustomerMessageKeys() {
+  try {
+    const keys = Array.from(notifiedCustomerMessageKeys).slice(-MAX_PERSISTED_NOTIFICATION_KEYS);
+    notifiedCustomerMessageKeys = new Set(keys);
+    localStorage.setItem("iconic_notified_customer_message_keys", JSON.stringify(keys));
+  } catch (e) {
+    // Local storage can be full or blocked. Notifications still work in memory.
+  }
+}
+
+function markCustomerMessagesAsNotified(messages) {
+  let changed = false;
+
+  (messages || []).forEach(function(message) {
+    if (!shouldIncludeInLiveCustomerNotifications(message)) return;
+
+    const key = customerNotificationKey(message);
+    if (!key || notifiedCustomerMessageKeys.has(key)) return;
+
+    notifiedCustomerMessageKeys.add(key);
+    changed = true;
+  });
+
+  if (changed) {
+    saveNotifiedCustomerMessageKeys();
+  }
+}
+
+function hasCustomerMessageAlreadyNotified(message) {
+  return notifiedCustomerMessageKeys.has(customerNotificationKey(message));
+}
+
 
 function getCustomerNotificationKeys(messages) {
   return new Set((messages || []).filter(shouldIncludeInLiveCustomerNotifications).slice(0, 500).map(customerNotificationKey));
@@ -17102,17 +17144,22 @@ function showBrowserLiveNotification(message, newCount) {
 }
 
 function processLiveInboxNotifications(nextMessages) {
-  const newKnownKeys = getCustomerNotificationKeys(nextMessages);
-  const newCustomerMessages = (nextMessages || []).filter(function(message) {
-    return shouldIncludeInLiveCustomerNotifications(message) && !knownCustomerMessageKeys.has(customerNotificationKey(message));
-  });
+  const safeMessages = nextMessages || [];
+  const newKnownKeys = getCustomerNotificationKeys(safeMessages);
 
   if (!liveNotificationsReady) {
     knownCustomerMessageKeys = newKnownKeys;
+    markCustomerMessagesAsNotified(safeMessages);
     liveNotificationsReady = true;
     updateLiveNotificationUi();
     return;
   }
+
+  const newCustomerMessages = safeMessages.filter(function(message) {
+    return shouldIncludeInLiveCustomerNotifications(message) &&
+      !knownCustomerMessageKeys.has(customerNotificationKey(message)) &&
+      !hasCustomerMessageAlreadyNotified(message);
+  });
 
   knownCustomerMessageKeys = newKnownKeys;
 
@@ -17120,6 +17167,11 @@ function processLiveInboxNotifications(nextMessages) {
     updateLiveNotificationUi();
     return;
   }
+
+  // Persist the notification decision immediately.
+  // This prevents the same customer message from triggering sound/toast again
+  // on the next auto-refresh, page reload, or Google Sheet reordering.
+  markCustomerMessagesAsNotified(newCustomerMessages);
 
   const dedupedNewCustomerMessages = newCustomerMessages.filter(shouldShowLiveToastForMessage);
 
