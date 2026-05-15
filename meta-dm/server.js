@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-stable-greeting-week-flow-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-booking-context-smart-intents";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -365,21 +365,23 @@ function isMarhabaGreeting(text) {
 function greetingBody(text, lang = "en") {
   if (isSalamGreeting(text)) {
     return `وعليكم السلام ورحمة الله 👋
-كيف فينا نساعدك اليوم؟`;
+كيف فينا نساعدك اليوم؟
+
+اختار من القائمة، أو اكتب سؤالك مباشرة.`;
   }
 
   if (isMarhabaGreeting(text)) {
     return `مرااحب، كيفك اليوم؟ 👋
-اختار من القائمة كيف فينا نساعدك:`;
+اختار من القائمة كيف فينا نساعدك، أو اكتب سؤالك مباشرة.`;
   }
 
   if (isAr(lang)) {
     return `أهلًا وسهلًا 👋
-كيف فينا نساعدك اليوم؟`;
+اختار من القائمة، أو اكتب سؤالك مباشرة وأنا رح حاول أساعدك.`;
   }
 
   return `Hello 👋
-How can we help you today?`;
+Please choose from the menu, or type your question directly and I’ll do my best to help.`;
 }
 
 function isBooking(text) {
@@ -448,7 +450,22 @@ function detectSmartIntent(text) {
     { name: "pain", keywords: ["ألم", "الم", "وجع", "بيوجع", "مؤلم", "في ألم", "هل يؤلم", "pain", "painful", "does it hurt", "hurt", "is it painful"] },
     { name: "booking", keywords: ["حجز", "احجز", "موعد", "بدي موعد", "استشارة", "احجز استشارة", "booking", "book", "appointment", "consultation", "book consultation", "reserve"] },
     { name: "location", keywords: ["الموقع", "وين", "العنوان", "الفرع", "دبي", "ابوظبي", "أبوظبي", "لوكيشن", "location", "where", "address", "branch", "dubai", "abu dhabi", "map"] },
-    { name: "team", keywords: ["فريق", "موظف", "كلموني", "تواصل", "بدي احكي مع حدا", "مساعدة", "ساعدني", "team", "staff", "agent", "talk to team", "contact", "help", "support", "human"] }
+    { name: "team", keywords: ["فريق", "موظف", "كلموني", "تواصل", "بدي احكي مع حدا", "مساعدة", "ساعدني", "team", "staff", "agent", "talk to team", "contact", "help", "support", "human"] },
+
+    { name: "suitability", keywords: ["يناسب حالتي", "ينفع لحالتي", "حالتي", "مناسب إلي", "مناسب لي", "هل يناسب", "suitable", "suit my case", "good for my case", "right for me", "my case"] },
+    { name: "men_women", keywords: ["رجال ونساء", "رجال", "نساء", "للرجال", "للنساء", "men and women", "men", "women", "male", "female"] },
+    { name: "privacy", keywords: ["خصوصية", "خاص", "سري", "ما بدي حدا يعرف", "privacy", "private", "confidential", "discreet"] },
+    { name: "durability", keywords: ["يثبت", "ثبات", "كم يدوم", "يدوم", "مدة الثبات", "hold", "durable", "durability", "how long it lasts", "last"] },
+    { name: "detectability", keywords: ["يبان تركيب", "هل يبان", "ما يبين", "حدا يعرف", "بان أنه تركيب", "detect", "detectable", "will people know", "will it show", "looks fake"] },
+    { name: "service_followup", keywords: ["سيرفس", "متابعة", "عميل قديم", "عميل حالي", "تعديل", "service follow up", "existing client", "current client", "follow up", "adjustment"] },
+    { name: "consult_vs_service", keywords: ["فرق بين استشارة وسيرفس", "الفرق بين الاستشارة والسيرفس", "استشارة ولا سيرفس", "consult vs service", "consultation or service", "difference between consult and service"] },
+    { name: "branch_help", keywords: ["أي فرع", "اختار أي فرع", "فرع دبي أو أبوظبي", "dubai or abu dhabi", "which branch", "what branch"] },
+    { name: "availability", keywords: ["أقرب موعد", "اقرب موعد", "متوفر اليوم", "في موعد", "availability", "available appointment", "earliest appointment", "soonest appointment"] },
+    { name: "hesitation", keywords: ["متردد", "خايف", "مو متأكد", "قلقان", "مش متأكد", "hesitant", "worried", "not sure", "concerned"] },
+    { name: "free_consultation", keywords: ["استشارة مجانية", "هل الاستشارة مجانية", "free consultation", "consultation free"] },
+    { name: "color_density", keywords: ["اللون", "الكثافة", "نفس شعري", "لون شعري", "color", "density", "match my hair", "same hair"] },
+    { name: "shaving", keywords: ["حلاقة", "احلق", "حلق", "بدون حلاقة", "shave", "shaving", "do i need to shave"] },
+    { name: "lifestyle", keywords: ["حياتي طبيعي", "سباحة", "رياضة", "نوم", "أمارس حياتي", "daily life", "normal life", "swim", "sport", "sleep"] }
   ];
 
   const match = intents.find((intent) => includesAny(value, intent.keywords));
@@ -518,12 +535,325 @@ function payloadToStaff(payload) {
   return names[payload] || "";
 }
 
-function welcomeBody(lang = "en") {
-  if (isAr(lang)) {
-    return `مرحبا 👋\n\nمعك المساعد الذكي الخاص بـ\n\n${BUSINESS_NAME}\n\nنقدر نساعدك في:\nحجز استشارة للعميل الجديد\nخدمة أو متابعة للعميل الحالي\nمشاهدة النتائج\nأو التواصل مع الفريق`;
+const STAFF_DIRECTORY = [
+  { canonical: "Ahmad", payload: "STAFF_AHMAD", branch: "Dubai", aliases: ["ahmad", "ahmed", "أحمد", "احمد"] },
+  { canonical: "Wael", payload: "STAFF_WAEL", branch: "Dubai", aliases: ["wael", "وائل"] },
+  { canonical: "Tamer", payload: "STAFF_TAMER", branch: "Dubai", aliases: ["tamer", "تامر"] },
+  { canonical: "Bashir", payload: "STAFF_BASHIR", branch: "Dubai", aliases: ["bashir", "basheer", "بشير"] },
+  { canonical: "Emad", payload: "STAFF_EMAD", branch: "Dubai", aliases: ["emad", "imad", "عماد"] },
+  { canonical: "Hamouda", payload: "STAFF_HAMOUDA", branch: "Dubai", aliases: ["hamouda", "hamoda", "حمودة", "حموده"] },
+  { canonical: "Ani", payload: "STAFF_ANI", branch: "Dubai", aliases: ["ani", "اني", "آني"] },
+  { canonical: "Omar", payload: "STAFF_OMAR", branch: "Dubai", aliases: ["omar", "عمر"] },
+  { canonical: "Adham", payload: "STAFF_ADHAM", branch: "Abu Dhabi", aliases: ["adham", "أدهم", "ادهم"] },
+  { canonical: "Osama", payload: "STAFF_OSAMA", branch: "Abu Dhabi", aliases: ["osama", "أسامة", "اسامة"] }
+];
+
+function findStaffFromText(text) {
+  const value = normalizeText(text);
+  return STAFF_DIRECTORY.find((staff) => staff.aliases.some((alias) => value.includes(normalizeText(alias)))) || null;
+}
+
+function findBranchFromText(text) {
+  const value = normalizeText(text);
+  if (value.includes("abu dhabi") || value.includes("abudhabi") || value.includes("أبوظبي") || value.includes("ابوظبي")) return "Abu Dhabi";
+  if (value.includes("dubai") || value.includes("دبي")) return "Dubai";
+  return "";
+}
+
+function findDayFromText(text) {
+  const value = normalizeText(text);
+  const weekDays = [
+    { payload: "WEEKDAY_MON", day: "Monday | الاثنين", aliases: ["monday", "الاثنين", "الإثنين"] },
+    { payload: "WEEKDAY_TUE", day: "Tuesday | الثلاثاء", aliases: ["tuesday", "الثلاثاء"] },
+    { payload: "WEEKDAY_WED", day: "Wednesday | الأربعاء", aliases: ["wednesday", "الأربعاء", "الاربعاء"] },
+    { payload: "WEEKDAY_THU", day: "Thursday | الخميس", aliases: ["thursday", "الخميس"] },
+    { payload: "WEEKDAY_FRI", day: "Friday | الجمعة", aliases: ["friday", "الجمعة"] },
+    { payload: "WEEKDAY_SAT", day: "Saturday | السبت", aliases: ["saturday", "السبت"] },
+    { payload: "WEEKDAY_SUN", day: "Sunday | الأحد", aliases: ["sunday", "الأحد", "الاحد"] }
+  ];
+
+  if (value.includes("today") || value.includes("اليوم") || value.includes("هاليوم")) return { payload: "DAY_TODAY", day: "Today | اليوم", kind: "day" };
+  if (value.includes("tomorrow") || value.includes("بكرا") || value.includes("غدا") || value.includes("غداً")) return { payload: "DAY_TOMORROW", day: "Tomorrow | بكرا", kind: "day" };
+  const weekDay = weekDays.find((item) => item.aliases.some((alias) => value.includes(normalizeText(alias))));
+  if (weekDay) return { payload: weekDay.payload, day: weekDay.day, kind: "weekday" };
+  if (value.includes("this week") || value.includes("هدا الأسبوع") || value.includes("هذا الأسبوع") || value.includes("هالأسبوع")) return { payload: "DAY_WEEK", day: "This week | هذا الأسبوع", kind: "week" };
+  return null;
+}
+
+function isBookingStateActive(state = {}) {
+  return ["booking", "consult", "service", "location", "team"].includes(state.intent) ||
+    Boolean(state.branch || state.staff || state.day || state.dayPayload || state.time);
+}
+
+function clearBookingAfterBranch(state) {
+  delete state.staff;
+  delete state.day;
+  delete state.dayPayload;
+  delete state.time;
+}
+
+function clearBookingAfterStaff(state) {
+  delete state.day;
+  delete state.dayPayload;
+  delete state.time;
+}
+
+function clearBookingAfterDay(state) {
+  delete state.time;
+}
+
+function hasAnyBookingWord(value, words) {
+  return words.some((word) => value.includes(word));
+}
+
+function isCancelBookingText(value) {
+  return hasAnyBookingWord(value, ["الغاء", "إلغاء", "الغِ", "ما بدي", "وقف", "رجعني", "القائمة", "cancel", "main menu", "start over", "stop"]);
+}
+
+function isChangeTimeText(value) {
+  return hasAnyBookingWord(value, ["غير الموعد", "تغيير الموعد", "أغير الموعد", "اغير الموعد", "غير الوقت", "تغيير الوقت", "وقت تاني", "وقت ثاني", "موعد تاني", "موعد ثاني", "reschedule", "change appointment", "change time", "another time", "different time"]);
+}
+
+function isChangeDayText(value) {
+  return hasAnyBookingWord(value, ["غير اليوم", "تغيير اليوم", "يوم تاني", "يوم ثاني", "اختار يوم", "change day", "another day", "different day"]);
+}
+
+function isChangeStaffText(value) {
+  return hasAnyBookingWord(value, ["غير المختص", "تغيير المختص", "غير الموظف", "تغيير الموظف", "شخص تاني", "شخص ثاني", "مختص تاني", "مختص ثاني", "غير الفريق", "change specialist", "change staff", "different specialist", "another specialist"]);
+}
+
+function isChangeBranchText(value) {
+  return hasAnyBookingWord(value, ["غير الفرع", "تغيير الفرع", "فرع تاني", "فرع ثاني", "change branch", "different branch", "another branch"]);
+}
+
+function directAppointmentTextLooksRelevant(text) {
+  const value = normalizeText(text);
+  return hasAnyBookingWord(value, ["موعد", "حجز", "احجز", "بدي", "اريد", "أريد", "سيرفس", "appointment", "book", "booking", "service"]);
+}
+
+function contextualBookingPrompt(state, lang = "en") {
+  if (state.intent === "service" && state.branch && !state.staff) {
+    return { body: askStaffBody(state.branch, lang), replies: staffReplies(state.branch, lang) };
   }
 
-  return `Hello 👋\n\nYou are chatting with the smart assistant of\n\n${BUSINESS_NAME}\n\nWe can help you with:\nbooking a consultation for new clients\nservice or follow-up for existing clients\nviewing results\nor connecting with our team`;
+  if ((state.intent === "consult" || state.intent === "service" || state.intent === "booking") && !state.branch) {
+    return { body: askBranchBody(state.intent === "service" ? "service" : "consult", lang), replies: branchReplies(lang) };
+  }
+
+  if (!state.dayPayload && !state.day) {
+    return { body: askDayBody(lang), replies: dayReplies(lang) };
+  }
+
+  return { body: askTimeBody(state.dayPayload || "DAY_WEEK", lang), replies: timeReplies(state.dayPayload || "DAY_WEEK", lang) };
+}
+
+async function sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, detectedDay }) {
+  if (!detectedDay) {
+    await sendText(channel, senderId, askDayBody(lang), dayReplies(lang));
+    return true;
+  }
+
+  if (detectedDay.payload === "DAY_WEEK") {
+    state.dayPayload = "DAY_WEEK";
+    state.day = detectedDay.day;
+    clearBookingAfterDay(state);
+    await sendText(channel, senderId, askWeekDayBody(lang), weekDayReplies(lang));
+    return true;
+  }
+
+  if (detectedDay.kind === "weekday") {
+    state.day = detectedDay.day;
+    state.dayPayload = "DAY_WEEK";
+    clearBookingAfterDay(state);
+    await sendText(channel, senderId, askTimeBody("DAY_WEEK", lang), timeReplies("DAY_WEEK", lang));
+    return true;
+  }
+
+  state.day = detectedDay.day;
+  state.dayPayload = detectedDay.payload;
+  clearBookingAfterDay(state);
+
+  if (isTodayPayload(detectedDay.payload) && getAvailableTimeSlots(detectedDay.payload).length === 0) {
+    await sendText(channel, senderId, askTimeBody(detectedDay.payload, lang), dayReplies(lang).filter((reply) => reply.payload !== "DAY_TODAY"));
+    return true;
+  }
+
+  await sendText(channel, senderId, askTimeBody(detectedDay.payload, lang), timeReplies(detectedDay.payload, lang));
+  return true;
+}
+
+async function handleDirectAppointmentRequest({ channel, senderId, text, state, lang }) {
+  if (!directAppointmentTextLooksRelevant(text)) return false;
+
+  const staff = findStaffFromText(text);
+  const detectedDay = findDayFromText(text);
+  const branchFromText = findBranchFromText(text);
+
+  if (!staff && !detectedDay && !branchFromText) return false;
+
+  state.lang = lang;
+  state.intent = staff ? "service" : (state.intent || "booking");
+
+  if (branchFromText) {
+    state.branch = branchFromText;
+    clearBookingAfterBranch(state);
+  }
+
+  if (staff) {
+    state.branch = staff.branch;
+    state.staff = staff.canonical;
+    clearBookingAfterStaff(state);
+  }
+
+  if (!state.branch && state.intent !== "booking") {
+    await sendText(channel, senderId, askBranchBody(state.intent, lang), branchReplies(lang));
+    return true;
+  }
+
+  if (staff && detectedDay) {
+    const branchAr = state.branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
+    const intro = isAr(lang)
+      ? `أكيد 👌\n\nحجز سيرفس مع ${staff.canonical} في فرع ${branchAr}.\n\nاختار الوقت المناسب:`
+      : `Sure 👌\n\nService appointment with ${staff.canonical} at ${state.branch} branch.\n\nPlease choose a suitable time:`;
+
+    if (detectedDay.payload === "DAY_WEEK") {
+      state.dayPayload = "DAY_WEEK";
+      state.day = detectedDay.day;
+      await sendText(channel, senderId, isAr(lang) ? `أكيد 👌\n\nحجز سيرفس مع ${staff.canonical} في فرع ${branchAr} هذا الأسبوع.\n\nاختار اليوم المناسب:` : `Sure 👌\n\nService appointment with ${staff.canonical} at ${state.branch} branch this week.\n\nPlease choose the day that suits you:`, weekDayReplies(lang));
+      return true;
+    }
+
+    if (detectedDay.kind === "weekday") {
+      state.day = detectedDay.day;
+      state.dayPayload = "DAY_WEEK";
+      await sendText(channel, senderId, intro, timeReplies("DAY_WEEK", lang));
+      return true;
+    }
+
+    state.day = detectedDay.day;
+    state.dayPayload = detectedDay.payload;
+    await sendText(channel, senderId, intro, timeReplies(detectedDay.payload, lang));
+    return true;
+  }
+
+  if (staff && !detectedDay) {
+    const branchAr = state.branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
+    await sendText(channel, senderId, isAr(lang) ? `أكيد، مع ${staff.canonical} في فرع ${branchAr}.\nاختار اليوم المناسب:` : `Sure, with ${staff.canonical} at ${state.branch} branch.\nPlease choose the day:`, dayReplies(lang));
+    return true;
+  }
+
+  if (detectedDay) {
+    if (!state.branch) {
+      await sendText(channel, senderId, isAr(lang) ? `أكيد، اختار الفرع المناسب أولًا:` : `Sure, please choose the branch first:`, branchReplies(lang));
+      return true;
+    }
+    return sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, detectedDay });
+  }
+
+  const next = contextualBookingPrompt(state, lang);
+  await sendText(channel, senderId, next.body, next.replies);
+  return true;
+}
+
+async function handleBookingContextText({ channel, senderId, text, state, lang }) {
+  if (!isBookingStateActive(state)) return false;
+
+  const value = normalizeText(text);
+  state.lang = lang;
+
+  if (isCancelBookingText(value)) {
+    resetState(senderId);
+    await sendText(channel, senderId, isAr(lang) ? `تمام، رجعتك للقائمة الرئيسية 👇` : `No problem, back to the main menu 👇`, mainReplies(lang));
+    return true;
+  }
+
+  const explicitBranch = findBranchFromText(text);
+  if (isChangeBranchText(value) || explicitBranch) {
+    if (explicitBranch) {
+      state.branch = explicitBranch;
+      clearBookingAfterBranch(state);
+      if (state.intent === "service") {
+        await sendText(channel, senderId, askStaffBody(state.branch, lang), staffReplies(state.branch, lang));
+        return true;
+      }
+      await sendText(channel, senderId, askDayBody(lang), dayReplies(lang));
+      return true;
+    }
+
+    delete state.branch;
+    clearBookingAfterBranch(state);
+    await sendText(channel, senderId, isAr(lang) ? `أكيد، اختار الفرع المناسب:` : `Sure, please choose the branch:`, branchReplies(lang));
+    return true;
+  }
+
+  const staff = findStaffFromText(text);
+  if (isChangeStaffText(value) || staff) {
+    if (state.intent !== "service" && !staff) {
+      await sendText(channel, senderId, isAr(lang) ? `اختيار المختص متاح لمسار السيرفس. إذا بدك سيرفس اختار Service، أو كمل حجز الاستشارة.` : `Specialist selection is available for Service bookings. Choose Service, or continue your consultation booking.`, bookingReplies(lang));
+      return true;
+    }
+
+    if (staff) {
+      state.intent = "service";
+      state.branch = staff.branch;
+      state.staff = staff.canonical;
+      clearBookingAfterStaff(state);
+      await sendText(channel, senderId, isAr(lang) ? `تمام، اخترنا ${staff.canonical}.\nاختار اليوم المناسب:` : `Done, selected ${staff.canonical}.\nPlease choose the day:`, dayReplies(lang));
+      return true;
+    }
+
+    if (!state.branch) {
+      await sendText(channel, senderId, askBranchBody("service", lang), branchReplies(lang));
+      return true;
+    }
+
+    await sendText(channel, senderId, isAr(lang) ? `أكيد، اختار المختص المناسب:` : `Sure, please choose the specialist:`, staffReplies(state.branch, lang));
+    return true;
+  }
+
+  const detectedDay = findDayFromText(text);
+  if (isChangeDayText(value) || detectedDay) {
+    if (detectedDay) return sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, detectedDay });
+    delete state.day;
+    delete state.dayPayload;
+    clearBookingAfterDay(state);
+    await sendText(channel, senderId, isAr(lang) ? `أكيد، اختار اليوم المناسب:` : `Sure, please choose the day:`, dayReplies(lang));
+    return true;
+  }
+
+  if (isChangeTimeText(value)) {
+    if (state.dayPayload) {
+      await sendText(channel, senderId, isAr(lang) ? `أكيد، اختار وقت جديد من الأوقات المتاحة:` : `Sure, please choose a new available time:`, timeReplies(state.dayPayload, lang));
+      return true;
+    }
+
+    await sendText(channel, senderId, isAr(lang) ? `أكيد، اختار اليوم أولًا حتى نعرض الأوقات:` : `Sure, please choose the day first so we can show times:`, dayReplies(lang));
+    return true;
+  }
+
+  const next = contextualBookingPrompt(state, lang);
+  await sendText(channel, senderId, isAr(lang) ? `تمام، خلينا نكمل الحجز من هون:` : `Sure, let’s continue the booking from here:`, next.replies);
+  return true;
+}
+
+function welcomeBody(lang = "en") {
+  if (isAr(lang)) {
+    return `مرحبا 👋
+
+أنا مساعد Iconic Hair Care الذكي.
+
+اختار أحد الخيارات من القائمة، أو اكتب سؤالك مباشرة وأنا رح حاول أجاوبك.
+
+إذا ما قدرت أساعدك، بحوّلك لفريقنا.`;
+  }
+
+  return `Hello 👋
+
+I’m the smart assistant for Iconic Hair Care.
+
+Please choose one of the options below, or type your question directly and I’ll do my best to help.
+
+If I can’t help, I’ll connect you with our team.`;
 }
 
 function bookingBody(lang = "en") {
@@ -560,25 +890,105 @@ function detailsBody(lang = "en") {
 
 function smartIntentBody(intent, lang = "en") {
   const ar = {
-    price: `أكيد 👋\n\nالسعر يختلف حسب الحالة، والمساحة المطلوبة، ونوع الخدمة المناسبة لك.\n\nالأفضل نعمل لك استشارة بسيطة حتى نحدد الحل الأنسب والسعر بشكل واضح، بدون أي التزام.`,
-    surgery: `لا، الخدمة بدون جراحة وبدون عملية.\n\nهي حل غير جراحي يعطي مظهر طبيعي، ويتم داخل المركز بدون تدخل طبي جراحي.`,
-    natural: `نعم، هدفنا الأساسي أن يكون الشكل طبيعي جدًا ومناسب لملامحك.\n\nنختار الكثافة، اللون، والتصميم حسب شكل الوجه حتى ما يعطي مظهر صناعي.`,
-    duration: `مدة الجلسة تختلف حسب الحالة والخدمة المطلوبة.\n\nعادة يتم توضيح الوقت بعد الاستشارة، لأن كل حالة تختلف حسب المساحة والتفاصيل المطلوبة.`,
-    pain: `لا، الخدمة غير جراحية ولا تحتاج عملية.\n\nعادة تكون مريحة، والفريق يشرح لك كل خطوة قبل البدء.`,
-    booking: `أكيد 👋\n\nفينا نساعدك بحجز استشارة أو موعد خدمة.\n\nاختار نوع الحجز المناسب لك، والفريق يتابع معك التفاصيل.`,
-    location: `عندنا فرعين:\n\nDubai branch\nAbu Dhabi branch\n\nاختار الفرع المناسب لك حتى نرسل لك الموقع الصحيح.`,
-    team: `أكيد، رح نخلي أحد أعضاء الفريق يتابع معك.\n\nاكتب لنا سؤالك أو اختار الفرع المناسب حتى نوجهك بشكل أسرع.`
+    price: `أكيد 👋
+
+السعر يختلف حسب الحالة، والمساحة المطلوبة، ونوع الخدمة المناسبة لك.
+
+الأفضل نعمل لك استشارة بسيطة حتى نحدد الحل الأنسب والسعر بشكل واضح، بدون أي التزام.`,
+    surgery: `لا، الخدمة بدون جراحة وبدون عملية.
+
+هي حل غير جراحي يعطي مظهر طبيعي، ويتم داخل المركز بدون تدخل طبي جراحي.`,
+    natural: `نعم، هدفنا الأساسي أن يكون الشكل طبيعي جدًا ومناسب لملامحك.
+
+نختار الكثافة، اللون، والتصميم حسب شكل الوجه حتى ما يعطي مظهر صناعي.`,
+    duration: `مدة الجلسة تختلف حسب الحالة والخدمة المطلوبة.
+
+عادة يتم توضيح الوقت بعد الاستشارة، لأن كل حالة تختلف حسب المساحة والتفاصيل المطلوبة.`,
+    pain: `لا، الخدمة غير جراحية ولا تحتاج عملية.
+
+عادة تكون مريحة، والفريق يشرح لك كل خطوة قبل البدء.`,
+    booking: `أكيد 👋
+
+فينا نساعدك بحجز استشارة أو موعد سيرفس.
+
+اختار نوع الحجز المناسب لك، والفريق يتابع معك التفاصيل.`,
+    location: `عندنا فرعين:
+
+Dubai branch
+Abu Dhabi branch
+
+اختار الفرع المناسب لك حتى نرسل لك الموقع الصحيح.`,
+    team: `أكيد، رح نخلي أحد أعضاء الفريق يتابع معك.
+
+اكتب لنا سؤالك أو اختار الفرع المناسب حتى نوجهك بشكل أسرع.`,
+
+    suitability: `غالبًا نقدر نساعدك، لكن الأفضل نشوف حالتك بالاستشارة حتى نحدد الحل الأنسب لك بشكل واضح.`,
+    men_women: `نعم، خدماتنا مناسبة للرجال والنساء حسب الحالة واللوك المطلوب.`,
+    privacy: `خصوصيتك مهمة جدًا. كل شيء يتم داخل المركز وبطريقة مريحة وخاصة.`,
+    durability: `الثبات والمدة تختلف حسب الحالة وطريقة العناية ونوع الخدمة. الفريق يوضح لك التفاصيل بعد الاستشارة.`,
+    detectability: `هدفنا أن الشكل يكون طبيعي وما يبان كأنه تركيب، من خلال اختيار اللون والكثافة والتصميم المناسبين لك.`,
+    service_followup: `إذا أنت عميل حالي وتحتاج سيرفس أو متابعة، فينا نساعدك بحجز موعد سيرفس مباشرة.`,
+    consult_vs_service: `الاستشارة للعميل الجديد حتى نحدد الحل الأنسب.
+
+السيرفس للعميل الحالي الذي يحتاج متابعة أو تعديل أو زيارة.`,
+    branch_help: `عندنا فرع دبي وفرع أبوظبي. اختار الأقرب لك، وإذا محتار فريقنا يساعدك.`,
+    availability: `نقدر نساعدك بأقرب موعد متاح. اختار نوع الحجز والفرع، وبعدها نعرض الأيام والأوقات.`,
+    hesitation: `طبيعي تكون متردد. الاستشارة تساعدك تشوف الخيارات المناسبة لك بدون ضغط أو التزام.`,
+    free_consultation: `الاستشارة هدفها نحدد الحل المناسب لك ونوضح التفاصيل. الفريق يؤكد لك أي تفاصيل قبل الموعد.`,
+    color_density: `نختار اللون والكثافة والتصميم حسب شعرك وملامحك حتى تكون النتيجة طبيعية قدر الإمكان.`,
+    shaving: `موضوع الحلاقة يعتمد على الحالة والخدمة المناسبة. الفريق يوضح لك ذلك خلال الاستشارة قبل أي خطوة.`,
+    lifestyle: `بعد اختيار الحل المناسب وشرح طريقة العناية، تقدر تمارس حياتك بشكل طبيعي حسب تعليمات الفريق.`
   };
 
   const en = {
-    price: `Of course 👋\n\nThe price depends on your case, the area needed, and the best service option for you.\n\nThe best step is a quick consultation so we can recommend the right solution and give you a clear price with no obligation.`,
-    surgery: `No, it does not require surgery.\n\nIt is a non-surgical solution designed to give a natural look, done inside the center without a surgical procedure.`,
-    natural: `Yes, the main goal is a very natural look that suits your features.\n\nWe choose the density, color, and design based on your face shape so it does not look artificial.`,
-    duration: `The session duration depends on the case and the service needed.\n\nUsually, we confirm the time after the consultation because every case is different depending on the area and details required.`,
-    pain: `No, the service is non-surgical and does not require an operation.\n\nIt is usually comfortable, and the team explains every step before starting.`,
-    booking: `Sure 👋\n\nWe can help you book a consultation or a service appointment.\n\nChoose the right booking type, and the team will follow up with the details.`,
-    location: `We have two branches:\n\nDubai branch\nAbu Dhabi branch\n\nChoose the branch that suits you so we can send the correct location.`,
-    team: `Sure, one of our team members will follow up with you.\n\nPlease write your question or choose the right branch so we can guide you faster.`
+    price: `Of course 👋
+
+The price depends on your case, the area needed, and the best service option for you.
+
+The best step is a quick consultation so we can recommend the right solution and give you a clear price with no obligation.`,
+    surgery: `No, it does not require surgery.
+
+It is a non-surgical solution designed to give a natural look, done inside the center without a surgical procedure.`,
+    natural: `Yes, the main goal is a very natural look that suits your features.
+
+We choose the density, color, and design based on your face shape so it does not look artificial.`,
+    duration: `The session duration depends on the case and the service needed.
+
+Usually, we confirm the time after the consultation because every case is different depending on the area and details required.`,
+    pain: `No, the service is non-surgical and does not require an operation.
+
+It is usually comfortable, and the team explains every step before starting.`,
+    booking: `Sure 👋
+
+We can help you book a consultation or a service appointment.
+
+Choose the right booking type, and the team will follow up with the details.`,
+    location: `We have two branches:
+
+Dubai branch
+Abu Dhabi branch
+
+Choose the branch that suits you so we can send the correct location.`,
+    team: `Sure, one of our team members will follow up with you.
+
+Please write your question or choose the right branch so we can guide you faster.`,
+
+    suitability: `In most cases, we can help, but the best step is a consultation so we can check your case and recommend the right solution.`,
+    men_women: `Yes, our services are suitable for men and women depending on the case and desired look.`,
+    privacy: `Your privacy is very important. Everything is handled inside the center in a private and comfortable way.`,
+    durability: `Hold and durability depend on the case, care routine, and service type. Our team explains the details after consultation.`,
+    detectability: `Our goal is a natural look that does not appear artificial, by matching color, density, and design to you.`,
+    service_followup: `If you are an existing client and need service or follow-up, we can help you book a service appointment directly.`,
+    consult_vs_service: `Consultation is for new clients to find the best solution.
+
+Service is for existing clients who need follow-up, adjustment, or a visit.`,
+    branch_help: `We have Dubai and Abu Dhabi branches. Choose the closest one, or our team can guide you.`,
+    availability: `We can help with the nearest available appointment. Choose the booking type and branch, then we’ll show days and times.`,
+    hesitation: `It is normal to feel unsure. A consultation helps you understand your options clearly, with no pressure.`,
+    free_consultation: `The consultation is to check your case and explain the suitable solution. Our team can confirm any details before the appointment.`,
+    color_density: `We match color, density, and design to your natural hair and features for the most natural result possible.`,
+    shaving: `Shaving depends on your case and the suitable service. The team explains this during consultation before any step.`,
+    lifestyle: `After choosing the right solution and understanding the care steps, you can continue daily life according to the team’s guidance.`
   };
 
   return isAr(lang) ? ar[intent] : en[intent];
@@ -1048,6 +1458,12 @@ async function handleIncomingEvent(entry, event) {
     return;
   }
 
+  const handledDirectAppointment = await handleDirectAppointmentRequest({ channel, senderId, text, state, lang });
+  if (handledDirectAppointment) return;
+
+  const handledBookingContext = await handleBookingContextText({ channel, senderId, text, state, lang });
+  if (handledBookingContext) return;
+
   if (isConsult(text)) {
     state.intent = "consult";
     await sendText(channel, senderId, askBranchBody("consult", lang), branchReplies(lang));
@@ -1141,8 +1557,8 @@ app.get("/api/version", (req, res) => {
     staffNotifyConfigured: Boolean(STAFF_WHATSAPP_TOKEN && (DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID || STAFF_WHATSAPP_PHONE_NUMBER_ID)),
     smartIntentLayer: {
       enabled: true,
-      phase: 1,
-      intents: ["price", "results", "details", "surgery", "natural", "duration", "pain", "booking", "location", "team"]
+      phase: 2,
+      intents: ["price", "results", "details", "surgery", "natural", "duration", "pain", "booking", "location", "team", "suitability", "men_women", "privacy", "durability", "detectability", "service_followup", "consult_vs_service", "branch_help", "availability", "hesitation", "direct_appointment"]
     }
   });
 });
