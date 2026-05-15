@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-10-notify-once-per-new-message";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-7-11-internal-test-bot-reply-notification-safe";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -242,8 +242,9 @@ function normalizePhoneDigits(value) {
 // V31.5.8.60.3.2 - Staff/customer separation:
 // Numbers used for staff notifications or internal tests must never be treated
 // as customer conversations, reminder opt-ins, or live customer notifications.
-// V31.5.8.60.3.7.9: Also suppress the owner/internal test number ending 395
-// from Team Inbox unread counters and live notifications.
+// V31.5.8.60.3.7.11: Also suppress the owner/internal test number ending 395
+// from Team Inbox unread counters and live notifications only.
+// These numbers are still allowed through the bot workflow for testing.
 const DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS = "971569979163,395";
 
 function splitPhoneListToDigits(value) {
@@ -18342,14 +18343,17 @@ app.post("/webhook", async (req, res) => {
     const profileName = getWhatsAppCustomerName(value?.contacts?.[0]);
     const suppressedInternalText = getIncomingMessageText(message);
 
+    // V31.5.8.60.3.7.11:
+    // Internal staff/test numbers must be suppressed from Team Inbox live notifications,
+    // but they must NOT be skipped from the bot workflow. This lets the owner test
+    // the bot normally from a staff/test phone while avoiding repeated inbox alerts.
     if (isSuppressedCustomerNotificationNumber(from)) {
-      console.log("[Internal Staff/Test Number] inbound skipped before bot/customer workflow", {
+      console.log("[Internal Staff/Test Number] inbound allowed for bot workflow; inbox notification suppressed", {
         from,
         incomingPhoneNumberId,
         branch: lineConfig.branch,
         text: suppressedInternalText
       });
-      return res.sendStatus(200);
     }
 
       // V60.2.4 Services / Results / How it works premium route
