@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-19-staff-action-buttons-handler";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-20-staff-action-context-link-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -148,6 +148,7 @@ const STAFF_BOOKING_ALERT_TEMPLATE_HEADER_IMAGE_URL = (
 ).toString().trim();
 const pendingStaffTemplateFallbackByMessageId = new Map();
 const pendingStaffBookingActionsByStaffNumber = new Map();
+const pendingStaffBookingActionsByTemplateMessageId = new Map();
 
 
 // V31.5.8.34 - WhatsApp Dynamic Flow Booking Prep:
@@ -4298,6 +4299,80 @@ function getBookingRequestDetails(booking = {}) {
   };
 }
 
+function getMessageContextId(message = {}) {
+  return (message?.context?.id || "").toString().trim();
+}
+
+function cleanupStaffBookingActionContexts() {
+  const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+  for (const [id, context] of pendingStaffBookingActionsByTemplateMessageId.entries()) {
+    if ((context?.createdAt || 0) < cutoff) {
+      pendingStaffBookingActionsByTemplateMessageId.delete(id);
+    }
+  }
+}
+
+function rememberStaffBookingActionContextFromTemplateResult(templateResult = {}, context = {}) {
+  const messageId = getWhatsAppTemplateMessageId(templateResult?.result || {});
+  if (!messageId) return "";
+
+  const customerPhone = normalizePhoneDigits(context.customerPhone || context.flowData?.phone || "");
+  const staffNumber = normalizeWhatsAppRecipientDigits(context.staffNumber || "");
+
+  pendingStaffBookingActionsByTemplateMessageId.set(messageId, {
+    ...context,
+    staffNumber,
+    customerPhone,
+    branch: context.flowData?.branch || context.routing?.branch || "",
+    phoneNumberId: normalizePhoneNumberId(context.phoneNumberId || context.routing?.phoneNumberId || DUBAI_PHONE_NUMBER_ID),
+    createdAt: Date.now()
+  });
+  cleanupStaffBookingActionContexts();
+
+  console.log("[Staff Booking Action Context] linked template", JSON.stringify({
+    messageId,
+    staffNumber,
+    customerPhone,
+    branch: context.flowData?.branch || context.routing?.branch || "",
+    testOnly: Boolean(context.testOnly || context.routing?.testOnly)
+  }, null, 2));
+
+  return messageId;
+}
+
+async function findPendingBookingForStaffActionContext(context = {}, route = {}) {
+  const customerPhone = normalizePhoneDigits(context.customerPhone || context.flowData?.phone || "");
+  if (!customerPhone) return null;
+
+  const result = await loadBookingRequestsFromGoogleSheetFromServer();
+  const bookings = Array.isArray(result.bookingRequests) ? result.bookingRequests : [];
+  const branchValue = compactText(context.branch || context.flowData?.branch || route.branch || "Dubai");
+
+  const matches = bookings.filter((booking) => {
+    const bookingPhone = normalizePhoneDigits(booking.phone || "");
+    const bookingBranch = compactText(booking.branch || getBookingRequestDetails(booking).branch || "");
+    const sameBranch = branchValue.includes("abu")
+      ? bookingBranch.includes("abu")
+      : (!bookingBranch.includes("abu"));
+
+    return bookingPhone === customerPhone &&
+      sameBranch &&
+      isPendingBookingStatusValue(booking.status || "Pending");
+  });
+
+  matches.sort((a, b) => {
+    const rowA = Number(a.rowNumber || 0);
+    const rowB = Number(b.rowNumber || 0);
+    if (rowA !== rowB) return rowB - rowA;
+
+    const dateA = parseSheetDate(a.lastUpdated || a.date || "")?.getTime() || 0;
+    const dateB = parseSheetDate(b.lastUpdated || b.date || "")?.getTime() || 0;
+    return dateB - dateA;
+  });
+
+  return matches[0] || null;
+}
+
 function buildBookingDetailsNoteForCustomer(booking = {}, language = "en") {
   const details = getBookingRequestDetails(booking);
   const lines = [];
@@ -4528,7 +4603,7 @@ async function sendBookingActionUpdateToCustomer({ booking = {}, status = "", no
   return { ok: true, customerPhone, result: sendResult };
 }
 
-async function handleStaffBookingAction({ from, originalText = "", incomingPhoneNumberId = DUBAI_PHONE_NUMBER_ID }) {
+async function handleStaffBookingAction({ from, message = null, originalText = "", incomingPhoneNumberId = DUBAI_PHONE_NUMBER_ID }) {
   const route = getStaffActionRouteFromNumber(from, incomingPhoneNumberId);
   if (!route.isStaff) return false;
 
@@ -4569,19 +4644,66 @@ async function handleStaffBookingAction({ from, originalText = "", incomingPhone
 
   if (!action) return false;
 
-  const booking = await findLatestPendingBookingForStaffAction(route.branch);
-  if (!booking) {
+  const contextMessageId = getMessageContextId(message);
+  const linkedContext = contextMessageId
+    ? pendingStaffBookingActionsByTemplateMessageId.get(contextMessageId)
+    : null;
+
+  if (!linkedContext) {
     await sendStaffActionAck(
       route.staffNumber,
-      `No pending ${route.branch} booking request found for this action.\nPlease check Team Inbox.`,
+      `This staff action is not linked to a booking request.
+Please use the latest booking alert, or check Team Inbox.`,
       route
     );
-    console.log("[Staff Booking Action] no pending booking found", JSON.stringify({ staff: route.staffNumber, branch: route.branch, action }, null, 2));
+    console.log("[Staff Booking Action] missing linked context", JSON.stringify({
+      staff: route.staffNumber,
+      branch: route.branch,
+      action,
+      contextMessageId
+    }, null, 2));
     return true;
   }
 
-  const customerPhone = normalizePhoneDigits(booking.phone || "");
-  const phoneNumberId = normalizePhoneNumberId(booking.phoneNumberId || route.phoneNumberId);
+  if (linkedContext.testOnly || linkedContext.routing?.testOnly) {
+    await sendStaffActionAck(
+      route.staffNumber,
+      `Test button received ✅
+
+Action: ${text}
+No customer was notified because this was a template test.`,
+      route
+    );
+    console.log("[Staff Booking Action] test-only action ignored", JSON.stringify({
+      staff: route.staffNumber,
+      branch: route.branch,
+      action,
+      contextMessageId
+    }, null, 2));
+    return true;
+  }
+
+  const booking = await findPendingBookingForStaffActionContext(linkedContext, route);
+  if (!booking) {
+    const linkedPhone = normalizePhoneDigits(linkedContext.customerPhone || linkedContext.flowData?.phone || "");
+    await sendStaffActionAck(
+      route.staffNumber,
+      `No pending booking request found for the linked customer${linkedPhone ? ` ${linkedPhone}` : ""}.
+Please check Team Inbox.`,
+      route
+    );
+    console.log("[Staff Booking Action] no linked pending booking found", JSON.stringify({
+      staff: route.staffNumber,
+      branch: route.branch,
+      action,
+      contextMessageId,
+      linkedPhone
+    }, null, 2));
+    return true;
+  }
+
+  const customerPhone = normalizePhoneDigits(booking.phone || linkedContext.customerPhone || linkedContext.flowData?.phone || "");
+  const phoneNumberId = normalizePhoneNumberId(booking.phoneNumberId || linkedContext.phoneNumberId || route.phoneNumberId);
 
   console.log("[Staff Booking Action] received", JSON.stringify({
     staff: route.staffNumber,
@@ -4589,7 +4711,8 @@ async function handleStaffBookingAction({ from, originalText = "", incomingPhone
     action,
     customerPhone,
     rowNumber: booking.rowNumber || "",
-    phoneNumberId
+    phoneNumberId,
+    contextMessageId
   }, null, 2));
 
   if (action === "suggest_time") {
@@ -5740,10 +5863,23 @@ async function sendStaffBookingAlertTemplateMessage(to, flowData = {}, customerP
     result: templateResult?.result || null
   }, null, 2));
 
+  let actionContextMessageId = "";
+  if (templateResult?.ok) {
+    actionContextMessageId = rememberStaffBookingActionContextFromTemplateResult(templateResult, {
+      staffNumber: to,
+      flowData,
+      customerPhone,
+      phoneNumberId: finalPhoneNumberId,
+      routing,
+      testOnly: Boolean(routing?.testOnly)
+    });
+  }
+
   return {
     ...templateResult,
     templateName,
-    templateFallback: true
+    templateFallback: true,
+    actionContextMessageId
   };
 }
 
@@ -6782,7 +6918,8 @@ app.get("/api/staff-template/test", protectInbox, async (req, res) => {
       envName,
       branchEnvName: envName,
       fallbackUsed: !process.env[envName],
-      hasNumber: true
+      hasNumber: true,
+      testOnly: true
     };
 
     console.log(`[Staff Template Test] preparing template=${templateName} branch=${branch} fromPhoneNumberId=${phoneNumberId} to=${staffNumber} env=${envName}`);
@@ -20939,6 +21076,7 @@ app.post("/webhook", async (req, res) => {
 
     const staffActionHandled = await handleStaffBookingAction({
       from,
+      message,
       originalText,
       incomingPhoneNumberId
     });
