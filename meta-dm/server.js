@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-hard-dedupe-english-only";
+const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-prelock-dedupe-client-link";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -112,6 +112,7 @@ const ABU_DHABI_STAFF_NUMBER = (
 const conversationState = new Map();
 const staffNotificationCache = new Map();
 const staffWhatsAppSendCache = new Map();
+const staffSenderLockCache = new Map();
 const STAFF_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
 
 function normalizeText(value) {
@@ -1182,32 +1183,87 @@ function buildStaffNotificationKey(state, channel, senderId) {
   ].join("|");
 }
 
-function shouldSendStaffNotification(state, channel, senderId) {
-  const key = buildStaffNotificationKey(state, channel, senderId);
-  const now = Date.now();
-  const lastSentAt = staffNotificationCache.get(key) || 0;
+function buildStaffSenderLockKey(senderId) {
+  return `booking-alert|${senderId || "unknown"}`;
+}
 
+function pruneStaffNotificationCaches(now) {
   for (const [cacheKey, sentAt] of staffNotificationCache.entries()) {
     if (now - sentAt > STAFF_NOTIFICATION_DEDUPE_MS) staffNotificationCache.delete(cacheKey);
   }
 
+  for (const [cacheKey, sentAt] of staffSenderLockCache.entries()) {
+    if (now - sentAt > STAFF_NOTIFICATION_DEDUPE_MS) staffSenderLockCache.delete(cacheKey);
+  }
+}
+
+function shouldSendStaffNotification(state, channel, senderId) {
+  const key = buildStaffNotificationKey(state, channel, senderId);
+  const senderLockKey = buildStaffSenderLockKey(senderId);
+  const now = Date.now();
+  pruneStaffNotificationCaches(now);
+
+  const lastSenderAlertAt = staffSenderLockCache.get(senderLockKey) || 0;
+  if (now - lastSenderAlertAt < STAFF_NOTIFICATION_DEDUPE_MS) {
+    console.log("[Staff Notify] skipped duplicate sender booking alert", senderLockKey);
+    return false;
+  }
+
+  const lastSentAt = staffNotificationCache.get(key) || 0;
   if (now - lastSentAt < STAFF_NOTIFICATION_DEDUPE_MS) {
     console.log("[Staff Notify] skipped duplicate booking alert", key);
     return false;
   }
 
+  // Pre-lock before any async WhatsApp send, so duplicate webhook events arriving
+  // at the same time cannot send the staff alert twice.
+  staffSenderLockCache.set(senderLockKey, now);
   staffNotificationCache.set(key, now);
   return true;
+}
+
+function formatStaffAlertDay(day) {
+  const raw = (day || "Not selected").toString().trim();
+  const firstPart = raw.split("|")[0].trim();
+  const value = firstPart || raw;
+  const normalized = normalizeText(value);
+
+  const dayMap = {
+    "اليوم": "Today",
+    "بكرا": "Tomorrow",
+    "غدا": "Tomorrow",
+    "غداً": "Tomorrow",
+    "هذا الأسبوع": "This week",
+    "هدا الأسبوع": "This week",
+    "الاثنين": "Monday",
+    "الإثنين": "Monday",
+    "الثلاثاء": "Tuesday",
+    "الأربعاء": "Wednesday",
+    "الاربعاء": "Wednesday",
+    "الخميس": "Thursday",
+    "الجمعة": "Friday",
+    "السبت": "Saturday",
+    "الأحد": "Sunday",
+    "الاحد": "Sunday"
+  };
+
+  return dayMap[normalized] || value;
+}
+
+function buildMetaInboxLink() {
+  const pageId = MESSENGER_PAGE_ID || "128849967688872";
+  return `https://business.facebook.com/latest/inbox/all?asset_id=${encodeURIComponent(pageId)}`;
 }
 
 function buildStaffBookingAlert(state, channel, senderId) {
   const isServiceRequest = state.intent === "service";
   const requestType = isServiceRequest ? "Service Appointment" : "Consultation Booking";
   const branch = state.branch || "Dubai";
-  const day = state.day || "Not selected";
+  const day = formatStaffAlertDay(state.day || "Not selected");
   const time = state.time || "Flexible";
   const staff = state.staff || "Not selected";
   const greeting = branch === "Dubai" ? "Hello Angel," : "Hello Abu Dhabi team,";
+  const inboxLink = buildMetaInboxLink();
 
   return `${greeting}
 
@@ -1221,6 +1277,9 @@ Request type: ${requestType}
 Specialist: ${staff}
 Day: ${day}
 Time: ${time}
+
+Open client conversation:
+${inboxLink}
 
 Meta customer ID:
 ${senderId}
