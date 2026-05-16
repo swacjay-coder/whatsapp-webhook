@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-full-cycle-language-buttons-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-appointment-intent-language-cta-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -131,20 +131,15 @@ function isPayloadOnly(text) {
 function getTurnLanguage(text, state) {
   const raw = (text || "").toString().trim();
 
-  if (isPayloadOnly(raw) && state?.lang) return state.lang;
   if (isArabic(raw)) return "ar";
+  if (isPayloadOnly(raw) && state?.lang) return state.lang;
+  if (/[A-Za-z]/.test(raw)) return "en";
 
   const value = normalizeText(raw);
-  // If the customer clearly writes with Latin characters, answer in English even if
-  // the previous conversation state was Arabic.
-  if (/[a-z]/i.test(raw)) return "en";
-
   if (
     value.includes("hello") ||
     value.includes("hi") ||
-    value.includes("book") ||
     value.includes("booking") ||
-    value.includes("appointment") ||
     value.includes("service") ||
     value.includes("consult") ||
     value.includes("results") ||
@@ -212,15 +207,8 @@ function detailsReplies(lang = "en") {
     : [quickReply("Results", "RESULTS"), quickReply("Booking", "BOOKING"), quickReply("Team", "TEAM")];
 }
 
-function priceReplies(lang = "en") {
-  return isAr(lang)
-    ? [quickReply("استشارة", "CONSULT"), quickReply("نتائج", "RESULTS"), quickReply("فريقنا", "TEAM")]
-    : [quickReply("Consult", "CONSULT"), quickReply("Results", "RESULTS"), quickReply("Team", "TEAM")];
-}
-
 function intentReplies(intent, lang = "en") {
   if (intent === "booking") return bookingReplies(lang);
-  if (intent === "price") return priceReplies(lang);
   if (intent === "location") {
     return isAr(lang)
       ? [quickReply("دبي", "BRANCH_DUBAI"), quickReply("أبوظبي", "BRANCH_ABUDHABI"), quickReply("حجز", "BOOKING")]
@@ -233,6 +221,11 @@ function intentReplies(intent, lang = "en") {
   }
   if (intent === "details") return detailsReplies(lang);
   if (intent === "results") return resultsReplies(lang);
+  if (intent === "price") {
+    return isAr(lang)
+      ? [quickReply("استشارة", "CONSULT"), quickReply("نتائج", "RESULTS"), quickReply("فريقنا", "TEAM")]
+      : [quickReply("Consult", "CONSULT"), quickReply("Results", "RESULTS"), quickReply("Team", "TEAM")];
+  }
   return isAr(lang)
     ? [quickReply("حجز", "BOOKING"), quickReply("نتائج", "RESULTS"), quickReply("فريقنا", "TEAM")]
     : [quickReply("Booking", "BOOKING"), quickReply("Results", "RESULTS"), quickReply("Team", "TEAM")];
@@ -452,6 +445,34 @@ function isBooking(text) {
   const value = normalizeText(text);
   return ["booking", "book", "حجز", "موعد", "booking | حجز", "book appointment"].includes(value) ||
     value.includes("احجز") || value.includes("appointment") || value.includes("استشارة") || value.includes("استشاره");
+}
+
+function isExplicitConsultationRequest(text) {
+  const value = normalizeText(text);
+  return includesAny(value, ["consult", "consultation", "استشارة", "استشاره"]);
+}
+
+function isAppointmentRequestWithoutDetails(text) {
+  const value = normalizeText(text);
+  if (isExplicitConsultationRequest(value)) return false;
+  if (!includesAny(value, ["appointment", "book appointment", "موعد", "احجز", "حجز", "بدي حجز", "بدي موعد"])) return false;
+  return !findStaffFromText(value) && !findDayFromText(value) && !findBranchFromText(value) && !findTimeFromText(value);
+}
+
+function appointmentBookingBody(lang = "en") {
+  if (isAr(lang)) {
+    return `أكيد 👋
+
+فينا نساعدك بحجز موعد.
+
+اختار الفرع المناسب حتى نكمل الحجز:`;
+  }
+
+  return `Sure 👋
+
+We can help you book an appointment.
+
+Please choose the branch to continue:`;
 }
 
 function isConsult(text) {
@@ -1213,103 +1234,18 @@ function askTimeBody(dayPayload, lang = "en") {
   return isAr(lang) ? `تمام، اختر الوقت المفضل حسب توقيت دبي:` : `Great, please choose your preferred time based on Dubai time:`;
 }
 
-function displayBranchForLang(branch = "Dubai", lang = "en") {
-  if (!isAr(lang)) return branch || "Dubai";
-  return branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
-}
-
-function displayStaffForLang(staff = "", lang = "en") {
-  if (!staff) return isAr(lang) ? "غير محدد" : "Not selected";
-  if (!isAr(lang)) return staff;
-  const names = {
-    Ahmad: "أحمد",
-    Wael: "وائل",
-    Tamer: "تامر",
-    Bashir: "بشير",
-    Emad: "عماد",
-    Hamouda: "حمودة",
-    Ani: "آني",
-    Omar: "عمر",
-    Osama: "أسامة",
-    Adham: "أدهم",
-    "Any available specialist": "أي مختص متاح"
-  };
-  return names[staff] || staff;
-}
-
-function displayDayForLang(state = {}, lang = "en") {
-  const raw = (state.day || "").toString();
-  const payload = (state.dayPayload || "").toString();
-
-  if (!raw && !payload) return isAr(lang) ? "غير محدد" : "Not selected";
-
-  if (payload === "DAY_TODAY" || /today|اليوم/i.test(raw)) return isAr(lang) ? "اليوم" : "Today";
-  if (payload === "DAY_TOMORROW" || /tomorrow|بكرا|غدا|غداً/i.test(raw)) return isAr(lang) ? "بكرا" : "Tomorrow";
-  if (payload === "DAY_WEEK" && /this week|هذا الأسبوع|هدا الأسبوع|هالأسبوع/i.test(raw)) return isAr(lang) ? "هذا الأسبوع" : "This week";
-
-  const weekdays = [
-    { en: "Monday", ar: "الاثنين", re: /monday|الاثنين|الإثنين/i },
-    { en: "Tuesday", ar: "الثلاثاء", re: /tuesday|الثلاثاء/i },
-    { en: "Wednesday", ar: "الأربعاء", re: /wednesday|الأربعاء|الاربعاء/i },
-    { en: "Thursday", ar: "الخميس", re: /thursday|الخميس/i },
-    { en: "Friday", ar: "الجمعة", re: /friday|الجمعة/i },
-    { en: "Saturday", ar: "السبت", re: /saturday|السبت/i },
-    { en: "Sunday", ar: "الأحد", re: /sunday|الأحد|الاحد/i }
-  ];
-  const matched = weekdays.find((day) => day.re.test(raw));
-  if (matched) return isAr(lang) ? matched.ar : matched.en;
-
-  // Remove bilingual separators such as "Tomorrow | بكرا" if any remain.
-  if (raw.includes("|")) {
-    const parts = raw.split("|").map((part) => part.trim()).filter(Boolean);
-    return isAr(lang) ? (parts[1] || parts[0]) : (parts[0] || parts[1]);
-  }
-
-  return raw;
-}
-
-function displayTimeForLang(time = "", lang = "en") {
-  const raw = (time || "").toString().trim();
-  if (!raw) return isAr(lang) ? "مرن" : "Flexible";
-  if (/flexible|مرن/i.test(raw)) return isAr(lang) ? "مرن" : "Flexible";
-
-  const amPmFirst = raw.match(/^(AM|PM)\s+(\d{1,2})(?::([0-5]\d))?$/i);
-  if (amPmFirst) {
-    const minute = amPmFirst[3] || "00";
-    return `${amPmFirst[2]}:${minute} ${amPmFirst[1].toUpperCase()}`;
-  }
-
-  return raw;
-}
-
 function finalSummaryBody(state, lang = "en") {
   const branch = state.branch || "Dubai";
-  const branchLabel = displayBranchForLang(branch, lang);
-  const dayLabel = displayDayForLang(state, lang);
-  const timeLabel = displayTimeForLang(state.time, lang);
-  const staffLabel = displayStaffForLang(state.staff, lang);
+  const branchAr = branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
+  const day = state.day || (isAr(lang) ? "غير محدد" : "Not selected");
+  const time = state.time || (isAr(lang) ? "مرن" : "Flexible");
+  const staff = state.staff || (isAr(lang) ? "غير محدد" : "Not selected");
 
   if (isAr(lang)) {
-    return `⚠️ تم استلام طلب الحجز، لكنه ليس تأكيدًا نهائيًا بعد.
-
-تفاصيل الطلب:
-الفرع: ${branchLabel}
-المختص: ${staffLabel}
-اليوم: ${dayLabel}
-الوقت: ${timeLabel}
-
-سيقوم الفريق بمراجعة توفر الوقت والمختص، وسنرجع لك خلال 2 إلى 5 دقائق لتأكيد الموعد.`;
+    return `⚠️ تم استلام طلب الحجز، لكنه ليس تأكيدًا نهائيًا بعد.\n\nتفاصيل الطلب:\nالفرع: ${branchAr}\nالمختص: ${staff}\nاليوم: ${day}\nالوقت: ${time}\n\nسيقوم الفريق بمراجعة توفر الوقت والمختص، وسنرجع لك خلال 2 إلى 5 دقائق لتأكيد الموعد.`;
   }
 
-  return `⚠️ Your booking request has been received, but it is not confirmed yet.
-
-Request details:
-Branch: ${branchLabel}
-Specialist: ${staffLabel}
-Day: ${dayLabel}
-Time: ${timeLabel}
-
-Our team will check the availability of the time and specialist, and we’ll get back to you within 2 to 5 minutes to confirm the appointment.`;
+  return `⚠️ Your booking request has been received, but it is not confirmed yet.\n\nRequest details:\nBranch: ${branch}\nSpecialist: ${staff}\nDay: ${day}\nTime: ${time}\n\nOur team will check the availability of the time and specialist, and we’ll get back to you within 2 to 5 minutes to confirm the appointment.`;
 }
 
 
@@ -1848,6 +1784,12 @@ async function handleSmartIntent({ channel, senderId, text, state, lang }) {
   }
 
   if (intent === "booking") {
+    if (isAppointmentRequestWithoutDetails(text)) {
+      state.intent = "service";
+      await sendText(channel, senderId, appointmentBookingBody(lang), branchReplies(lang));
+      return true;
+    }
+
     state.intent = "booking";
     await sendText(channel, senderId, smartIntentBody("booking", lang), bookingReplies(lang));
     return true;
@@ -1972,6 +1914,12 @@ async function handleIncomingEvent(entry, event) {
   if (handledIntent) return;
 
   if (isBooking(intentText)) {
+    if (isAppointmentRequestWithoutDetails(intentText)) {
+      state.intent = "service";
+      await sendText(channel, senderId, appointmentBookingBody(lang), branchReplies(lang));
+      return;
+    }
+
     state.intent = "booking";
     await sendText(channel, senderId, bookingBody(lang), bookingReplies(lang));
     return;
