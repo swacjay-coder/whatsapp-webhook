@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-single-source-dedupe";
+const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-instagram-inbox-link";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -1247,9 +1247,8 @@ function formatStaffAlertDay(day) {
   return dayMap[normalized] || value;
 }
 
-function buildMetaInboxLink() {
-  const pageId = MESSENGER_PAGE_ID || "128849967688872";
-  return `https://business.facebook.com/latest/inbox/all?asset_id=${encodeURIComponent(pageId)}`;
+function buildInstagramInboxLink() {
+  return "https://www.instagram.com/direct/inbox/";
 }
 
 function buildStaffBookingAlert(state, channel, senderId) {
@@ -1260,7 +1259,7 @@ function buildStaffBookingAlert(state, channel, senderId) {
   const time = state.time || "Flexible";
   const staff = state.staff || "Not selected";
   const greeting = branch === "Dubai" ? "Hello Angel," : "Hello Abu Dhabi team,";
-  const inboxLink = buildMetaInboxLink();
+  const inboxLink = buildInstagramInboxLink();
 
   return `${greeting}
 
@@ -1275,7 +1274,7 @@ Specialist: ${staff}
 Day: ${day}
 Time: ${time}
 
-Open client conversation:
+Open Instagram inbox:
 ${inboxLink}
 
 Meta customer ID:
