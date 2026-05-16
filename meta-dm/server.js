@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-instagram-inbox-link";
+const BOT_VERSION = "iconic-meta-dm-v1-greeting-intent-location-context-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -365,6 +365,30 @@ function isSalamGreeting(text) {
 function isMarhabaGreeting(text) {
   const value = normalizeText(text);
   return value.includes("مرحبا") || value === "هلا" || value === "هاي";
+}
+
+function stripLeadingGreeting(text) {
+  let value = (text || "").toString().trim();
+  if (!value) return value;
+
+  const patterns = [
+    /^(السلام\s+عليكم\s+ورحمة\s+الله\s+وبركاته|السلام\s+عليكم\s+ورحمة\s+الله|السلام\s+عليكم|سلام\s+عليكم)\s*[،,.!؟?\-:]*\s*/i,
+    /^(مرحبا|مراحب|هلا|هاي)\s*[،,.!؟?\-:]*\s*/i,
+    /^(hello|hi|hey)\s*[،,.!؟?\-:]*\s*/i
+  ];
+
+  for (const pattern of patterns) {
+    const stripped = value.replace(pattern, "").trim();
+    if (stripped !== value && stripped.length > 0) return stripped;
+  }
+
+  return value;
+}
+
+function hasGreetingWithIntent(text) {
+  const raw = (text || "").toString().trim();
+  const stripped = stripLeadingGreeting(raw);
+  return Boolean(raw && stripped && stripped !== raw);
 }
 
 function greetingBody(text, lang = "en") {
@@ -1723,68 +1747,78 @@ async function handleIncomingEvent(entry, event) {
   const lang = getTurnLanguage(text, state);
   state.lang = lang;
 
+  const intentText = hasGreetingWithIntent(text) ? stripLeadingGreeting(text) : text;
+
   const payload = isPayloadOnly(text) ? text.toUpperCase().trim() : "";
   if (payload) {
     const handledPayload = await handlePayload({ channel, senderId, payload, state, lang });
     if (handledPayload) return;
   }
 
-  if (isGreeting(text)) {
+  if (isGreeting(text) && !hasGreetingWithIntent(text)) {
     await sendText(channel, senderId, greetingBody(text, lang), mainReplies(lang));
     return;
   }
 
-  const handledDirectAppointment = await handleDirectAppointmentRequest({ channel, senderId, text, state, lang });
+  const handledDirectAppointment = await handleDirectAppointmentRequest({ channel, senderId, text: intentText, state, lang });
   if (handledDirectAppointment) return;
 
-  const handledBookingContext = await handleBookingContextText({ channel, senderId, text, state, lang });
+  if (isLocation(intentText)) {
+    const requestedBranch = findBranchFromText(intentText);
+    if (requestedBranch) {
+      resetState(senderId);
+      await sendText(channel, senderId, locationBody(requestedBranch, lang), intentReplies("location", lang));
+      return;
+    }
+
+    state.intent = "location";
+    state.lang = lang;
+    await sendText(channel, senderId, smartIntentBody("location", lang), intentReplies("location", lang));
+    return;
+  }
+
+  const handledBookingContext = await handleBookingContextText({ channel, senderId, text: intentText, state, lang });
   if (handledBookingContext) return;
 
-  if (isConsult(text)) {
+  if (isConsult(intentText)) {
     state.intent = "consult";
     await sendText(channel, senderId, askBranchBody("consult", lang), branchReplies(lang));
     return;
   }
 
-  if (isService(text)) {
+  if (isService(intentText)) {
     state.intent = "service";
     await sendText(channel, senderId, askBranchBody("service", lang), branchReplies(lang));
     return;
   }
 
-  const handledIntent = await handleSmartIntent({ channel, senderId, text, state, lang });
+  const handledIntent = await handleSmartIntent({ channel, senderId, text: intentText, state, lang });
   if (handledIntent) return;
 
-  if (isBooking(text)) {
+  if (isBooking(intentText)) {
     state.intent = "booking";
     await sendText(channel, senderId, bookingBody(lang), bookingReplies(lang));
     return;
   }
 
-  if (isServices(text)) {
+  if (isServices(intentText)) {
     await sendText(channel, senderId, servicesBody(lang), servicesReplies(lang));
     return;
   }
 
-  if (isResults(text)) {
+  if (isResults(intentText)) {
     await sendResultsContent(channel, senderId, lang);
     await sendText(channel, senderId, resultsBody(lang), resultsReplies(lang));
     return;
   }
 
-  if (isDetails(text)) {
+  if (isDetails(intentText)) {
     await sendDetailsContent(channel, senderId, lang);
     await sendText(channel, senderId, detailsBody(lang), detailsReplies(lang));
     return;
   }
 
-  if (isLocation(text)) {
-    state.intent = "location";
-    await sendText(channel, senderId, askBranchBody("location", lang), branchReplies(lang));
-    return;
-  }
-
-  if (isTeam(text)) {
+  if (isTeam(intentText)) {
     await sendText(channel, senderId, teamBody(lang), mainReplies(lang));
     return;
   }
