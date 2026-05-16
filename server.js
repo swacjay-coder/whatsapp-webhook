@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-14-real-customer-intents-upgrade";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-15-reminder-language-split";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -3164,10 +3164,17 @@ function buildWhatsAppFlowConfirmationBody(flowData = {}, language = "en") {
   ].filter((line) => line !== "").join(String.fromCharCode(10));
 }
 
-function getAppointmentReminderOptInButtons() {
+function getAppointmentReminderOptInButtons(language = "en") {
+  if (language === "ar") {
+    return [
+      { id: "appointment_reminder_yes", title: "ذكرني" },
+      { id: "appointment_reminder_no", title: "لا" }
+    ];
+  }
+
   return [
-    { id: "appointment_reminder_yes", title: "أي | نعم" },
-    { id: "appointment_reminder_no", title: "لا | No" }
+    { id: "appointment_reminder_yes", title: "Remind Me" },
+    { id: "appointment_reminder_no", title: "No Reminder" }
   ];
 }
 
@@ -3175,9 +3182,15 @@ function isAppointmentReminderYesText(text) {
   const value = compactText(text);
   if (!value) return false;
 
-  // Do not treat a plain typed "yes" as a 1-hour appointment reminder opt-in.
-  // Plain YES can belong to the separate 20-day service follow-up consent flow.
+  // Keep the 1-hour reminder flow tied to the explicit reminder buttons/titles.
+  // This avoids confusing it with the separate service follow-up consent flow.
   return value === "appointment_reminder_yes" ||
+    value === "remind me" ||
+    value === "reminder yes" ||
+    value === "yes reminder" ||
+    value === "ذكرني" ||
+    value === "ذكرني قبل الموعد" ||
+    value === "تذكير" ||
     value === "أي | نعم" ||
     value === "اي | نعم" ||
     value === "yes | نعم";
@@ -3187,9 +3200,12 @@ function isAppointmentReminderNoText(text) {
   const value = compactText(text);
   if (!value) return false;
 
-  // Same separation rule: only the explicit appointment reminder button/title
-  // controls the 1-hour appointment reminder flow.
   return value === "appointment_reminder_no" ||
+    value === "no reminder" ||
+    value === "do not remind" ||
+    value === "لا" ||
+    value === "لا تذكرني" ||
+    value === "بدون تذكير" ||
     value === "لا | no" ||
     value === "no | لا";
 }
@@ -3213,17 +3229,42 @@ function isApprovedBookingStatus(status = "") {
   return value.includes("approved") || value.includes("confirmed");
 }
 
-function buildAppointmentReminderNotConfirmedBody(customerName = "") {
+function buildAppointmentReminderNotConfirmedBody(customerName = "", language = "en") {
   const cleanName = cleanCustomerName(customerName);
-  const intro = cleanName ? `تمام ${cleanName}` : "تمام";
 
-  return `${intro}، طلب الموعد لا يزال بانتظار تأكيد الفريق.\n\n` +
-    "تذكير الموعد قبل ساعة لا يتفعّل إلا بعد تأكيد الموعد النهائي من الفريق ✅\n\n" +
-    "------------------------------\n\n" +
-    "Your appointment request is still pending team confirmation.\n\n" +
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName}` : "تمام";
+    return `${intro}، طلب الموعد لا يزال بانتظار تأكيد الفريق.\n\n` +
+      "تذكير الموعد قبل ساعة لا يتفعّل إلا بعد تأكيد الموعد النهائي من الفريق ✅";
+  }
+
+  return "Your appointment request is still pending team confirmation.\n\n" +
     "The 1-hour appointment reminder is activated only after the team confirms the final appointment ✅";
 }
 
+function buildAppointmentReminderActiveBody(customerName = "", language = "en") {
+  const cleanName = cleanCustomerName(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName}، تم تفعيل تذكير الموعد ✅` : "تم تفعيل تذكير الموعد ✅";
+    return `${intro}\n\nسنذكّرك قبل موعدك بساعة.`;
+  }
+
+  const intro = cleanName ? `Done ${cleanName} ✅` : "Done ✅";
+  return `${intro}\n\nYour 1-hour appointment reminder is active.`;
+}
+
+function buildAppointmentReminderDeclinedBody(customerName = "", language = "en") {
+  const cleanName = cleanCustomerName(customerName);
+
+  if (language === "ar") {
+    return cleanName
+      ? `تمام ${cleanName}، لن نرسل تذكير لهذا الموعد.`
+      : "تمام، لن نرسل تذكير لهذا الموعد.";
+  }
+
+  return "No problem. We will not send a reminder for this appointment.";
+}
 
 async function handleWhatsAppFlowBookingSubmit({
   from,
@@ -5545,118 +5586,121 @@ async function updateBookingRequestStatusInGoogleSheetFromServer({ rowNumber, ph
   }
 }
 
-function buildBookingCustomerUpdateBody(status, notes = "") {
+function buildBookingCustomerUpdateBody(status, notes = "", language = "en") {
   const cleanStatus = (status || "").toString().trim();
   const statusValue = cleanStatus.toLowerCase();
   const cleanNotes = (notes || "").toString().trim();
+  const isArabic = language === "ar";
 
   if (!cleanStatus) {
-    return { ok: false, error: "Please choose an update action before sending it to the customer." };
+    return { ok: false, error: isArabic ? "اختر إجراء تحديث الموعد قبل إرساله للعميل." : "Please choose an update action before sending it to the customer." };
   }
 
   if (statusValue.includes("suggest")) {
     if (!cleanNotes) {
       return {
         ok: false,
-        error: "Please add the suggested appointment time in the team note first."
+        error: isArabic ? "أضف الوقت المقترح في ملاحظة الفريق أولاً." : "Please add the suggested appointment time in the team note first."
       };
     }
 
     return {
       ok: true,
-      body: [
-        BUSINESS_NAME_SPACED + " ✨",
-        "",
-        "شكراً لك.",
-        "راجع فريقنا طلب الموعد، وهذا الوقت المقترح لك:",
-        "",
-        cleanNotes,
-        "",
-        "إذا كان الوقت مناسباً، يرجى الرد على هذه الرسالة للتأكيد.",
-        "",
-        "------------------------------",
-        "",
-        BUSINESS_NAME_SPACED + " ✨",
-        "",
-        "Thank you.",
-        "Our team reviewed your appointment request, and this is the suggested time:",
-        "",
-        cleanNotes,
-        "",
-        "If this time works for you, please reply to confirm."
-      ].join("\n")
+      body: isArabic
+        ? [
+            BUSINESS_NAME_SPACED + " ✨",
+            "",
+            "شكراً لك.",
+            "راجع فريقنا طلب الموعد، وهذا الوقت المقترح لك:",
+            "",
+            cleanNotes,
+            "",
+            "إذا كان الوقت مناسباً، يرجى الرد على هذه الرسالة للتأكيد."
+          ].join("\n")
+        : [
+            BUSINESS_NAME_SPACED + " ✨",
+            "",
+            "Thank you.",
+            "Our team reviewed your appointment request, and this is the suggested time:",
+            "",
+            cleanNotes,
+            "",
+            "If this time works for you, please reply to confirm."
+          ].join("\n")
     };
   }
 
-  if (statusValue.includes("approved")) {
+  if (statusValue.includes("approved") || statusValue.includes("confirmed")) {
     return {
       ok: true,
-      buttons: getAppointmentReminderOptInButtons(),
-      body: [
-        BUSINESS_NAME_SPACED + " ✨",
-        "",
-        "تم تأكيد موعدك من طرف فريقنا ✅",
-        cleanNotes ? "تفاصيل الموعد:" : "",
-        cleanNotes ? cleanNotes : "",
-        "",
-        "هل تحب نذكّرك قبل موعدك بساعة؟",
-        "اضغط: أي | نعم لتفعيل تذكير الموعد قبل ساعة.",
-        "",
-        "------------------------------",
-        "",
-        BUSINESS_NAME_SPACED + " ✨",
-        "",
-        "Your appointment has been confirmed by our team ✅",
-        cleanNotes ? "Appointment details:" : "",
-        cleanNotes ? cleanNotes : "",
-        "",
-        "Would you like us to remind you 1 hour before your appointment?",
-        "Tap: أي | نعم to activate the 1-hour appointment reminder."
-      ].filter((line) => line !== "").join("\n")
+      buttons: getAppointmentReminderOptInButtons(language),
+      body: isArabic
+        ? [
+            BUSINESS_NAME_SPACED + " ✨",
+            "",
+            "تم تأكيد موعدك من طرف فريقنا ✅",
+            cleanNotes ? "تفاصيل الموعد:" : "",
+            cleanNotes ? cleanNotes : "",
+            "",
+            "هل تحب نذكّرك قبل موعدك بساعة؟",
+            "اضغط زر \"ذكرني\" لتفعيل تذكير الموعد قبل ساعة."
+          ].filter((line) => line !== "").join("\n")
+        : [
+            BUSINESS_NAME_SPACED + " ✨",
+            "",
+            "Your appointment has been confirmed by our team ✅",
+            cleanNotes ? "Appointment details:" : "",
+            cleanNotes ? cleanNotes : "",
+            "",
+            "Would you like us to remind you 1 hour before your appointment?",
+            "Tap \"Remind Me\" to activate the 1-hour appointment reminder."
+          ].filter((line) => line !== "").join("\n")
     };
   }
 
   if (statusValue.includes("follow")) {
     return {
       ok: true,
-      body: [
-        BUSINESS_NAME_SPACED + " ✨",
-        "",
-        "طلبك قيد المتابعة من فريقنا.",
-        "سنراجع التفاصيل ونعود إليك قريباً بالتحديث المناسب.",
-        "",
-        "------------------------------",
-        "",
-        BUSINESS_NAME_SPACED + " ✨",
-        "",
-        "Your request is being followed up by our team.",
-        "We will review the details and get back to you shortly."
-      ].join("\n")
+      body: isArabic
+        ? [
+            BUSINESS_NAME_SPACED + " ✨",
+            "",
+            "طلبك قيد المتابعة من فريقنا.",
+            "سنراجع التفاصيل ونعود إليك قريباً بالتحديث المناسب."
+          ].join("\n")
+        : [
+            BUSINESS_NAME_SPACED + " ✨",
+            "",
+            "Your request is being followed up by our team.",
+            "We will review the details and get back to you shortly."
+          ].join("\n")
     };
   }
 
   if (statusValue.includes("cancel")) {
     return {
       ok: true,
-      body: [
-        BUSINESS_NAME_SPACED + " ✨",
-        "",
-        "تم تحديث طلب الموعد الحالي.",
-        "إذا رغبت بالمساعدة أو اختيار وقت آخر، يمكنك الرد هنا في أي وقت.",
-        "",
-        "------------------------------",
-        "",
-        BUSINESS_NAME_SPACED + " ✨",
-        "",
-        "Your current appointment request has been updated.",
-        "If you would like help or another time option, you can reply here anytime."
-      ].join("\n")
+      body: isArabic
+        ? [
+            BUSINESS_NAME_SPACED + " ✨",
+            "",
+            "تم تحديث طلب الموعد الحالي.",
+            "إذا رغبت بالمساعدة أو اختيار وقت آخر، يمكنك الرد هنا في أي وقت."
+          ].join("\n")
+        : [
+            BUSINESS_NAME_SPACED + " ✨",
+            "",
+            "Your current appointment request has been updated.",
+            "If you would like help or another time option, you can reply here anytime."
+          ].join("\n")
     };
   }
 
   return {
     ok: false,
-    error: "Choose Confirm booking, Suggest another time, Mark for follow-up, or Cancel request before sending an update."
+    error: isArabic
+      ? "اختر Confirm booking أو Suggest another time أو Mark for follow-up أو Cancel request قبل إرسال التحديث."
+      : "Choose Confirm booking, Suggest another time, Mark for follow-up, or Cancel request before sending an update."
   };
 }
 
@@ -6228,14 +6272,14 @@ app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
       return res.status(400).json({ ok: false, error: "Missing customer phone" });
     }
 
-    const messageBuild = buildBookingCustomerUpdateBody(status, notes);
+    const replyLanguage = getConversationLanguage(to);
+    const messageBuild = buildBookingCustomerUpdateBody(status, notes, replyLanguage);
 
     if (!messageBuild.ok) {
       return res.status(400).json(messageBuild);
     }
 
     const updateButtons = Array.isArray(messageBuild.buttons) ? messageBuild.buttons : [];
-    const replyLanguage = getConversationLanguage(to);
     const localizedUpdateBody = cleanLocalizedReplyBody(messageBuild.body, replyLanguage);
     const localizedUpdateButtons = localizeReplyButtons(updateButtons, replyLanguage);
     const sendResult = localizedUpdateButtons.length > 0
@@ -20134,7 +20178,7 @@ app.post("/webhook", async (req, res) => {
       const currentAppointmentStatus = conversationStatus[from] || await getSavedConversationStatusForPhone(from, incomingPhoneNumberId);
 
       if (!isConfirmedAppointmentStatus(currentAppointmentStatus)) {
-        const notConfirmedBody = buildAppointmentReminderNotConfirmedBody(profileName);
+        const notConfirmedBody = buildAppointmentReminderNotConfirmedBody(profileName, replyLanguage);
         await sendWhatsAppMessage(from, notConfirmedBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
         addInboxMessage(from, "bot", notConfirmedBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Blocked - Pending Confirmation" });
         return res.sendStatus(200);
@@ -20150,14 +20194,8 @@ app.post("/webhook", async (req, res) => {
         updatedBy: "Appointment Reminder Button After Confirm"
       });
 
-      const reminderName = cleanCustomerName(profileName);
-      const reminderYesBody = `${reminderName ? `تمام ${reminderName}، تم تفعيل تذكير الموعد ✅` : "تم تفعيل تذكير الموعد ✅"}
-
-سنذكّرك قبل موعدك بساعة.
-
-Done ✅
-Your 1-hour appointment reminder is active.`;
-      await sendWhatsAppMessage(from, reminderYesBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
+      const reminderYesBody = buildAppointmentReminderActiveBody(profileName, replyLanguage);
+      await sendWhatsAppMessage(from, reminderYesBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
       addInboxMessage(from, "bot", reminderYesBody, "Appointment Reminder Active", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Active" });
       return res.sendStatus(200);
     }
@@ -20166,7 +20204,7 @@ Your 1-hour appointment reminder is active.`;
       const currentAppointmentStatus = conversationStatus[from] || await getSavedConversationStatusForPhone(from, incomingPhoneNumberId);
 
       if (!isConfirmedAppointmentStatus(currentAppointmentStatus)) {
-        const notConfirmedBody = buildAppointmentReminderNotConfirmedBody(profileName);
+        const notConfirmedBody = buildAppointmentReminderNotConfirmedBody(profileName, replyLanguage);
         await sendWhatsAppMessage(from, notConfirmedBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
         addInboxMessage(from, "bot", notConfirmedBody, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Declined Blocked - Pending Confirmation" });
         return res.sendStatus(200);
@@ -20182,11 +20220,8 @@ Your 1-hour appointment reminder is active.`;
         updatedBy: "Appointment Reminder Button After Confirm"
       });
 
-      const reminderName = cleanCustomerName(profileName);
-      const reminderNoBody = `${reminderName ? `تمام ${reminderName}، لن نرسل تذكير لهذا الموعد.` : "تمام، لن نرسل تذكير لهذا الموعد."}
-
-No problem. We will not send a reminder for this appointment.`;
-      await sendWhatsAppMessage(from, reminderNoBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
+      const reminderNoBody = buildAppointmentReminderDeclinedBody(profileName, replyLanguage);
+      await sendWhatsAppMessage(from, reminderNoBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
       addInboxMessage(from, "bot", reminderNoBody, "Appointment Reminder Declined", incomingPhoneNumberId, { customerName: profileName, messageType: "Appointment Reminder Declined" });
       return res.sendStatus(200);
     }
