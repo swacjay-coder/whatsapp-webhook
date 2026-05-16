@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-15-reminder-language-split";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-16-staff-template-fallback-131047";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -126,6 +126,21 @@ const CALL_NOW_TEMPLATE_NAME_ABU_DHABI =
   process.env.ABU_DHABI_CALL_NOW_TEMPLATE_NAME ||
   "iconic_call_now_abudhabi";
 const CALL_NOW_TEMPLATE_LANGUAGE = process.env.CALL_NOW_TEMPLATE_LANGUAGE || "en";
+
+// Staff booking alert templates:
+// Used only as fallback when normal staff text notification fails because the
+// WhatsApp 24-hour service window is closed (error 131047).
+const STAFF_BOOKING_ALERT_TEMPLATE_DUBAI =
+  process.env.STAFF_BOOKING_ALERT_TEMPLATE_DUBAI ||
+  "staff_booking_alert_dubai";
+const STAFF_BOOKING_ALERT_TEMPLATE_ABU_DHABI =
+  process.env.STAFF_BOOKING_ALERT_TEMPLATE_ABU_DHABI ||
+  "staff_booking_alert_abudhabi";
+const STAFF_BOOKING_ALERT_TEMPLATE_LANGUAGE =
+  process.env.STAFF_BOOKING_ALERT_TEMPLATE_LANGUAGE ||
+  "en";
+const pendingStaffTemplateFallbackByMessageId = new Map();
+
 
 // V31.5.8.34 - WhatsApp Dynamic Flow Booking Prep:
 // Safe independent Flow setup. Does not touch Flyksoft, reminders, cron, opt-in/out, or /api/wake.
@@ -477,7 +492,14 @@ async function notifyStaffAboutFlowBooking(flowData = {}, customerPhone = "", ph
   const body = buildStaffBookingNotificationBody(flowData, customerPhone);
   const results = [];
   for (const staffNumber of numbers) {
-    const result = await sendStaffNotificationTextMessage(staffNumber, body, phoneNumberId, routing);
+    const textResult = await sendStaffNotificationTextMessage(staffNumber, body, phoneNumberId, routing);
+    const result = await handleStaffTemplateFallbackIfTextBlocked(textResult, {
+      staffNumber,
+      flowData,
+      customerPhone,
+      phoneNumberId,
+      routing
+    });
     results.push({ staffNumber, ...result });
   }
   return { ok: results.every((item) => item.ok), results };
@@ -4230,7 +4252,14 @@ async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", prof
   };
 
   const body = buildStaffBookingNotificationBody(flowData, customerPhone);
-  const directResult = await sendStaffNotificationTextMessage(staffNumber, body, routingPhoneNumberId, routing);
+  const textResult = await sendStaffNotificationTextMessage(staffNumber, body, routingPhoneNumberId, routing);
+  const directResult = await handleStaffTemplateFallbackIfTextBlocked(textResult, {
+    staffNumber,
+    flowData,
+    customerPhone,
+    phoneNumberId: routingPhoneNumberId,
+    routing
+  });
 
   console.log("[Smart Booking Direct Staff Notify] result", JSON.stringify({
     ok: directResult?.ok,
@@ -4240,7 +4269,10 @@ async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", prof
     envName,
     staffNumber,
     teamMember: flowData.teamMember || "",
-    result: directResult?.result || null
+    templateFallbackAttempted: Boolean(directResult?.templateFallbackAttempted),
+    watchedForTemplateFallback: Boolean(directResult?.watchedForTemplateFallback),
+    result: directResult?.result || null,
+    templateFallback: directResult?.templateFallback || null
   }, null, 2));
 
   return {
@@ -5106,6 +5138,20 @@ function buildTemplateComponents(options = {}) {
     });
   }
 
+  const bodyParameters = Array.isArray(options.bodyParameters)
+    ? options.bodyParameters.map((value) => ({
+        type: "text",
+        text: (value ?? "").toString()
+      }))
+    : [];
+
+  if (bodyParameters.length > 0) {
+    components.push({
+      type: "body",
+      parameters: bodyParameters
+    });
+  }
+
   return components;
 }
 
@@ -5154,6 +5200,190 @@ async function sendWhatsAppTemplate(to, templateName = FOLLOW_UP_TEMPLATE_NAME, 
     status: response.status,
     result
   };
+}
+
+
+function getWhatsAppTemplateMessageId(result = {}) {
+  return (Array.isArray(result.messages) && result.messages[0]?.id)
+    ? result.messages[0].id
+    : "";
+}
+
+function getWhatsAppErrorCode(result = {}) {
+  const directCode = result?.error?.code;
+  if (directCode) return Number(directCode);
+
+  const errors = Array.isArray(result?.errors) ? result.errors : [];
+  const firstErrorCode = errors[0]?.code;
+  if (firstErrorCode) return Number(firstErrorCode);
+
+  return 0;
+}
+
+function isReengagementErrorResult(result = {}) {
+  return getWhatsAppErrorCode(result) === 131047;
+}
+
+function isReengagementStatus(status = {}) {
+  const errors = Array.isArray(status.errors) ? status.errors : [];
+  return errors.some((error) => Number(error?.code) === 131047);
+}
+
+function getStaffBookingAlertTemplateName(branch = "") {
+  const value = compactText(branch);
+  return value.includes("abu")
+    ? STAFF_BOOKING_ALERT_TEMPLATE_ABU_DHABI
+    : STAFF_BOOKING_ALERT_TEMPLATE_DUBAI;
+}
+
+function buildStaffBookingAlertTemplateValues(flowData = {}, customerPhone = "") {
+  return [
+    flowData.branch || "Dubai",
+    flowData.customerName || "Customer",
+    customerPhone || flowData.phone || "",
+    flowData.preferredDay || "",
+    flowData.preferredTime || "",
+    flowData.teamMember || "Any Available"
+  ].map((value) => (value || "-").toString());
+}
+
+async function sendStaffBookingAlertTemplateMessage(to, flowData = {}, customerPhone = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, routing = {}) {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const templateName = getStaffBookingAlertTemplateName(flowData.branch || routing.branch || "");
+  const templateValues = buildStaffBookingAlertTemplateValues(flowData, customerPhone);
+
+  console.log(`[Staff Template Fallback] sending template=${templateName} branch=${flowData.branch || routing.branch || ""} fromPhoneNumberId=${finalPhoneNumberId} to=${to} env=${routing.envName || "UNKNOWN"}`);
+
+  const templateResult = await sendWhatsAppTemplate(
+    to,
+    templateName,
+    finalPhoneNumberId,
+    STAFF_BOOKING_ALERT_TEMPLATE_LANGUAGE,
+    {
+      includeHeaderImage: false,
+      bodyParameters: templateValues
+    }
+  );
+
+  console.log("[Staff Template Fallback] result", JSON.stringify({
+    ok: templateResult?.ok,
+    status: templateResult?.status,
+    templateName,
+    branch: flowData.branch || routing.branch || "",
+    to,
+    result: templateResult?.result || null
+  }, null, 2));
+
+  return {
+    ...templateResult,
+    templateName,
+    templateFallback: true
+  };
+}
+
+function rememberStaffTemplateFallbackCandidate(textResult = {}, context = {}) {
+  const messageId = getWhatsAppTemplateMessageId(textResult?.result || {});
+
+  if (!messageId) {
+    return "";
+  }
+
+  pendingStaffTemplateFallbackByMessageId.set(messageId, {
+    ...context,
+    createdAt: Date.now()
+  });
+
+  // Keep memory small and remove old entries after roughly 24 hours.
+  const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+  for (const [id, item] of pendingStaffTemplateFallbackByMessageId.entries()) {
+    if ((item?.createdAt || 0) < cutoff) {
+      pendingStaffTemplateFallbackByMessageId.delete(id);
+    }
+  }
+
+  return messageId;
+}
+
+async function handleStaffTemplateFallbackIfTextBlocked(textResult = {}, context = {}) {
+  const resultPayload = textResult?.result || {};
+
+  if (textResult?.ok) {
+    const messageId = rememberStaffTemplateFallbackCandidate(textResult, context);
+    if (messageId) {
+      console.log(`[Staff Template Fallback] text accepted; watching messageId=${messageId} for async 131047 failure`);
+    }
+
+    return {
+      ...textResult,
+      watchedForTemplateFallback: Boolean(messageId)
+    };
+  }
+
+  if (!isReengagementErrorResult(resultPayload)) {
+    return textResult;
+  }
+
+  console.log("[Staff Template Fallback] text blocked synchronously by 131047; sending approved template now.");
+
+  const templateResult = await sendStaffBookingAlertTemplateMessage(
+    context.staffNumber,
+    context.flowData,
+    context.customerPhone,
+    context.phoneNumberId,
+    context.routing
+  );
+
+  return {
+    ...textResult,
+    templateFallbackAttempted: true,
+    templateFallback: templateResult,
+    ok: Boolean(templateResult?.ok)
+  };
+}
+
+async function handleStaffTemplateFallbackFromStatus(status = {}, statusValue = {}) {
+  if (!status || status.status !== "failed" || !isReengagementStatus(status)) {
+    return false;
+  }
+
+  const messageId = (status.id || "").toString().trim();
+  const context = pendingStaffTemplateFallbackByMessageId.get(messageId);
+
+  if (!context) {
+    console.log("[Staff Template Fallback] 131047 status received but no pending staff context found", {
+      messageId,
+      recipientId: status.recipient_id || "",
+      phoneNumberId: statusValue?.metadata?.phone_number_id || ""
+    });
+    return false;
+  }
+
+  pendingStaffTemplateFallbackByMessageId.delete(messageId);
+
+  console.log("[Staff Template Fallback] async 131047 detected; sending approved staff template", {
+    messageId,
+    staffNumber: context.staffNumber,
+    branch: context.flowData?.branch || "",
+    phoneNumberId: context.phoneNumberId || ""
+  });
+
+  await sendStaffBookingAlertTemplateMessage(
+    context.staffNumber,
+    context.flowData,
+    context.customerPhone,
+    context.phoneNumberId,
+    context.routing
+  );
+
+  return true;
+}
+
+async function handleWhatsAppStatusUpdates(value = {}) {
+  const statuses = Array.isArray(value?.statuses) ? value.statuses : [];
+
+  for (const status of statuses) {
+    await handleStaffTemplateFallbackFromStatus(status, value);
+  }
 }
 
 function parseSheetDate(value) {
@@ -20015,7 +20245,11 @@ app.post("/webhook", async (req, res) => {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
 
+    // Status webhooks do not include a customer message. They can still report
+    // that a staff text notification failed later with 131047, after Graph API
+    // initially accepted it. In that case, send the approved staff template.
     if (!message) {
+      await handleWhatsAppStatusUpdates(value);
       return res.sendStatus(200);
     }
 
