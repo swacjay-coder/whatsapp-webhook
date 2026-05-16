@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-direct-booking-parser-pending-confirmation";
+const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-dedupe-english-only";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -110,6 +110,8 @@ const ABU_DHABI_STAFF_NUMBER = (
 ).toString().replace(/\D/g, "");
 
 const conversationState = new Map();
+const staffNotificationCache = new Map();
+const STAFF_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
 
 function normalizeText(value) {
   return (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
@@ -792,10 +794,7 @@ async function handleDirectAppointmentRequest({ channel, senderId, text, state, 
 
     if (detectedTime) {
       await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
-      const staffNumber = getStaffNumberForBranch(state.branch);
-      const staffSenderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(state.branch);
-      const alertBody = buildStaffBookingAlert(state, channel, senderId);
-      await sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
+      await sendStaffBookingAlertOnce(state, channel, senderId);
       resetState(senderId);
       return true;
     }
@@ -922,10 +921,7 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
     }
 
     await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
-    const staffNumber = getStaffNumberForBranch(state.branch);
-    const staffSenderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(state.branch);
-    const alertBody = buildStaffBookingAlert(state, channel, senderId);
-    await sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
+    await sendStaffBookingAlertOnce(state, channel, senderId);
     resetState(senderId);
     return true;
   }
@@ -1173,17 +1169,73 @@ function getStaffSenderPhoneNumberIdForBranch(branch) {
   return branch === "Abu Dhabi" ? ABU_DHABI_STAFF_NOTIFY_PHONE_NUMBER_ID : DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID;
 }
 
+function buildStaffNotificationKey(state, channel, senderId) {
+  return [
+    senderId || "unknown",
+    channel || "unknown",
+    state.intent || "booking",
+    state.branch || "Dubai",
+    state.staff || "not-selected",
+    state.day || "not-selected",
+    state.time || "Flexible"
+  ].join("|");
+}
+
+function shouldSendStaffNotification(state, channel, senderId) {
+  const key = buildStaffNotificationKey(state, channel, senderId);
+  const now = Date.now();
+  const lastSentAt = staffNotificationCache.get(key) || 0;
+
+  for (const [cacheKey, sentAt] of staffNotificationCache.entries()) {
+    if (now - sentAt > STAFF_NOTIFICATION_DEDUPE_MS) staffNotificationCache.delete(cacheKey);
+  }
+
+  if (now - lastSentAt < STAFF_NOTIFICATION_DEDUPE_MS) {
+    console.log("[Staff Notify] skipped duplicate booking alert", key);
+    return false;
+  }
+
+  staffNotificationCache.set(key, now);
+  return true;
+}
+
 function buildStaffBookingAlert(state, channel, senderId) {
   const isServiceRequest = state.intent === "service";
-  const requestTypeAr = isServiceRequest ? "موعد سيرفس" : "حجز استشارة";
-  const requestTypeEn = isServiceRequest ? "Service Appointment" : "Consultation Booking";
-  const branchEn = state.branch || "Dubai";
-  const branchAr = branchEn === "Abu Dhabi" ? "أبوظبي" : "دبي";
-  const day = state.day || "Not selected | غير محدد";
-  const time = state.time || "Flexible | مرن";
-  const staff = state.staff || "Not selected | غير محدد";
+  const requestType = isServiceRequest ? "Service Appointment" : "Consultation Booking";
+  const branch = state.branch || "Dubai";
+  const day = state.day || "Not selected";
+  const time = state.time || "Flexible";
+  const staff = state.staff || "Not selected";
+  const greeting = branch === "Dubai" ? "Hello Angel," : "Hello Abu Dhabi team,";
 
-  return `🔔 طلب حجز جديد من Instagram / Messenger\n\nالقناة: ${channel}\nنوع الطلب: ${requestTypeAr}\nالفرع: ${branchAr}\nاليوم: ${day}\nالوقت: ${time}\nالمختص: ${staff}\n\nرقم/معرّف العميل داخل Meta:\n${senderId}\n\nالرجاء متابعة العميل من Instagram / Meta Inbox.\n\n------------------------------\n\n🔔 New booking request from Instagram / Messenger\n\nChannel: ${channel}\nRequest type: ${requestTypeEn}\nBranch: ${branchEn}\nDay: ${day}\nTime: ${time}\nSpecialist: ${staff}\n\nMeta customer sender ID:\n${senderId}\n\nPlease follow up with the client from Instagram / Meta Inbox.`;
+  return `${greeting}
+
+A new client booking request has been received from Instagram / Messenger.
+
+Please follow up with the client.
+
+Booking details:
+Branch: ${branch}
+Request type: ${requestType}
+Specialist: ${staff}
+Day: ${day}
+Time: ${time}
+
+Meta customer ID:
+${senderId}
+
+Important:
+This is not a confirmed booking yet.
+Please check the specialist and time availability, then confirm with the client within 2 to 5 minutes.`;
+}
+
+async function sendStaffBookingAlertOnce(state, channel, senderId) {
+  if (!shouldSendStaffNotification(state, channel, senderId)) return { ok: false, skipped: true, reason: "duplicate_booking_alert" };
+
+  const staffNumber = getStaffNumberForBranch(state.branch);
+  const staffSenderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(state.branch);
+  const alertBody = buildStaffBookingAlert(state, channel, senderId);
+  return sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
 }
 
 async function sendStaffWhatsAppText(to, body, phoneNumberId) {
@@ -1464,10 +1516,7 @@ async function handlePayload({ channel, senderId, payload, state, lang }) {
 
     await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
 
-    const staffNumber = getStaffNumberForBranch(state.branch);
-    const staffSenderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(state.branch);
-    const alertBody = buildStaffBookingAlert(state, channel, senderId);
-    await sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
+    await sendStaffBookingAlertOnce(state, channel, senderId);
 
     resetState(senderId);
     return true;
