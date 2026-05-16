@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-prelock-dedupe-client-link";
+const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-single-source-dedupe";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -113,6 +113,7 @@ const conversationState = new Map();
 const staffNotificationCache = new Map();
 const staffWhatsAppSendCache = new Map();
 const staffSenderLockCache = new Map();
+const bookingFinalizationCache = new Map();
 const STAFF_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
 
 function normalizeText(value) {
@@ -795,9 +796,7 @@ async function handleDirectAppointmentRequest({ channel, senderId, text, state, 
     }
 
     if (detectedTime) {
-      await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
-      await sendStaffBookingAlertOnce(state, channel, senderId);
-      resetState(senderId);
+      await finalizeBookingOnce({ channel, senderId, state, lang });
       return true;
     }
 
@@ -922,9 +921,7 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
       return true;
     }
 
-    await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
-    await sendStaffBookingAlertOnce(state, channel, senderId);
-    resetState(senderId);
+    await finalizeBookingOnce({ channel, senderId, state, lang });
     return true;
   }
 
@@ -1298,6 +1295,52 @@ async function sendStaffBookingAlertOnce(state, channel, senderId) {
   return sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
 }
 
+function buildBookingFinalizationKey(senderId) {
+  return `booking-finalized|${senderId || "unknown"}`;
+}
+
+function shouldFinalizeBooking(senderId) {
+  const key = buildBookingFinalizationKey(senderId);
+  const now = Date.now();
+
+  for (const [cacheKey, finalizedAt] of bookingFinalizationCache.entries()) {
+    if (now - finalizedAt > STAFF_NOTIFICATION_DEDUPE_MS) bookingFinalizationCache.delete(cacheKey);
+  }
+
+  const lastFinalizedAt = bookingFinalizationCache.get(key) || 0;
+  if (now - lastFinalizedAt < STAFF_NOTIFICATION_DEDUPE_MS) {
+    console.log("[Booking Finalize] skipped duplicate finalization", key);
+    return false;
+  }
+
+  bookingFinalizationCache.set(key, now);
+  return true;
+}
+
+async function finalizeBookingOnce({ channel, senderId, state, lang }) {
+  if (state.bookingFinalized) {
+    console.log("[Booking Finalize] skipped duplicate state finalization", senderId);
+    return { ok: false, skipped: true, reason: "duplicate_state_finalization" };
+  }
+
+  if (!shouldFinalizeBooking(senderId)) {
+    return { ok: false, skipped: true, reason: "duplicate_sender_finalization" };
+  }
+
+  // Lock before any async send so two parallel webhook events cannot both notify staff.
+  state.bookingFinalized = true;
+
+  const customerReply = await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
+  if (!customerReply?.ok) {
+    console.log("[Staff Notify] skipped because customer final reply failed", customerReply?.status || "no-status");
+    return customerReply;
+  }
+
+  await sendStaffBookingAlertOnce(state, channel, senderId);
+  resetState(senderId);
+  return customerReply;
+}
+
 
 function buildStaffWhatsAppDedupeKey(to, body, phoneNumberId) {
   return [
@@ -1605,11 +1648,7 @@ async function handlePayload({ channel, senderId, payload, state, lang }) {
     state.time = time;
     state.lang = lang;
 
-    await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
-
-    await sendStaffBookingAlertOnce(state, channel, senderId);
-
-    resetState(senderId);
+    await finalizeBookingOnce({ channel, senderId, state, lang });
     return true;
   }
 
