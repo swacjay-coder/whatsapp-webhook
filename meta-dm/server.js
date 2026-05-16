@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-booking-context-smart-faq-override-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-smart-booking-memory-bilingual";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -663,7 +663,8 @@ function findTimeFromText(text) {
   const patterns = [
     /\bat\s*(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm)?\b/i,
     /\b(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm)\b/i,
-    /(?:الساعة|ساعه|عالساعة|ع الساعة)\s*(1[0-2]|[1-9])(?::([0-5]\d))?/i
+    /(?:الساعة|ساعه|عالساعة|ع الساعة)\s*(1[0-2]|[1-9])(?::([0-5]\d))?/i,
+    /^(1[0-2]|[1-9])(?::([0-5]\d))?$/i
   ];
 
   let match = null;
@@ -740,7 +741,11 @@ function isChangeBranchText(value) {
 
 function directAppointmentTextLooksRelevant(text) {
   const value = normalizeText(text);
-  return hasAnyBookingWord(value, ["موعد", "حجز", "احجز", "بدي", "اريد", "أريد", "سيرفس", "appointment", "book", "booking", "service"]);
+  if (hasAnyBookingWord(value, ["موعد", "حجز", "احجز", "بدي", "اريد", "أريد", "سيرفس", "appointment", "book", "booking", "service", "with", "مع"])) return true;
+
+  // Smart memory: allow short natural booking fragments like "with Omar" / "مع عمر".
+  // Time-only fragments are handled only when a booking state is already active.
+  return Boolean(findStaffFromText(text));
 }
 
 function contextualBookingPrompt(state, lang = "en") {
@@ -757,6 +762,20 @@ function contextualBookingPrompt(state, lang = "en") {
   }
 
   return { body: askTimeBody(state.dayPayload || "DAY_WEEK", lang), replies: timeReplies(state.dayPayload || "DAY_WEEK", lang) };
+}
+
+function canFinalizeBookingFromMemory(state = {}) {
+  if (!state.branch) return false;
+  if (!state.day && !state.dayPayload) return false;
+  if (!state.time) return false;
+  if (state.intent === "service" && !state.staff) return false;
+  return true;
+}
+
+async function finalizeIfBookingMemoryComplete({ channel, senderId, state, lang }) {
+  if (!canFinalizeBookingFromMemory(state)) return false;
+  await finalizeBookingOnce({ channel, senderId, state, lang });
+  return true;
 }
 
 async function sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, detectedDay }) {
@@ -776,6 +795,7 @@ async function sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, d
   if (detectedDay.kind === "weekday") {
     state.day = detectedDay.day;
     state.dayPayload = "DAY_WEEK";
+    if (await finalizeIfBookingMemoryComplete({ channel, senderId, state, lang })) return true;
     clearBookingAfterDay(state);
     await sendText(channel, senderId, askTimeBody("DAY_WEEK", lang), timeReplies("DAY_WEEK", lang));
     return true;
@@ -783,6 +803,7 @@ async function sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, d
 
   state.day = detectedDay.day;
   state.dayPayload = detectedDay.payload;
+  if (await finalizeIfBookingMemoryComplete({ channel, senderId, state, lang })) return true;
   clearBookingAfterDay(state);
 
   if (isTodayPayload(detectedDay.payload) && getAvailableTimeSlots(detectedDay.payload).length === 0) {
@@ -945,6 +966,12 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
 
   const detectedDay = findDayFromText(text);
   const detectedTime = findTimeFromText(text);
+
+  if (detectedDay && detectedTime) {
+    state.time = detectedTime.time;
+    return sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, detectedDay });
+  }
+
   if (isChangeDayText(value) || detectedDay) {
     if (detectedDay) return sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, detectedDay });
     delete state.day;
@@ -1919,7 +1946,7 @@ app.get("/api/version", (req, res) => {
     smartIntentLayer: {
       enabled: true,
       phase: 2,
-      intents: ["price", "results", "details", "surgery", "natural", "duration", "pain", "booking", "location", "team", "suitability", "men_women", "privacy", "durability", "detectability", "service_followup", "consult_vs_service", "branch_help", "availability", "hesitation", "direct_appointment"]
+      intents: ["price", "results", "details", "surgery", "natural", "duration", "pain", "booking", "location", "team", "suitability", "men_women", "privacy", "durability", "detectability", "service_followup", "consult_vs_service", "branch_help", "availability", "hesitation", "direct_appointment", "smart_booking_memory"]
     }
   });
 });
