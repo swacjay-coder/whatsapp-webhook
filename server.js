@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-17-staff-template-test-endpoint";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-18-staff-template-image-header-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -139,6 +139,13 @@ const STAFF_BOOKING_ALERT_TEMPLATE_ABU_DHABI =
 const STAFF_BOOKING_ALERT_TEMPLATE_LANGUAGE =
   process.env.STAFF_BOOKING_ALERT_TEMPLATE_LANGUAGE ||
   "en";
+// Staff alert templates were created with an IMAGE header in Meta.
+// WhatsApp requires the same header component when sending the template.
+const STAFF_BOOKING_ALERT_TEMPLATE_HEADER_IMAGE_URL = (
+  process.env.STAFF_BOOKING_ALERT_TEMPLATE_HEADER_IMAGE_URL ||
+  BOT_HEADER_IMAGE_URL ||
+  ""
+).toString().trim();
 const pendingStaffTemplateFallbackByMessageId = new Map();
 
 
@@ -5260,7 +5267,8 @@ async function sendStaffBookingAlertTemplateMessage(to, flowData = {}, customerP
     finalPhoneNumberId,
     STAFF_BOOKING_ALERT_TEMPLATE_LANGUAGE,
     {
-      includeHeaderImage: false,
+      includeHeaderImage: Boolean(STAFF_BOOKING_ALERT_TEMPLATE_HEADER_IMAGE_URL),
+      headerImageUrl: STAFF_BOOKING_ALERT_TEMPLATE_HEADER_IMAGE_URL,
       bodyParameters: templateValues
     }
   );
