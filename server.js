@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-16-staff-template-fallback-131047";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-17-staff-template-test-endpoint";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -6272,6 +6272,90 @@ app.get("/api/staff-notify/test", protectInbox, async (req, res) => {
     console.error("Staff notify test failed:");
     console.error(error);
     return res.status(500).json({ ok: false, error: "Staff notify test failed", message: error?.message || String(error) });
+  }
+});
+
+app.get("/api/staff-template/test", protectInbox, async (req, res) => {
+  try {
+    const branchInput = compactText(req.query.branch || "dubai");
+    const isAbuDhabi = branchInput.includes("abu") || branchInput.includes("abudhabi") || branchInput.includes("ابو");
+    const phoneNumberId = isAbuDhabi ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID;
+    const envName = isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER";
+    const rawStaffNumber = isAbuDhabi
+      ? (process.env.ABU_DHABI_STAFF_NUMBER || ABU_DHABI_STAFF_NUMBER || DEFAULT_ABU_DHABI_STAFF_NUMBER || "")
+      : (process.env.DUBAI_STAFF_NUMBER || DUBAI_STAFF_NUMBER || DEFAULT_DUBAI_STAFF_NUMBER || "");
+    const staffNumber = normalizeWhatsAppRecipientDigits(req.query.to || rawStaffNumber);
+    const branch = isAbuDhabi ? "Abu Dhabi" : "Dubai";
+    const templateName = getStaffBookingAlertTemplateName(branch);
+
+    if (!staffNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "Missing staff number",
+        branch,
+        envName,
+        rawStaffNumber,
+        phoneNumberId,
+        templateName
+      });
+    }
+
+    const flowData = {
+      branch,
+      customerName: (req.query.customer || "Test Customer").toString().trim(),
+      phone: normalizeWhatsAppRecipientDigits(req.query.customerPhone || "971521322395"),
+      preferredDay: (req.query.day || "Tomorrow").toString().trim(),
+      preferredTime: (req.query.time || "4:00 PM").toString().trim(),
+      teamMember: (req.query.member || (isAbuDhabi ? "Adham" : "Ahmed")).toString().trim()
+    };
+
+    const routing = {
+      number: staffNumber,
+      branch,
+      phoneNumberId,
+      envName,
+      branchEnvName: envName,
+      fallbackUsed: !process.env[envName],
+      hasNumber: true
+    };
+
+    console.log(`[Staff Template Test] preparing template=${templateName} branch=${branch} fromPhoneNumberId=${phoneNumberId} to=${staffNumber} env=${envName}`);
+
+    const result = await sendStaffBookingAlertTemplateMessage(
+      staffNumber,
+      flowData,
+      flowData.phone,
+      phoneNumberId,
+      routing
+    );
+
+    console.log("[Staff Template Test] result", JSON.stringify({
+      branch,
+      staffNumber,
+      phoneNumberId,
+      envName,
+      templateName,
+      ok: result.ok,
+      status: result.status,
+      result: result.result
+    }, null, 2));
+
+    return res.status(result.ok ? 200 : 500).json({
+      ok: result.ok,
+      branch,
+      envName,
+      staffNumber,
+      phoneNumberId,
+      templateName,
+      language: STAFF_BOOKING_ALERT_TEMPLATE_LANGUAGE,
+      sampleValues: buildStaffBookingAlertTemplateValues(flowData, flowData.phone),
+      status: result.status,
+      result: result.result
+    });
+  } catch (error) {
+    console.error("Staff template test failed:");
+    console.error(error);
+    return res.status(500).json({ ok: false, error: "Staff template test failed", message: error?.message || String(error) });
   }
 });
 
