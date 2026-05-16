@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-18-staff-template-image-header-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-19-staff-action-buttons-handler";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -147,6 +147,7 @@ const STAFF_BOOKING_ALERT_TEMPLATE_HEADER_IMAGE_URL = (
   ""
 ).toString().trim();
 const pendingStaffTemplateFallbackByMessageId = new Map();
+const pendingStaffBookingActionsByStaffNumber = new Map();
 
 
 // V31.5.8.34 - WhatsApp Dynamic Flow Booking Prep:
@@ -4205,6 +4206,463 @@ async function handleRealCustomerIntentUpgrade({ from, originalText, text, incom
     const buttons = getAvailabilityConfirmButtons(replyLanguage);
     await sendWhatsAppButtonMessage(from, body, buttons, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
     addInboxMessage(from, "bot", formatButtonLog(body, buttons), "Availability Question", incomingPhoneNumberId, { customerName: profileName, messageType: "Real Customer Intent - Availability" });
+    return true;
+  }
+
+  return false;
+}
+
+
+function getStaffActionNumbersForBranch(branch = "Dubai") {
+  const isAbuDhabi = compactText(branch).includes("abu");
+  const envName = isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER";
+  const fallback = isAbuDhabi ? DEFAULT_ABU_DHABI_STAFF_NUMBER : DEFAULT_DUBAI_STAFF_NUMBER;
+  const raw = (process.env[envName] || fallback || "").toString();
+  return raw
+    .split(",")
+    .map((item) => normalizeWhatsAppRecipientDigits(item))
+    .filter(Boolean);
+}
+
+function getStaffActionRouteFromNumber(staffPhone = "", incomingPhoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+  const cleanStaffPhone = normalizeWhatsAppRecipientDigits(staffPhone);
+  const dubaiNumbers = getStaffActionNumbersForBranch("Dubai");
+  const abuDhabiNumbers = getStaffActionNumbersForBranch("Abu Dhabi");
+
+  if (abuDhabiNumbers.includes(cleanStaffPhone)) {
+    return {
+      isStaff: true,
+      staffNumber: cleanStaffPhone,
+      branch: "Abu Dhabi",
+      phoneNumberId: ABU_DHABI_PHONE_NUMBER_ID,
+      envName: "ABU_DHABI_STAFF_NUMBER"
+    };
+  }
+
+  if (dubaiNumbers.includes(cleanStaffPhone)) {
+    return {
+      isStaff: true,
+      staffNumber: cleanStaffPhone,
+      branch: "Dubai",
+      phoneNumberId: DUBAI_PHONE_NUMBER_ID,
+      envName: "DUBAI_STAFF_NUMBER"
+    };
+  }
+
+  return {
+    isStaff: false,
+    staffNumber: cleanStaffPhone,
+    branch: getLineConfig(incomingPhoneNumberId).branch,
+    phoneNumberId: incomingPhoneNumberId,
+    envName: "NONE"
+  };
+}
+
+function getStaffBookingActionFromText(text = "") {
+  const value = compactText(text);
+  if (!value) return "";
+
+  if (value === "confirm" || value === "confirmed" || value === "approve" || value === "approved") return "confirm";
+  if (value === "suggest time" || value === "suggest_time" || value === "suggest" || value.includes("suggest time")) return "suggest_time";
+  if (value === "team will call" || value === "team_will_call" || value === "team will contact" || value.includes("team will call")) return "team_will_call";
+
+  return "";
+}
+
+function getBookingMessageField(message = "", labels = []) {
+  const lines = (message || "").toString().split(/\r?\n/);
+  const normalizedLabels = labels.map((label) => compactText(label));
+
+  for (const line of lines) {
+    const index = line.indexOf(":");
+    if (index === -1) continue;
+
+    const key = compactText(line.slice(0, index));
+    if (normalizedLabels.includes(key)) {
+      return line.slice(index + 1).trim();
+    }
+  }
+
+  return "";
+}
+
+function getBookingRequestDetails(booking = {}) {
+  const message = booking.message || "";
+  return {
+    branch: booking.branch || getBookingMessageField(message, ["Preferred branch", "Branch"]),
+    preferredDay: getBookingMessageField(message, ["Preferred day", "Day"]),
+    preferredTime: getBookingMessageField(message, ["Preferred time", "Time"]),
+    teamMember: getBookingMessageField(message, ["Team member", "Employee", "Staff"]),
+    serviceType: getBookingMessageField(message, ["Service type", "Service"]),
+    requestType: booking.requestType || getBookingMessageField(message, ["Request type", "Type"])
+  };
+}
+
+function buildBookingDetailsNoteForCustomer(booking = {}, language = "en") {
+  const details = getBookingRequestDetails(booking);
+  const lines = [];
+  const isArabic = language === "ar";
+
+  if (details.preferredDay) lines.push(`${isArabic ? "اليوم" : "Day"}: ${getSmartBookingDayLabel(details.preferredDay, language)}`);
+  if (details.preferredTime) lines.push(`${isArabic ? "الوقت" : "Time"}: ${details.preferredTime}`);
+  if (details.teamMember) lines.push(`${isArabic ? "الموظف" : "Team member"}: ${details.teamMember}`);
+  if (details.serviceType) lines.push(`${isArabic ? "الخدمة" : "Service"}: ${details.serviceType}`);
+
+  return lines.join("\n");
+}
+
+function isPendingBookingStatusValue(status = "") {
+  const value = compactText(status || "pending");
+  if (!value) return true;
+
+  return !value.includes("confirm") &&
+    !value.includes("approved") &&
+    !value.includes("cancel") &&
+    !value.includes("done") &&
+    !value.includes("closed") &&
+    !value.includes("suggested") &&
+    !value.includes("team will call");
+}
+
+async function findLatestPendingBookingForStaffAction(branch = "Dubai") {
+  const result = await loadBookingRequestsFromGoogleSheetFromServer();
+  const bookings = Array.isArray(result.bookingRequests) ? result.bookingRequests : [];
+  const branchValue = compactText(branch);
+  const branchBookings = bookings.filter((booking) => {
+    const bookingBranch = compactText(booking.branch || getBookingRequestDetails(booking).branch || "");
+    const customerPhone = normalizePhoneDigits(booking.phone || "");
+    const isSameBranch = branchValue.includes("abu")
+      ? bookingBranch.includes("abu")
+      : (!bookingBranch.includes("abu"));
+
+    return isSameBranch &&
+      customerPhone &&
+      !isSuppressedCustomerNotificationNumber(customerPhone) &&
+      isPendingBookingStatusValue(booking.status || "Pending");
+  });
+
+  branchBookings.sort((a, b) => {
+    const rowA = Number(a.rowNumber || 0);
+    const rowB = Number(b.rowNumber || 0);
+    if (rowA !== rowB) return rowB - rowA;
+
+    const dateA = parseSheetDate(a.lastUpdated || a.date || "")?.getTime() || 0;
+    const dateB = parseSheetDate(b.lastUpdated || b.date || "")?.getTime() || 0;
+    return dateB - dateA;
+  });
+
+  return branchBookings[0] || null;
+}
+
+async function getCustomerLanguageFromHistory(customerPhone = "", fallback = "en") {
+  const cleanPhone = normalizePhoneDigits(customerPhone);
+  const savedLanguage = conversationLanguage[cleanPhone] || conversationLanguage[customerPhone] || "";
+
+  try {
+    const loaded = await loadMessagesFromGoogleSheet();
+    const messages = Array.isArray(loaded.messages) ? loaded.messages : [];
+    const latestCustomerMessage = messages
+      .filter((message) => normalizePhoneDigits(message.phone || "") === cleanPhone && (message.sender || "") === "customer")
+      .sort((a, b) => (parseSheetDate(b.time || "")?.getTime() || 0) - (parseSheetDate(a.time || "")?.getTime() || 0))[0];
+
+    if (latestCustomerMessage?.body) {
+      return detectIncomingLanguage(latestCustomerMessage.body, savedLanguage || fallback || "en");
+    }
+  } catch (error) {
+    console.log("Staff action customer language lookup failed:");
+    console.log(error);
+  }
+
+  return savedLanguage || fallback || "en";
+}
+
+function buildTeamWillCallCustomerBody(customerName = "", language = "en") {
+  const cleanName = cleanCustomerName(customerName);
+
+  if (language === "ar") {
+    return [
+      `${BUSINESS_NAME_SPACED} ✨`,
+      "",
+      cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
+      "فريقنا سيتواصل معك قريبًا لتأكيد أفضل موعد متاح."
+    ].join("\n");
+  }
+
+  return [
+    `${BUSINESS_NAME_SPACED} ✨`,
+    "",
+    cleanName ? `Done ${cleanName} ✅` : "Done ✅",
+    "Our team will contact you shortly to confirm the best available appointment time."
+  ].join("\n");
+}
+
+function buildStaffActionAckBody(action = "", booking = {}, extra = "") {
+  const phone = normalizePhoneDigits(booking.phone || "");
+  const details = getBookingRequestDetails(booking);
+  const customerName = booking.customerName || "Customer";
+
+  if (action === "confirm") {
+    return [
+      "Confirmed ✅",
+      "",
+      `Customer: ${customerName}`,
+      phone ? `Phone: ${phone}` : "",
+      details.preferredDay ? `Day: ${details.preferredDay}` : "",
+      details.preferredTime ? `Time: ${details.preferredTime}` : "",
+      "The customer has been notified."
+    ].filter(Boolean).join("\n");
+  }
+
+  if (action === "suggest_time_waiting") {
+    return [
+      "Please type the suggested time.",
+      "Example: Tomorrow 5:00 PM",
+      "",
+      `Customer: ${customerName}`,
+      phone ? `Phone: ${phone}` : ""
+    ].filter(Boolean).join("\n");
+  }
+
+  if (action === "suggest_time_sent") {
+    return [
+      "Suggested time sent ✅",
+      "",
+      `Customer: ${customerName}`,
+      phone ? `Phone: ${phone}` : "",
+      extra ? `Suggested time: ${extra}` : ""
+    ].filter(Boolean).join("\n");
+  }
+
+  if (action === "team_will_call") {
+    return [
+      "Team Will Call message sent ✅",
+      "",
+      `Customer: ${customerName}`,
+      phone ? `Phone: ${phone}` : "",
+      "The customer has been notified that the team will contact them shortly."
+    ].filter(Boolean).join("\n");
+  }
+
+  return "Action received ✅";
+}
+
+async function sendStaffActionAck(staffNumber = "", body = "", route = {}) {
+  const to = normalizeWhatsAppRecipientDigits(staffNumber);
+  if (!to || !body) return null;
+
+  return sendWhatsAppMessage(to, body, route.phoneNumberId || DUBAI_PHONE_NUMBER_ID, {
+    replyLanguage: "en",
+    skipAutoLanguage: true
+  });
+}
+
+async function sendBookingActionUpdateToCustomer({ booking = {}, status = "", notes = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, updatedBy = "Staff Booking Action" }) {
+  const customerPhone = normalizePhoneDigits(booking.phone || "");
+  if (!customerPhone) {
+    return { ok: false, error: "missing_customer_phone" };
+  }
+
+  const customerLanguage = await getCustomerLanguageFromHistory(customerPhone, "en");
+  const messageBuild = buildBookingCustomerUpdateBody(status, notes, customerLanguage);
+
+  if (!messageBuild.ok) {
+    return { ok: false, error: messageBuild.error || "message_build_failed" };
+  }
+
+  const buttons = Array.isArray(messageBuild.buttons) ? messageBuild.buttons : [];
+  const sendResult = buttons.length
+    ? await sendWhatsAppButtonMessage(customerPhone, messageBuild.body, buttons, phoneNumberId, {
+        headerImageUrl: BOT_HEADER_IMAGE_URL,
+        replyLanguage: customerLanguage,
+        skipAutoLanguage: true
+      })
+    : await sendWhatsAppMessage(customerPhone, messageBuild.body, phoneNumberId, {
+        replyLanguage: customerLanguage,
+        skipAutoLanguage: true
+      });
+
+  if (sendResult?.error) {
+    return {
+      ok: false,
+      error: sendResult.error?.message || "customer_update_send_failed",
+      result: sendResult
+    };
+  }
+
+  if (booking.rowNumber) {
+    await updateBookingRequestStatusInGoogleSheetFromServer({
+      rowNumber: booking.rowNumber,
+      phone: customerPhone,
+      phoneNumberId,
+      status,
+      notes
+    });
+  }
+
+  const loggedBody = buttons.length ? formatButtonLog(messageBuild.body, buttons) : messageBuild.body;
+  addInboxMessage(
+    customerPhone,
+    "staff",
+    loggedBody,
+    isApprovedBookingStatus(status) ? "Confirmed Appointment" : "Human Reply",
+    phoneNumberId,
+    {
+      customerName: booking.customerName || "",
+      messageType: buttons.length ? "Staff Button Action - Customer Update With Reminder Option" : "Staff Button Action - Customer Update"
+    }
+  );
+
+  if (isApprovedBookingStatus(status)) {
+    setConversationStatus(customerPhone, "Confirmed Appointment");
+    await saveConversationStateToGoogleSheetFromServer({
+      phone: customerPhone,
+      phoneNumberId,
+      branch: booking.branch || getLineConfig(phoneNumberId).branch,
+      status: "Confirmed Appointment",
+      assignee: getBranchTeamAssignee(booking.branch || getLineConfig(phoneNumberId).branch),
+      tags: ["Booking", "Confirmed", "Appointment Reminder Eligible"],
+      updatedBy
+    });
+  }
+
+  return { ok: true, customerPhone, result: sendResult };
+}
+
+async function handleStaffBookingAction({ from, originalText = "", incomingPhoneNumberId = DUBAI_PHONE_NUMBER_ID }) {
+  const route = getStaffActionRouteFromNumber(from, incomingPhoneNumberId);
+  if (!route.isStaff) return false;
+
+  const text = (originalText || "").toString().trim();
+  const action = getStaffBookingActionFromText(text);
+  const pendingAction = pendingStaffBookingActionsByStaffNumber.get(route.staffNumber);
+
+  if (pendingAction?.action === "suggest_time" && !action) {
+    const booking = pendingAction.booking || {};
+    const customerPhone = normalizePhoneDigits(booking.phone || "");
+    const phoneNumberId = normalizePhoneNumberId(booking.phoneNumberId || pendingAction.phoneNumberId || route.phoneNumberId);
+    const suggestedTime = text;
+
+    if (!suggestedTime) {
+      await sendStaffActionAck(route.staffNumber, "Please type the suggested time. Example: Tomorrow 5:00 PM", route);
+      return true;
+    }
+
+    const sendResult = await sendBookingActionUpdateToCustomer({
+      booking,
+      status: "Suggested Time",
+      notes: suggestedTime,
+      phoneNumberId,
+      updatedBy: "Staff Suggested Time Button"
+    });
+
+    pendingStaffBookingActionsByStaffNumber.delete(route.staffNumber);
+
+    if (!sendResult.ok) {
+      await sendStaffActionAck(route.staffNumber, `Suggested time failed ⚠️\n${sendResult.error || "Unknown error"}`, route);
+      return true;
+    }
+
+    await sendStaffActionAck(route.staffNumber, buildStaffActionAckBody("suggest_time_sent", booking, suggestedTime), route);
+    console.log("[Staff Booking Action] suggested time sent", JSON.stringify({ staff: route.staffNumber, customerPhone, phoneNumberId, suggestedTime }, null, 2));
+    return true;
+  }
+
+  if (!action) return false;
+
+  const booking = await findLatestPendingBookingForStaffAction(route.branch);
+  if (!booking) {
+    await sendStaffActionAck(
+      route.staffNumber,
+      `No pending ${route.branch} booking request found for this action.\nPlease check Team Inbox.`,
+      route
+    );
+    console.log("[Staff Booking Action] no pending booking found", JSON.stringify({ staff: route.staffNumber, branch: route.branch, action }, null, 2));
+    return true;
+  }
+
+  const customerPhone = normalizePhoneDigits(booking.phone || "");
+  const phoneNumberId = normalizePhoneNumberId(booking.phoneNumberId || route.phoneNumberId);
+
+  console.log("[Staff Booking Action] received", JSON.stringify({
+    staff: route.staffNumber,
+    branch: route.branch,
+    action,
+    customerPhone,
+    rowNumber: booking.rowNumber || "",
+    phoneNumberId
+  }, null, 2));
+
+  if (action === "suggest_time") {
+    pendingStaffBookingActionsByStaffNumber.set(route.staffNumber, {
+      action: "suggest_time",
+      booking,
+      branch: route.branch,
+      phoneNumberId,
+      createdAt: Date.now()
+    });
+    await sendStaffActionAck(route.staffNumber, buildStaffActionAckBody("suggest_time_waiting", booking), route);
+    return true;
+  }
+
+  if (action === "confirm") {
+    const notes = buildBookingDetailsNoteForCustomer(booking, await getCustomerLanguageFromHistory(customerPhone, "en"));
+    const sendResult = await sendBookingActionUpdateToCustomer({
+      booking,
+      status: "Confirmed",
+      notes,
+      phoneNumberId,
+      updatedBy: "Staff Confirm Button"
+    });
+
+    if (!sendResult.ok) {
+      await sendStaffActionAck(route.staffNumber, `Confirm failed ⚠️\n${sendResult.error || "Unknown error"}`, route);
+      return true;
+    }
+
+    await sendStaffActionAck(route.staffNumber, buildStaffActionAckBody("confirm", booking), route);
+    return true;
+  }
+
+  if (action === "team_will_call") {
+    const customerLanguage = await getCustomerLanguageFromHistory(customerPhone, "en");
+    const body = buildTeamWillCallCustomerBody(booking.customerName || "", customerLanguage);
+    const sendResult = await sendWhatsAppMessage(customerPhone, body, phoneNumberId, {
+      replyLanguage: customerLanguage,
+      skipAutoLanguage: true
+    });
+
+    if (sendResult?.error) {
+      await sendStaffActionAck(route.staffNumber, `Team Will Call failed ⚠️\n${sendResult.error?.message || "Unknown error"}`, route);
+      return true;
+    }
+
+    if (booking.rowNumber) {
+      await updateBookingRequestStatusInGoogleSheetFromServer({
+        rowNumber: booking.rowNumber,
+        phone: customerPhone,
+        phoneNumberId,
+        status: "Team Will Call",
+        notes: "Team will contact customer shortly"
+      });
+    }
+
+    addInboxMessage(customerPhone, "staff", body, "Team Will Call", phoneNumberId, {
+      customerName: booking.customerName || "",
+      messageType: "Staff Button Action - Team Will Call"
+    });
+
+    setConversationStatus(customerPhone, "Need Follow-up");
+    await saveConversationStateToGoogleSheetFromServer({
+      phone: customerPhone,
+      phoneNumberId,
+      branch: booking.branch || route.branch,
+      status: "Need Follow-up",
+      assignee: getBranchTeamAssignee(booking.branch || route.branch),
+      tags: ["Booking", "Team Will Call"],
+      updatedBy: "Staff Team Will Call Button"
+    });
+
+    await sendStaffActionAck(route.staffNumber, buildStaffActionAckBody("team_will_call", booking), route);
     return true;
   }
 
@@ -20478,6 +20936,17 @@ app.post("/webhook", async (req, res) => {
     const originalText = getIncomingMessageText(message);
     const text = normalizeText(originalText);
     const replyLanguage = getMessageReplyLanguage(from, message, originalText || text);
+
+    const staffActionHandled = await handleStaffBookingAction({
+      from,
+      originalText,
+      incomingPhoneNumberId
+    });
+
+    if (staffActionHandled) {
+      return res.sendStatus(200);
+    }
+
     const optEventDate = getDubaiTimestamp();
     const isOptInMessage = isOptInText(text);
     const isOptOutMessage = isOptOutText(text);
