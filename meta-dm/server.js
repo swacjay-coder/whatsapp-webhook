@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-greeting-intent-location-context-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-booking-context-smart-faq-override-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -485,6 +485,32 @@ function isTeam(text) {
   const value = normalizeText(text);
   return value === "team" || value === "help" || value === "help | فريقنا" ||
     includesAny(value, ["فريق", "ساعدني", "مساعدة", "موظف", "كلموني", "تواصل", "بدي احكي مع حدا", "human", "support", "staff", "agent", "talk to team", "contact"]);
+}
+
+function isBookingContextSmartFaqOverride(intent) {
+  return [
+    "price",
+    "results",
+    "details",
+    "surgery",
+    "natural",
+    "duration",
+    "pain",
+    "location",
+    "team",
+    "suitability",
+    "men_women",
+    "privacy",
+    "durability",
+    "detectability",
+    "consult_vs_service",
+    "branch_help",
+    "hesitation",
+    "free_consultation",
+    "color_density",
+    "shaving",
+    "lifestyle"
+  ].includes(intent);
 }
 
 function detectSmartIntent(text) {
@@ -1775,6 +1801,31 @@ async function handleIncomingEvent(entry, event) {
     state.lang = lang;
     await sendText(channel, senderId, smartIntentBody("location", lang), intentReplies("location", lang));
     return;
+  }
+
+  if (isBookingStateActive(state)) {
+    const bookingContextIntent = detectSmartIntent(intentText);
+    if (isBookingContextSmartFaqOverride(bookingContextIntent)) {
+      if (bookingContextIntent === "results") {
+        await sendResultsContent(channel, senderId, lang);
+        await sendText(channel, senderId, resultsBody(lang), resultsReplies(lang));
+        return;
+      }
+
+      if (bookingContextIntent === "details") {
+        await sendDetailsContent(channel, senderId, lang);
+        await sendText(channel, senderId, detailsBody(lang), detailsReplies(lang));
+        return;
+      }
+
+      if (bookingContextIntent === "team") {
+        await sendText(channel, senderId, teamBody(lang), mainReplies(lang));
+        return;
+      }
+
+      await sendText(channel, senderId, smartIntentBody(bookingContextIntent, lang), intentReplies(bookingContextIntent, lang));
+      return;
+    }
   }
 
   const handledBookingContext = await handleBookingContextText({ channel, senderId, text: intentText, state, lang });
