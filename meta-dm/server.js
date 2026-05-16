@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-dedupe-english-only";
+const BOT_VERSION = "iconic-meta-dm-v1-staff-notify-hard-dedupe-english-only";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -111,6 +111,7 @@ const ABU_DHABI_STAFF_NUMBER = (
 
 const conversationState = new Map();
 const staffNotificationCache = new Map();
+const staffWhatsAppSendCache = new Map();
 const STAFF_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
 
 function normalizeText(value) {
@@ -1238,6 +1239,33 @@ async function sendStaffBookingAlertOnce(state, channel, senderId) {
   return sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
 }
 
+
+function buildStaffWhatsAppDedupeKey(to, body, phoneNumberId) {
+  return [
+    (to || "").toString().replace(/\D/g, ""),
+    (phoneNumberId || "").toString().trim(),
+    (body || "").toString().trim()
+  ].join("|");
+}
+
+function shouldSendStaffWhatsAppText(to, body, phoneNumberId) {
+  const key = buildStaffWhatsAppDedupeKey(to, body, phoneNumberId);
+  const now = Date.now();
+  const lastSentAt = staffWhatsAppSendCache.get(key) || 0;
+
+  for (const [cacheKey, sentAt] of staffWhatsAppSendCache.entries()) {
+    if (now - sentAt > STAFF_NOTIFICATION_DEDUPE_MS) staffWhatsAppSendCache.delete(cacheKey);
+  }
+
+  if (now - lastSentAt < STAFF_NOTIFICATION_DEDUPE_MS) {
+    console.log("[Staff Notify] skipped duplicate WhatsApp send");
+    return { ok: false, skipped: true, reason: "duplicate_whatsapp_send", key };
+  }
+
+  staffWhatsAppSendCache.set(key, now);
+  return { ok: true, key };
+}
+
 async function sendStaffWhatsAppText(to, body, phoneNumberId) {
   if (!STAFF_NOTIFY_ENABLED) {
     console.log("[Staff Notify] skipped because STAFF_NOTIFY_ENABLED=false");
@@ -1255,6 +1283,9 @@ async function sendStaffWhatsAppText(to, body, phoneNumberId) {
     console.log("[Staff Notify] skipped: WhatsApp token or sender phone number ID missing");
     return { ok: false, skipped: true, reason: "missing_whatsapp_env" };
   }
+
+  const dedupe = shouldSendStaffWhatsAppText(to, body, senderPhoneNumberId);
+  if (!dedupe.ok) return dedupe;
 
   const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(senderPhoneNumberId)}/messages`;
   const payload = {
@@ -1277,6 +1308,7 @@ async function sendStaffWhatsAppText(to, body, phoneNumberId) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      staffWhatsAppSendCache.delete(dedupe.key);
       console.log("[Staff Notify] failed", response.status, JSON.stringify(data));
       return { ok: false, status: response.status, data };
     }
