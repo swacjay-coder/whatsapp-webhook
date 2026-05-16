@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-token-check-diagnostic";
+const BOT_VERSION = "iconic-meta-dm-v1-direct-booking-parser-pending-confirmation";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -565,7 +565,7 @@ const STAFF_DIRECTORY = [
   { canonical: "Emad", payload: "STAFF_EMAD", branch: "Dubai", aliases: ["emad", "imad", "عماد"] },
   { canonical: "Hamouda", payload: "STAFF_HAMOUDA", branch: "Dubai", aliases: ["hamouda", "hamoda", "حمودة", "حموده"] },
   { canonical: "Ani", payload: "STAFF_ANI", branch: "Dubai", aliases: ["ani", "اني", "آني"] },
-  { canonical: "Omar", payload: "STAFF_OMAR", branch: "Dubai", aliases: ["omar", "عمر"] },
+  { canonical: "Omar", payload: "STAFF_OMAR", branch: "Dubai", aliases: ["omar", "omer", "عمر"] },
   { canonical: "Adham", payload: "STAFF_ADHAM", branch: "Abu Dhabi", aliases: ["adham", "أدهم", "ادهم"] },
   { canonical: "Osama", payload: "STAFF_OSAMA", branch: "Abu Dhabi", aliases: ["osama", "أسامة", "اسامة"] }
 ];
@@ -600,6 +600,41 @@ function findDayFromText(text) {
   if (weekDay) return { payload: weekDay.payload, day: weekDay.day, kind: "weekday" };
   if (value.includes("this week") || value.includes("هدا الأسبوع") || value.includes("هذا الأسبوع") || value.includes("هالأسبوع")) return { payload: "DAY_WEEK", day: "This week | هذا الأسبوع", kind: "week" };
   return null;
+}
+
+function findTimeFromText(text) {
+  const value = normalizeText(text);
+
+  const patterns = [
+    /\bat\s*(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm)?\b/i,
+    /\b(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm)\b/i,
+    /(?:الساعة|ساعه|عالساعة|ع الساعة)\s*(1[0-2]|[1-9])(?::([0-5]\d))?/i
+  ];
+
+  let match = null;
+  for (const pattern of patterns) {
+    match = value.match(pattern);
+    if (match) break;
+  }
+
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  const suffix = (match[3] || "").toLowerCase();
+
+  if (suffix === "pm" && hour < 12) hour += 12;
+  if (suffix === "am" && hour === 12) hour = 0;
+
+  // If the customer writes a bare hour, map it to Iconic working slots.
+  // Examples: "at 3" => 3:00 PM, "الساعة 6:30" => 6:30 PM.
+  if (!suffix && hour >= 1 && hour <= 6) hour += 12;
+
+  const minutes = hour * 60 + minute;
+  const slot = allTimeSlots().find((item) => item.minutes === minutes);
+  if (!slot) return null;
+
+  return { payload: slot.payload, time: slot.title, minutes };
 }
 
 function isBookingStateActive(state = {}) {
@@ -710,8 +745,9 @@ async function handleDirectAppointmentRequest({ channel, senderId, text, state, 
   const staff = findStaffFromText(text);
   const detectedDay = findDayFromText(text);
   const branchFromText = findBranchFromText(text);
+  const detectedTime = findTimeFromText(text);
 
-  if (!staff && !detectedDay && !branchFromText) return false;
+  if (!staff && !detectedDay && !branchFromText && !detectedTime) return false;
 
   state.lang = lang;
   state.intent = staff ? "service" : (state.intent || "booking");
@@ -727,6 +763,10 @@ async function handleDirectAppointmentRequest({ channel, senderId, text, state, 
     clearBookingAfterStaff(state);
   }
 
+  if (detectedTime) {
+    state.time = detectedTime.time;
+  }
+
   if (!state.branch && state.intent !== "booking") {
     await sendText(channel, senderId, askBranchBody(state.intent, lang), branchReplies(lang));
     return true;
@@ -734,9 +774,6 @@ async function handleDirectAppointmentRequest({ channel, senderId, text, state, 
 
   if (staff && detectedDay) {
     const branchAr = state.branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
-    const intro = isAr(lang)
-      ? `أكيد 👌\n\nحجز سيرفس مع ${staff.canonical} في فرع ${branchAr}.\n\nاختار الوقت المناسب:`
-      : `Sure 👌\n\nService appointment with ${staff.canonical} at ${state.branch} branch.\n\nPlease choose a suitable time:`;
 
     if (detectedDay.payload === "DAY_WEEK") {
       state.dayPayload = "DAY_WEEK";
@@ -748,18 +785,36 @@ async function handleDirectAppointmentRequest({ channel, senderId, text, state, 
     if (detectedDay.kind === "weekday") {
       state.day = detectedDay.day;
       state.dayPayload = "DAY_WEEK";
-      await sendText(channel, senderId, intro, timeReplies("DAY_WEEK", lang));
+    } else {
+      state.day = detectedDay.day;
+      state.dayPayload = detectedDay.payload;
+    }
+
+    if (detectedTime) {
+      await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
+      const staffNumber = getStaffNumberForBranch(state.branch);
+      const staffSenderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(state.branch);
+      const alertBody = buildStaffBookingAlert(state, channel, senderId);
+      await sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
+      resetState(senderId);
       return true;
     }
 
-    state.day = detectedDay.day;
-    state.dayPayload = detectedDay.payload;
-    await sendText(channel, senderId, intro, timeReplies(detectedDay.payload, lang));
+    const intro = isAr(lang)
+      ? `أكيد 👌\n\nحجز سيرفس مع ${staff.canonical} في فرع ${branchAr}.\n\nاختار الوقت المناسب:`
+      : `Sure 👌\n\nService appointment with ${staff.canonical} at ${state.branch} branch.\n\nPlease choose a suitable time:`;
+
+    await sendText(channel, senderId, intro, timeReplies(state.dayPayload || "DAY_WEEK", lang));
     return true;
   }
 
   if (staff && !detectedDay) {
     const branchAr = state.branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
+    if (detectedTime) {
+      await sendText(channel, senderId, isAr(lang) ? `أكيد 👌\n\nحجز سيرفس مع ${staff.canonical} في فرع ${branchAr} الساعة ${detectedTime.time}.\n\nاختار اليوم المناسب:` : `Sure 👌\n\nService appointment with ${staff.canonical} at ${state.branch} branch at ${detectedTime.time}.\n\nPlease choose the day:`, dayReplies(lang));
+      return true;
+    }
+
     await sendText(channel, senderId, isAr(lang) ? `أكيد، مع ${staff.canonical} في فرع ${branchAr}.\nاختار اليوم المناسب:` : `Sure, with ${staff.canonical} at ${state.branch} branch.\nPlease choose the day:`, dayReplies(lang));
     return true;
   }
@@ -770,6 +825,11 @@ async function handleDirectAppointmentRequest({ channel, senderId, text, state, 
       return true;
     }
     return sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, detectedDay });
+  }
+
+  if (detectedTime) {
+    await sendText(channel, senderId, isAr(lang) ? `تمام، سجلت الوقت ${detectedTime.time}.\nاختار اليوم المناسب:` : `Got it, selected ${detectedTime.time}.\nPlease choose the day:`, dayReplies(lang));
+    return true;
   }
 
   const next = contextualBookingPrompt(state, lang);
@@ -834,6 +894,7 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
   }
 
   const detectedDay = findDayFromText(text);
+  const detectedTime = findTimeFromText(text);
   if (isChangeDayText(value) || detectedDay) {
     if (detectedDay) return sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, detectedDay });
     delete state.day;
@@ -850,6 +911,22 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
     }
 
     await sendText(channel, senderId, isAr(lang) ? `أكيد، اختار اليوم أولًا حتى نعرض الأوقات:` : `Sure, please choose the day first so we can show times:`, dayReplies(lang));
+    return true;
+  }
+
+  if (detectedTime) {
+    state.time = detectedTime.time;
+    if (!state.dayPayload && !state.day) {
+      await sendText(channel, senderId, isAr(lang) ? `تمام، سجلت الوقت ${detectedTime.time}.\nاختار اليوم المناسب:` : `Got it, selected ${detectedTime.time}.\nPlease choose the day:`, dayReplies(lang));
+      return true;
+    }
+
+    await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
+    const staffNumber = getStaffNumberForBranch(state.branch);
+    const staffSenderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(state.branch);
+    const alertBody = buildStaffBookingAlert(state, channel, senderId);
+    await sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
+    resetState(senderId);
     return true;
   }
 
@@ -1056,16 +1133,15 @@ function finalSummaryBody(state, lang = "en") {
   const branchAr = branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
   const day = state.day || (isAr(lang) ? "غير محدد" : "Not selected");
   const time = state.time || (isAr(lang) ? "مرن" : "Flexible");
-  const staff = state.staff || "";
+  const staff = state.staff || (isAr(lang) ? "غير محدد" : "Not selected");
 
   if (isAr(lang)) {
-    const requestType = state.intent === "service" ? "موعد سيرفس" : "حجز استشارة";
-    return `تم استلام طلبك ✅\n\nنوع الطلب: ${requestType}\nالفرع: ${branchAr}\nاليوم: ${day}\nالوقت: ${time}${staff ? `\nالمختص: ${staff}` : ""}\n\nالفريق سيراجع الطلب ويرد عليك قريباً لتأكيد الموعد.`;
+    return `⚠️ تم استلام طلب الحجز، لكنه ليس تأكيدًا نهائيًا بعد.\n\nتفاصيل الطلب:\nالفرع: ${branchAr}\nالمختص: ${staff}\nاليوم: ${day}\nالوقت: ${time}\n\nسيقوم الفريق بمراجعة توفر الوقت والمختص، وسنرجع لك خلال 2 إلى 5 دقائق لتأكيد الموعد.`;
   }
 
-  const requestType = state.intent === "service" ? "Service Appointment" : "Consultation Booking";
-  return `Your request has been received ✅\n\nRequest type: ${requestType}\nBranch: ${branch}\nDay: ${day}\nTime: ${time}${staff ? `\nSpecialist: ${staff}` : ""}\n\nOur team will review it and confirm your appointment shortly.`;
+  return `⚠️ Your booking request has been received, but it is not confirmed yet.\n\nRequest details:\nBranch: ${branch}\nSpecialist: ${staff}\nDay: ${day}\nTime: ${time}\n\nOur team will check the availability of the time and specialist, and we’ll get back to you within 2 to 5 minutes to confirm the appointment.`;
 }
+
 
 function teamBody(lang = "en") {
   if (isAr(lang)) {
@@ -1568,57 +1644,6 @@ app.get("/", (req, res) => {
   res.status(200).json({ ok: true, service: "iconic-meta-dm", version: BOT_VERSION });
 });
 
-
-function getTokenSourceForMessenger() {
-  if ((process.env.MESSENGER_PAGE_ACCESS_TOKEN || "").toString().trim()) return "MESSENGER_PAGE_ACCESS_TOKEN";
-  if ((process.env.META_PAGE_ACCESS_TOKEN || "").toString().trim()) return "META_PAGE_ACCESS_TOKEN";
-  return "missing";
-}
-
-function getTokenSourceForInstagram() {
-  if ((process.env.INSTAGRAM_ACCESS_TOKEN || "").toString().trim()) return "INSTAGRAM_ACCESS_TOKEN";
-  if ((process.env.IG_ACCESS_TOKEN || "").toString().trim()) return "IG_ACCESS_TOKEN";
-  if ((process.env.META_PAGE_ACCESS_TOKEN || "").toString().trim()) return "META_PAGE_ACCESS_TOKEN";
-  return "missing";
-}
-
-async function inspectMetaToken(label, token) {
-  const result = {
-    label,
-    present: Boolean(token),
-    valid: false,
-    tokenLength: token ? token.length : 0,
-    pageId: "",
-    pageName: "",
-    errorCode: null,
-    errorSubcode: null,
-    errorMessage: ""
-  };
-
-  if (!token) return result;
-
-  try {
-    const url = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/me?fields=id,name&access_token=${encodeURIComponent(token)}`;
-    const response = await fetch(url);
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      result.errorCode = data?.error?.code || null;
-      result.errorSubcode = data?.error?.error_subcode || null;
-      result.errorMessage = data?.error?.message || "Unknown token validation error";
-      return result;
-    }
-
-    result.valid = true;
-    result.pageId = data?.id || "";
-    result.pageName = data?.name || "";
-    return result;
-  } catch (error) {
-    result.errorMessage = error?.message || "Token validation request failed";
-    return result;
-  }
-}
-
 app.get("/api/version", (req, res) => {
   res.status(200).json({
     ok: true,
@@ -1633,54 +1658,6 @@ app.get("/api/version", (req, res) => {
       phase: 2,
       intents: ["price", "results", "details", "surgery", "natural", "duration", "pain", "booking", "location", "team", "suitability", "men_women", "privacy", "durability", "detectability", "service_followup", "consult_vs_service", "branch_help", "availability", "hesitation", "direct_appointment"]
     }
-  });
-});
-
-
-app.get("/api/token-check", async (req, res) => {
-  const messengerRaw = (process.env.MESSENGER_PAGE_ACCESS_TOKEN || "").toString().trim();
-  const instagramRaw = (process.env.INSTAGRAM_ACCESS_TOKEN || "").toString().trim();
-  const metaPageRaw = (process.env.META_PAGE_ACCESS_TOKEN || "").toString().trim();
-  const igRaw = (process.env.IG_ACCESS_TOKEN || "").toString().trim();
-
-  const [messenger, instagram, metaPageFallback, igFallback] = await Promise.all([
-    inspectMetaToken("MESSENGER_PAGE_ACCESS_TOKEN", messengerRaw),
-    inspectMetaToken("INSTAGRAM_ACCESS_TOKEN", instagramRaw),
-    inspectMetaToken("META_PAGE_ACCESS_TOKEN", metaPageRaw),
-    inspectMetaToken("IG_ACCESS_TOKEN", igRaw)
-  ]);
-
-  res.status(200).json({
-    ok: true,
-    service: "iconic-meta-dm",
-    version: BOT_VERSION,
-    expected: {
-      pageId: MESSENGER_PAGE_ID,
-      pageName: "Iconic Hair Care",
-      instagramBusinessAccountId: INSTAGRAM_BUSINESS_ACCOUNT_ID
-    },
-    selectedSources: {
-      messenger: getTokenSourceForMessenger(),
-      instagram: getTokenSourceForInstagram()
-    },
-    envPresence: {
-      MESSENGER_PAGE_ACCESS_TOKEN: Boolean(messengerRaw),
-      INSTAGRAM_ACCESS_TOKEN: Boolean(instagramRaw),
-      META_PAGE_ACCESS_TOKEN: Boolean(metaPageRaw),
-      IG_ACCESS_TOKEN: Boolean(igRaw)
-    },
-    comparisons: {
-      messengerAndInstagramSame: Boolean(messengerRaw && instagramRaw && messengerRaw === instagramRaw),
-      messengerAndMetaPageSame: Boolean(messengerRaw && metaPageRaw && messengerRaw === metaPageRaw),
-      instagramAndMetaPageSame: Boolean(instagramRaw && metaPageRaw && instagramRaw === metaPageRaw)
-    },
-    checks: {
-      messenger,
-      instagram,
-      metaPageFallback,
-      igFallback
-    },
-    note: "This endpoint never returns token values. It only validates which Page each token belongs to and whether Meta reports it as valid."
   });
 });
 
