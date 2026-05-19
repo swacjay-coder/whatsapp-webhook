@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-instagram-only-clean-logs-fix-v2";
+const BOT_VERSION = "iconic-meta-dm-v1-instagram-booking-loop-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -755,14 +755,21 @@ function findDayFromText(text) {
   return null;
 }
 
+function normalizeArabicIndicDigits(value = "") {
+  return (value || "").toString()
+    .replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit).toString())
+    .replace(/[۰-۹]/g, (digit) => "۰۱۲۳۴۵۶۷۸۹".indexOf(digit).toString());
+}
+
 function findTimeFromText(text) {
-  const value = normalizeText(text);
+  const value = normalizeArabicIndicDigits(normalizeText(text));
 
   const patterns = [
     /\bat\s*(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm)?\b/i,
     /\b(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm)\b/i,
-    /(?:الساعة|ساعه|عالساعة|ع الساعة)\s*(1[0-2]|[1-9])(?::([0-5]\d))?/i,
-    /^(1[0-2]|[1-9])(?::([0-5]\d))?$/i
+    /(?:الساعة|الساعه|ساعة|ساعه|عالساعة|عالساعه|ع الساعة|ع الساعه)\s*(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm|ص|م|صباح|مساء)?/i,
+    /(?:time|موعد|وقت)\s*(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm)?/i,
+    /^(1[0-2]|[1-9])(?::([0-5]\d))?\s*(am|pm)?$/i
   ];
 
   let match = null;
@@ -777,11 +784,11 @@ function findTimeFromText(text) {
   const minute = Number(match[2] || 0);
   const suffix = (match[3] || "").toLowerCase();
 
-  if (suffix === "pm" && hour < 12) hour += 12;
-  if (suffix === "am" && hour === 12) hour = 0;
+  if ((suffix === "pm" || suffix === "م" || suffix === "مساء") && hour < 12) hour += 12;
+  if ((suffix === "am" || suffix === "ص" || suffix === "صباح") && hour === 12) hour = 0;
 
   // If the customer writes a bare hour, map it to Iconic working slots.
-  // Examples: "at 3" => 3:00 PM, "الساعة 6:30" => 6:30 PM.
+  // Examples: "at 3" => 3:00 PM, "ساعة 5" => 5:00 PM, "الساعة 6:30" => 6:30 PM.
   if (!suffix && hour >= 1 && hour <= 6) hour += 12;
 
   const minutes = hour * 60 + minute;
@@ -876,6 +883,75 @@ async function finalizeIfBookingMemoryComplete({ channel, senderId, state, lang 
   return true;
 }
 
+function getDetectedBookingFactsCount({ staff = null, detectedDay = null, branchFromText = "", detectedTime = null } = {}) {
+  return [staff, detectedDay, branchFromText, detectedTime].filter(Boolean).length;
+}
+
+function applyDetectedDayToState(state, detectedDay) {
+  if (!detectedDay) return;
+
+  if (detectedDay.kind === "weekday") {
+    state.day = detectedDay.day;
+    state.dayPayload = "DAY_WEEK";
+    return;
+  }
+
+  state.day = detectedDay.day;
+  state.dayPayload = detectedDay.payload;
+}
+
+async function handleCombinedBookingDetails({ channel, senderId, text, state, lang, staff = null, detectedDay = null, branchFromText = "", detectedTime = null }) {
+  const factsCount = getDetectedBookingFactsCount({ staff, detectedDay, branchFromText, detectedTime });
+  if (factsCount < 2) return false;
+
+  state.lang = lang;
+  state.intent = staff ? "service" : (state.intent || "booking");
+
+  if (branchFromText) {
+    if (state.branch && state.branch !== branchFromText) {
+      delete state.staff;
+    }
+    state.branch = branchFromText;
+  }
+
+  if (staff) {
+    state.intent = "service";
+    state.branch = staff.branch;
+    state.staff = staff.canonical;
+  }
+
+  if (detectedDay) {
+    applyDetectedDayToState(state, detectedDay);
+  }
+
+  if (detectedTime) {
+    state.time = detectedTime.time;
+  }
+
+  debugLog("[Booking Natural Details Merged]", {
+    channel,
+    senderId,
+    textPreview: previewText(text),
+    factsCount,
+    staff: staff?.canonical || state.staff || "",
+    branch: state.branch || "",
+    day: state.day || "",
+    time: state.time || "",
+    intent: state.intent || ""
+  });
+
+  if (detectedDay?.payload === "DAY_WEEK" && detectedDay.kind === "week") {
+    await sendText(channel, senderId, askWeekDayBody(lang), weekDayReplies(lang));
+    return true;
+  }
+
+  if (await finalizeIfBookingMemoryComplete({ channel, senderId, state, lang })) return true;
+
+  const next = contextualBookingPrompt(state, lang);
+  await sendText(channel, senderId, next.body, next.replies);
+  return true;
+}
+
 async function sendDayOrTimeAfterDetectedDay({ channel, senderId, state, lang, detectedDay }) {
   if (!detectedDay) {
     await sendText(channel, senderId, askDayBody(lang), dayReplies(lang));
@@ -922,6 +998,19 @@ async function handleDirectAppointmentRequest({ channel, senderId, text, state, 
   const detectedTime = findTimeFromText(text);
 
   if (!staff && !detectedDay && !branchFromText && !detectedTime) return false;
+
+  const handledCombinedDetails = await handleCombinedBookingDetails({
+    channel,
+    senderId,
+    text,
+    state,
+    lang,
+    staff,
+    detectedDay,
+    branchFromText,
+    detectedTime
+  });
+  if (handledCombinedDetails) return true;
 
   state.lang = lang;
   state.intent = staff ? "service" : (state.intent || "booking");
@@ -1019,6 +1108,23 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
   }
 
   const explicitBranch = findBranchFromText(text);
+  const staff = findStaffFromText(text);
+  const detectedDay = findDayFromText(text);
+  const detectedTime = findTimeFromText(text);
+
+  const handledCombinedDetails = await handleCombinedBookingDetails({
+    channel,
+    senderId,
+    text,
+    state,
+    lang,
+    staff,
+    detectedDay,
+    branchFromText: explicitBranch,
+    detectedTime
+  });
+  if (handledCombinedDetails) return true;
+
   if (isChangeBranchText(value) || explicitBranch) {
     if (explicitBranch) {
       state.branch = explicitBranch;
@@ -1037,7 +1143,6 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
     return true;
   }
 
-  const staff = findStaffFromText(text);
   if (isChangeStaffText(value) || staff) {
     if (state.intent !== "service" && !staff) {
       await sendText(channel, senderId, isAr(lang) ? `اختيار المختص متاح لمسار السيرفس. إذا بدك سيرفس اختار Service، أو كمل حجز الاستشارة.` : `Specialist selection is available for Service bookings. Choose Service, or continue your consultation booking.`, bookingReplies(lang));
@@ -1061,9 +1166,6 @@ async function handleBookingContextText({ channel, senderId, text, state, lang }
     await sendText(channel, senderId, isAr(lang) ? `أكيد، اختار المختص المناسب:` : `Sure, please choose the specialist:`, staffReplies(state.branch, lang));
     return true;
   }
-
-  const detectedDay = findDayFromText(text);
-  const detectedTime = findTimeFromText(text);
 
   if (detectedDay && detectedTime) {
     state.time = detectedTime.time;
