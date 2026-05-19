@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-appointment-intent-language-cta-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-appointment-intent-debug-staff-notify-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -115,6 +115,70 @@ const staffWhatsAppSendCache = new Map();
 const staffSenderLockCache = new Map();
 const bookingFinalizationCache = new Map();
 const STAFF_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
+
+const META_DM_DEBUG_LOGS_ENABLED = (process.env.META_DM_DEBUG_LOGS_ENABLED || "true").toString().toLowerCase() !== "false";
+
+function debugLog(label, data = {}) {
+  if (!META_DM_DEBUG_LOGS_ENABLED) return;
+
+  try {
+    console.log(`${label} ${JSON.stringify(data)}`);
+  } catch (error) {
+    console.log(label, data);
+  }
+}
+
+function previewText(value, maxLength = 220) {
+  const text = (value || "").toString().replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}...`;
+}
+
+function getEventType(event = {}) {
+  if (event?.message?.quick_reply?.payload) return "quick_reply";
+  if (event?.postback?.payload) return "postback";
+  if (event?.message?.text) return "text";
+  if (event?.message?.attachments?.length) return "attachment";
+  return "unknown";
+}
+
+function summarizeQuickReplies(quickReplies = []) {
+  return (quickReplies || []).map((reply) => ({
+    title: reply?.title || "",
+    payload: reply?.payload || ""
+  }));
+}
+
+function summarizeState(state = {}) {
+  return {
+    intent: state.intent || "",
+    branch: state.branch || "",
+    staff: state.staff || "",
+    day: state.day || "",
+    dayPayload: state.dayPayload || "",
+    time: state.time || "",
+    lang: state.lang || "",
+    bookingFinalized: Boolean(state.bookingFinalized)
+  };
+}
+
+function getMetaErrorSummary(result = {}) {
+  const error = result?.data?.error || result?.error || result?.data || result;
+  if (!error) return {};
+
+  return {
+    message: error.message || "",
+    type: error.type || "",
+    code: error.code || "",
+    error_subcode: error.error_subcode || "",
+    fbtrace_id: error.fbtrace_id || "",
+    raw: typeof error === "object" ? error : String(error)
+  };
+}
+
+function getWhatsAppMessageId(data = {}) {
+  return data?.messages?.[0]?.id || "";
+}
 
 function normalizeText(value) {
   return (value || "").toString().toLowerCase().trim().replace(/\s+/g, " ");
@@ -1402,6 +1466,17 @@ async function sendStaffBookingAlertOnce(state, channel, senderId) {
   const staffNumber = getStaffNumberForBranch(state.branch);
   const staffSenderPhoneNumberId = getStaffSenderPhoneNumberIdForBranch(state.branch);
   const alertBody = buildStaffBookingAlert(state, channel, senderId);
+
+  debugLog("[Staff Notify Preparing]", {
+    channel,
+    senderId,
+    branch: state.branch || "Dubai",
+    staffNumber,
+    fromPhoneNumberId: staffSenderPhoneNumberId,
+    state: summarizeState(state),
+    bodyPreview: previewText(alertBody)
+  });
+
   return sendStaffWhatsAppText(staffNumber, alertBody, staffSenderPhoneNumberId);
 }
 
@@ -1430,26 +1505,78 @@ function shouldFinalizeBooking(senderId) {
 async function finalizeBookingOnce({ channel, senderId, state, lang }) {
   if (state.bookingFinalized) {
     console.log("[Booking Finalize] skipped duplicate state finalization", senderId);
+    debugLog("[Booking Finalize Debug]", {
+      senderId,
+      reason: "duplicate_state_finalization",
+      state: summarizeState(state)
+    });
     return { ok: false, skipped: true, reason: "duplicate_state_finalization" };
   }
 
   if (!shouldFinalizeBooking(senderId)) {
+    debugLog("[Booking Finalize Debug]", {
+      senderId,
+      reason: "duplicate_sender_finalization",
+      state: summarizeState(state)
+    });
     return { ok: false, skipped: true, reason: "duplicate_sender_finalization" };
   }
 
   // Lock before any async send so two parallel webhook events cannot both notify staff.
   state.bookingFinalized = true;
 
-  const customerReply = await sendText(channel, senderId, finalSummaryBody(state, lang), mainReplies(lang));
+  debugLog("[Booking Finalize Start]", {
+    channel,
+    senderId,
+    lang,
+    state: summarizeState(state)
+  });
+
+  const summaryBody = finalSummaryBody(state, lang);
+  const customerReply = await sendText(channel, senderId, summaryBody, mainReplies(lang));
+
   if (!customerReply?.ok) {
-    console.log("[Staff Notify] skipped because customer final reply failed", customerReply?.status || "no-status");
-    return customerReply;
+    console.log("[Customer Final Reply] failed, staff notify will continue", customerReply?.status || "no-status", JSON.stringify(getMetaErrorSummary(customerReply)));
+    debugLog("[Customer Final Reply Debug]", {
+      channel,
+      senderId,
+      status: customerReply?.status || "no-status",
+      reason: customerReply?.reason || "",
+      error: getMetaErrorSummary(customerReply),
+      replyPreview: previewText(summaryBody),
+      buttons: summarizeQuickReplies(mainReplies(lang))
+    });
+  } else {
+    debugLog("[Customer Final Reply Sent]", {
+      channel,
+      senderId,
+      result: customerReply?.data || {},
+      replyPreview: previewText(summaryBody)
+    });
   }
 
-  await sendStaffBookingAlertOnce(state, channel, senderId);
+  const staffResult = await sendStaffBookingAlertOnce(state, channel, senderId);
+  debugLog("[Booking Finalize Staff Notify Result]", {
+    channel,
+    senderId,
+    ok: Boolean(staffResult?.ok),
+    skipped: Boolean(staffResult?.skipped),
+    reason: staffResult?.reason || "",
+    status: staffResult?.status || "",
+    wamid: getWhatsAppMessageId(staffResult?.data || {}),
+    error: getMetaErrorSummary(staffResult)
+  });
+
   resetState(senderId);
-  return customerReply;
+
+  return {
+    ok: Boolean(customerReply?.ok || staffResult?.ok),
+    customerReply,
+    staffResult,
+    customerReplyFailed: !customerReply?.ok
+  };
 }
+
 
 
 function buildStaffWhatsAppDedupeKey(to, body, phoneNumberId) {
@@ -1497,7 +1624,15 @@ async function sendStaffWhatsAppText(to, body, phoneNumberId) {
   }
 
   const dedupe = shouldSendStaffWhatsAppText(to, body, senderPhoneNumberId);
-  if (!dedupe.ok) return dedupe;
+  if (!dedupe.ok) {
+    debugLog("[Staff Notify Skipped]", {
+      to,
+      fromPhoneNumberId: senderPhoneNumberId,
+      reason: dedupe.reason || "dedupe",
+      bodyPreview: previewText(body)
+    });
+    return dedupe;
+  }
 
   const url = `https://graph.facebook.com/v18.0/${encodeURIComponent(senderPhoneNumberId)}/messages`;
   const payload = {
@@ -1507,6 +1642,13 @@ async function sendStaffWhatsAppText(to, body, phoneNumberId) {
     type: "text",
     text: { preview_url: false, body }
   };
+
+  debugLog("[Staff Notify Send Attempt]", {
+    to,
+    fromPhoneNumberId: senderPhoneNumberId,
+    bodyPreview: previewText(body),
+    bodyLength: (body || "").toString().length
+  });
 
   try {
     const response = await fetch(url, {
@@ -1522,13 +1664,30 @@ async function sendStaffWhatsAppText(to, body, phoneNumberId) {
     if (!response.ok) {
       staffWhatsAppSendCache.delete(dedupe.key);
       console.log("[Staff Notify] failed", response.status, JSON.stringify(data));
+      debugLog("[Staff Notify Failed Debug]", {
+        to,
+        fromPhoneNumberId: senderPhoneNumberId,
+        status: response.status,
+        error: getMetaErrorSummary({ data })
+      });
       return { ok: false, status: response.status, data };
     }
 
     console.log("[Staff Notify] sent", JSON.stringify(data));
+    debugLog("[Staff Notify Sent Debug]", {
+      to,
+      fromPhoneNumberId: senderPhoneNumberId,
+      wamid: getWhatsAppMessageId(data),
+      data
+    });
     return { ok: true, data };
   } catch (error) {
     console.log("[Staff Notify] error", error.message);
+    debugLog("[Staff Notify Error Debug]", {
+      to,
+      fromPhoneNumberId: senderPhoneNumberId,
+      error: error.message
+    });
     return { ok: false, error: error.message };
   }
 }
@@ -1554,6 +1713,13 @@ async function sendMetaMessage(channel, recipientId, message) {
 
   if (!config.accessToken || !config.senderId) {
     console.log(`[Meta Send] skipped: missing env for ${channel}`);
+    debugLog("[Meta Send Skipped]", {
+      channel,
+      recipientId,
+      reason: "missing_env",
+      hasAccessToken: Boolean(config.accessToken),
+      senderId: config.senderId || ""
+    });
     return { ok: false, skipped: true, reason: "missing_env" };
   }
 
@@ -1563,6 +1729,15 @@ async function sendMetaMessage(channel, recipientId, message) {
   if (channel !== "instagram") {
     payload.messaging_type = "RESPONSE";
   }
+
+  debugLog("[Meta Send Attempt]", {
+    channel,
+    recipientId,
+    senderId: config.senderId,
+    messageTextPreview: previewText(message?.text || ""),
+    quickReplies: summarizeQuickReplies(message?.quick_replies || []),
+    attachmentType: message?.attachment?.type || ""
+  });
 
   try {
     const response = await fetch(`${url}?access_token=${encodeURIComponent(config.accessToken)}`, {
@@ -1581,19 +1756,50 @@ async function sendMetaMessage(channel, recipientId, message) {
       // Instagram sender is not a Messenger PSID. The real Instagram reply may still
       // be delivered, so keep this silent to avoid scary red log noise.
       if (channel === "messenger" && errorCode === 100 && errorSubcode === 2018001) {
+        debugLog("[Meta Send Skipped]", {
+          channel,
+          recipientId,
+          status: response.status,
+          reason: "messenger_no_matching_user",
+          error: getMetaErrorSummary({ data })
+        });
         return { ok: false, skipped: true, reason: "messenger_no_matching_user", status: response.status, data };
       }
 
       console.log(`[Meta Send] failed ${channel}`, response.status, JSON.stringify(data));
+      debugLog("[Meta Send Failed Debug]", {
+        channel,
+        recipientId,
+        senderId: config.senderId,
+        status: response.status,
+        error: getMetaErrorSummary({ data }),
+        messageTextPreview: previewText(message?.text || ""),
+        quickReplies: summarizeQuickReplies(message?.quick_replies || [])
+      });
       return { ok: false, status: response.status, data };
     }
 
+    debugLog("[Meta Send Sent]", {
+      channel,
+      recipientId,
+      senderId: config.senderId,
+      data,
+      messageTextPreview: previewText(message?.text || "")
+    });
     return { ok: true, data };
   } catch (error) {
     console.log(`[Meta Send] error ${channel}`, error.message);
+    debugLog("[Meta Send Error Debug]", {
+      channel,
+      recipientId,
+      senderId: config.senderId,
+      error: error.message,
+      messageTextPreview: previewText(message?.text || "")
+    });
     return { ok: false, error: error.message };
   }
 }
+
 
 async function sendText(channel, recipientId, text, quickReplies = []) {
   const message = { text };
@@ -1840,10 +2046,25 @@ async function handleIncomingEvent(entry, event) {
   const lang = getTurnLanguage(text, state);
   state.lang = lang;
 
+  debugLog("[Meta Incoming]", {
+    channel,
+    senderId,
+    eventType: getEventType(event),
+    textPreview: previewText(text),
+    lang,
+    currentState: summarizeState(state)
+  });
+
   const intentText = hasGreetingWithIntent(text) ? stripLeadingGreeting(text) : text;
 
   const payload = isPayloadOnly(text) ? text.toUpperCase().trim() : "";
   if (payload) {
+    debugLog("[Meta Incoming Payload]", {
+      channel,
+      senderId,
+      payload,
+      state: summarizeState(state)
+    });
     const handledPayload = await handlePayload({ channel, senderId, payload, state, lang });
     if (handledPayload) return;
   }
@@ -2014,6 +2235,10 @@ app.post(["/webhook", "/webhook/meta", "/api/webhook"], async (req, res) => {
 
   try {
     const events = collectMessagingEvents(req.body);
+    debugLog("[Webhook Received]", {
+      object: req.body?.object || "",
+      eventCount: events.length
+    });
     for (const { entry, event } of events) {
       await handleIncomingEvent(entry, event);
     }
