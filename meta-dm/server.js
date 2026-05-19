@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-instagram-only-staff-notify-dedupe-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-instagram-only-clean-logs-fix-v2";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -1438,7 +1438,7 @@ function buildStaffBookingAlert(state, channel, senderId) {
 
   return `${greeting}
 
-A new client booking request has been received from Instagram / Messenger.
+A new client booking request has been received from Instagram.
 
 Please follow up with the client.
 
@@ -1556,16 +1556,28 @@ async function finalizeBookingOnce({ channel, senderId, state, lang }) {
   }
 
   const staffResult = await sendStaffBookingAlertOnce(state, channel, senderId);
-  debugLog("[Booking Finalize Staff Notify Result]", {
-    channel,
-    senderId,
-    ok: Boolean(staffResult?.ok),
-    skipped: Boolean(staffResult?.skipped),
-    reason: staffResult?.reason || "",
-    status: staffResult?.status || "",
-    wamid: getWhatsAppMessageId(staffResult?.data || {}),
-    error: getMetaErrorSummary(staffResult)
-  });
+  const staffWamid = getWhatsAppMessageId(staffResult?.data || {});
+
+  if (staffResult?.ok) {
+    debugLog("[Booking Finalize Completed]", {
+      channel,
+      senderId,
+      customerReplyOk: Boolean(customerReply?.ok),
+      staffNotifyOk: true,
+      staffWamid
+    });
+  } else {
+    debugLog("[Booking Finalize Staff Notify Issue]", {
+      channel,
+      senderId,
+      customerReplyOk: Boolean(customerReply?.ok),
+      staffNotifyOk: false,
+      skipped: Boolean(staffResult?.skipped),
+      reason: staffResult?.reason || "",
+      status: staffResult?.status || "",
+      error: getMetaErrorSummary(staffResult)
+    });
+  }
 
   resetState(senderId);
 
@@ -1673,13 +1685,8 @@ async function sendStaffWhatsAppText(to, body, phoneNumberId) {
       return { ok: false, status: response.status, data };
     }
 
-    console.log("[Staff Notify] sent", JSON.stringify(data));
-    debugLog("[Staff Notify Sent Debug]", {
-      to,
-      fromPhoneNumberId: senderPhoneNumberId,
-      wamid: getWhatsAppMessageId(data),
-      data
-    });
+    const wamid = getWhatsAppMessageId(data);
+    console.log(`[Staff Notify] sent to=${to} fromPhoneNumberId=${senderPhoneNumberId} wamid=${wamid}`);
     return { ok: true, data };
   } catch (error) {
     console.log("[Staff Notify] error", error.message);
@@ -2056,9 +2063,7 @@ async function handleIncomingEvent(entry, event) {
     debugLog("[Meta Incoming Skipped]", {
       channel,
       senderId,
-      reason: "messenger_disabled_business_ai_handles_messenger",
-      textPreview: previewText(text),
-      hasMessengerToken: Boolean(MESSENGER_PAGE_ACCESS_TOKEN && MESSENGER_PAGE_ID)
+      reason: "messenger_disabled_business_ai_handles_messenger"
     });
     return;
   }
