@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-appointment-intent-debug-staff-notify-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-instagram-only-staff-notify-dedupe-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -2036,12 +2036,33 @@ function getChannelFromEntry(entry, event) {
   return "messenger";
 }
 
+// Instagram-only safety mode:
+// Messenger is handled by Meta Business AI, so this service must not answer
+// Messenger events or send staff WhatsApp notifications for Messenger events.
+// This prevents duplicate Angel alerts when Meta sends both Messenger-like and
+// Instagram webhook events for the same customer action.
+function shouldSkipIncomingChannel(channel) {
+  return channel === "messenger";
+}
+
 async function handleIncomingEvent(entry, event) {
   const senderId = getSenderId(event);
   if (!senderId) return;
 
   const channel = getChannelFromEntry(entry, event);
   const text = getMessageText(event);
+
+  if (shouldSkipIncomingChannel(channel)) {
+    debugLog("[Meta Incoming Skipped]", {
+      channel,
+      senderId,
+      reason: "messenger_disabled_business_ai_handles_messenger",
+      textPreview: previewText(text),
+      hasMessengerToken: Boolean(MESSENGER_PAGE_ACCESS_TOKEN && MESSENGER_PAGE_ID)
+    });
+    return;
+  }
+
   const state = getState(senderId);
   const lang = getTurnLanguage(text, state);
   state.lang = lang;
