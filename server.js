@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-34-abu-dhabi-bot-cycle-parity-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-35-staff-flow-confirm-direct-customer-confirmation";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -5211,8 +5211,43 @@ function getStaffBookingActionFromText(text = "") {
   const value = compactText(text);
   if (!value) return "";
 
-  if (value === "confirm" || value === "confirmed" || value === "approve" || value === "approved") return "confirm";
-  if (value === "suggest time" || value === "suggest_time" || value === "suggest" || value.includes("suggest time")) return "suggest_time";
+  // V31.5.8.60.3.9.35 - Staff Flow confirm priority:
+  // Staff WhatsApp alert buttons may arrive as "Confirm Booking",
+  // "confirm_booking", or even the common typo "conform".
+  // Treat all of them as a direct booking confirmation action so the
+  // customer is notified immediately without needing Team Inbox.
+  if (
+    value === "confirm" ||
+    value === "confirmed" ||
+    value === "confirm booking" ||
+    value === "confirm appointment" ||
+    value === "confirm request" ||
+    value === "confirm_booking" ||
+    value === "confirm_appointment" ||
+    value === "approve" ||
+    value === "approved" ||
+    value === "approve booking" ||
+    value === "approve appointment" ||
+    value === "conform" ||
+    value === "conform booking" ||
+    value === "conform appointment" ||
+    value === "تأكيد" ||
+    value === "تأكيد الحجز" ||
+    value === "اكد" ||
+    value === "أكد" ||
+    value === "اكد الحجز" ||
+    value === "أكد الحجز"
+  ) return "confirm";
+
+  if (
+    value === "suggest time" ||
+    value === "suggest_time" ||
+    value === "suggest" ||
+    value === "suggest another time" ||
+    value === "suggest_another_time" ||
+    value.includes("suggest time")
+  ) return "suggest_time";
+
   if (value === "team will call" || value === "team_will_call" || value === "team will contact" || value.includes("team will call")) return "team_will_call";
 
   return "";
@@ -5426,13 +5461,15 @@ function buildStaffActionAckBody(action = "", booking = {}, extra = "") {
 
   if (action === "confirm") {
     return [
-      "Confirmed ✅",
+      "Confirmed ✅ / تم تأكيد الموعد ✅",
       "",
       `Customer: ${customerName}`,
       phone ? `Phone: ${phone}` : "",
       details.preferredDay ? `Day: ${details.preferredDay}` : "",
       details.preferredTime ? `Time: ${details.preferredTime}` : "",
-      "The customer has been notified."
+      "",
+      "The customer has been notified directly.",
+      "تم إرسال التأكيد للعميل مباشرة."
     ].filter(Boolean).join("\n");
   }
 
@@ -6034,7 +6071,7 @@ Please check Team Inbox.`,
       status: "Confirmed",
       notes,
       phoneNumberId,
-      updatedBy: "Staff Confirm Button"
+      updatedBy: "Staff Flow Confirm Button - Direct Customer Confirmation"
     });
 
     if (!sendResult.ok) {
