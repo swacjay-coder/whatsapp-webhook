@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-24-context-safe-no-reply-routing";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-25-remove-1-hour-reminder-keep-20-day-followup";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -3417,35 +3417,17 @@ function getAppointmentReminderOptInButtons(language = "en") {
 }
 
 function isAppointmentReminderYesText(text) {
-  const value = compactText(text);
-  if (!value) return false;
-
-  // Keep the 1-hour reminder flow tied to the explicit reminder buttons/titles.
-  // This avoids confusing it with the separate service follow-up consent flow.
-  return value === "appointment_reminder_yes" ||
-    value === "remind me" ||
-    value === "reminder yes" ||
-    value === "yes reminder" ||
-    value === "ذكرني" ||
-    value === "ذكرني قبل الموعد" ||
-    value === "تذكير" ||
-    value === "أي | نعم" ||
-    value === "اي | نعم" ||
-    value === "yes | نعم";
+  // V31.5.8.60.3.9.25:
+  // The 1-hour appointment reminder opt-in flow is disabled.
+  // Keep this function present for compatibility with older code paths, but never route messages here.
+  return false;
 }
 
 function isAppointmentReminderNoText(text) {
-  const value = compactText(text);
-  if (!value) return false;
-
-  return value === "appointment_reminder_no" ||
-    value === "no reminder" ||
-    value === "do not remind" ||
-    value === "لا" ||
-    value === "لا تذكرني" ||
-    value === "بدون تذكير" ||
-    value === "لا | no" ||
-    value === "no | لا";
+  // V31.5.8.60.3.9.25:
+  // The 1-hour appointment reminder opt-out flow is disabled.
+  // This prevents normal replies such as Arabic "لا" from being misclassified as reminder actions.
+  return false;
 }
 
 function isConfirmedAppointmentStatus(status = "") {
@@ -4808,7 +4790,7 @@ async function sendBookingActionUpdateToCustomer({ booking = {}, status = "", no
     phoneNumberId,
     {
       customerName: booking.customerName || "",
-      messageType: buttons.length ? "Staff Button Action - Customer Update With Reminder Option" : "Staff Button Action - Customer Update"
+      messageType: "Staff Button Action - Customer Update"
     }
   );
 
@@ -4820,7 +4802,7 @@ async function sendBookingActionUpdateToCustomer({ booking = {}, status = "", no
       branch: booking.branch || getLineConfig(phoneNumberId).branch,
       status: "Confirmed Appointment",
       assignee: getBranchTeamAssignee(booking.branch || getLineConfig(phoneNumberId).branch),
-      tags: ["Booking", "Confirmed", "Appointment Reminder Eligible"],
+      tags: ["Booking", "Confirmed"],
       updatedBy
     });
   }
@@ -5903,12 +5885,12 @@ function getReminderOptInButtons() {
 function buildReminderOptInBody() {
   return `${BUSINESS_NAME_SPACED} ✨\n\n` +
     "هل توافق على استلام تذكير / متابعة من Iconic Hair Care؟\n\n" +
-    "هذا التذكير خاص بمتابعة الخدمة كل 20 يوم تقريباً، وليس تذكير الموعد قبل ساعة.\n\n" +
+    "هذا التذكير خاص بمتابعة الخدمة كل 20 يوم تقريباً.\n\n" +
     "الموافقة اختيارية، وتقدر توقف التذكير بأي وقت بإرسال STOP أو إيقاف.\n\n" +
     "------------------------------\n\n" +
     `${BUSINESS_NAME_SPACED} ✨\n\n` +
     "Do you agree to receive service follow-up reminders from Iconic Hair Care?\n\n" +
-    "This reminder is for service follow-up around every 20 days, not the 1-hour appointment reminder.\n\n" +
+    "This reminder is for service follow-up around every 20 days.\n\n" +
     "This is optional. You can stop reminders anytime by sending STOP.";
 }
 
@@ -6723,7 +6705,6 @@ function buildBookingCustomerUpdateBody(status, notes = "", language = "en") {
   if (statusValue.includes("approved") || statusValue.includes("confirmed")) {
     return {
       ok: true,
-      buttons: getAppointmentReminderOptInButtons(language),
       body: isArabic
         ? [
             BUSINESS_NAME_SPACED + " ✨",
@@ -6732,8 +6713,7 @@ function buildBookingCustomerUpdateBody(status, notes = "", language = "en") {
             cleanNotes ? "تفاصيل الموعد:" : "",
             cleanNotes ? cleanNotes : "",
             "",
-            "هل تحب نذكّرك قبل موعدك بساعة؟",
-            "اضغط زر \"ذكرني\" لتفعيل تذكير الموعد قبل ساعة."
+            "إذا احتجت أي تعديل أو مساعدة، يمكنك الرد على هذه الرسالة في أي وقت."
           ].filter((line) => line !== "").join("\n")
         : [
             BUSINESS_NAME_SPACED + " ✨",
@@ -6742,8 +6722,7 @@ function buildBookingCustomerUpdateBody(status, notes = "", language = "en") {
             cleanNotes ? "Appointment details:" : "",
             cleanNotes ? cleanNotes : "",
             "",
-            "Would you like us to remind you 1 hour before your appointment?",
-            "Tap \"Remind Me\" to activate the 1-hour appointment reminder."
+            "If you need any change or support, you can reply to this message anytime."
           ].filter((line) => line !== "").join("\n")
     };
   }
@@ -7481,7 +7460,7 @@ app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
         branch: getLineConfig(phoneNumberId).branch,
         status: "Confirmed Appointment",
         assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
-        tags: ["Booking", "Confirmed", "Appointment Reminder Eligible"],
+        tags: ["Booking", "Confirmed"],
         updatedBy: "Team Confirmed Booking"
       });
     }
@@ -7493,7 +7472,7 @@ app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
       isApprovedBookingStatus(status) ? "Confirmed Appointment" : "Human Reply",
       phoneNumberId,
       {
-        messageType: updateButtons.length > 0 ? "Booking Customer Update With Reminder Option" : "Booking Customer Update"
+        messageType: "Booking Customer Update"
       }
     );
 
