@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-39-auto-1-hour-reminder-on-confirm";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-40-split-appointment-reminder-cron";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -8556,40 +8556,115 @@ app.post("/api/flows/iconic-booking", async (req, res) => {
 });
 
 
+
+function serializeAppointmentReminderRecord(record = {}) {
+  return {
+    phone: record.phone,
+    customerName: record.customerName || "",
+    branch: record.branch,
+    phoneNumberId: record.phoneNumberId,
+    appointmentAt: record.appointmentAt?.toISOString?.() || "",
+    reminderAt: record.reminderAt?.toISOString?.() || "",
+    template: record.template || getAppointmentReminderTemplateName(record.phoneNumberId)
+  };
+}
+
+function buildAppointmentReminderPayload(appointmentDue = []) {
+  return {
+    enabled: APPOINTMENT_REMINDER_ENABLED,
+    templates: getAppointmentReminderTemplateMap(),
+    language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
+    leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
+    dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
+    dueCount: appointmentDue.length,
+    due: appointmentDue.map(serializeAppointmentReminderRecord)
+  };
+}
+
+async function loadAppointmentReminderDueData() {
+  const sheetData = await loadMessagesFromGoogleSheet();
+  const messages = sheetData.messages || [];
+  const bookingData = await loadBookingRequestsFromGoogleSheetFromServer();
+  const bookings = bookingData.bookingRequests || [];
+  const appointmentDue = getDueAppointmentReminders(bookings, messages);
+
+  return {
+    messages,
+    bookings,
+    appointmentDue
+  };
+}
+
+async function sendDueAppointmentReminderRecords(appointmentDue = []) {
+  const appointmentSent = [];
+  const appointmentFailed = [];
+
+  for (const record of appointmentDue) {
+    const templateName = getAppointmentReminderTemplateName(record.phoneNumberId);
+    const sendResult = await sendWhatsAppTemplate(record.phone, templateName, record.phoneNumberId, APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE);
+
+    if (sendResult.ok) {
+      addInboxMessage(
+        record.phone,
+        "bot",
+        getAppointmentReminderBodyForLog(record.phoneNumberId, record.appointmentAt),
+        "Appointment Reminder Sent",
+        record.phoneNumberId,
+        {
+          customerName: record.customerName || "",
+          messageType: "Appointment 1-hour Reminder"
+        }
+      );
+
+      appointmentSent.push({
+        phone: record.phone,
+        branch: record.branch,
+        phoneNumberId: record.phoneNumberId,
+        appointmentAt: record.appointmentAt?.toISOString?.() || "",
+        reminderAt: record.reminderAt?.toISOString?.() || "",
+        template: templateName
+      });
+    } else {
+      appointmentFailed.push({
+        phone: record.phone,
+        branch: record.branch,
+        phoneNumberId: record.phoneNumberId,
+        appointmentAt: record.appointmentAt?.toISOString?.() || "",
+        reminderAt: record.reminderAt?.toISOString?.() || "",
+        template: templateName,
+        result: sendResult.result
+      });
+    }
+  }
+
+  return {
+    sent: appointmentSent,
+    failed: appointmentFailed
+  };
+}
+
 app.get("/api/reminders/preview", protectInbox, async (req, res) => {
   try {
     const sheetData = await loadMessagesFromGoogleSheet();
     const messages = sheetData.messages || [];
     const due = getDueFollowUpReminders(messages);
     const allOptIns = buildLatestOptInRecords(messages);
-    const bookingData = await loadBookingRequestsFromGoogleSheetFromServer();
-    const appointmentDue = getDueAppointmentReminders(bookingData.bookingRequests || [], messages);
 
     return res.json({
       ok: true,
       mode: "preview_only",
+      cronType: "service_follow_up_only",
       templateMode: "branch_specific",
       templates: getFollowUpTemplateMap(),
       appointmentReminder: {
-        enabled: APPOINTMENT_REMINDER_ENABLED,
-        templates: getAppointmentReminderTemplateMap(),
-        language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
-        leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
-        dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
-        dueCount: appointmentDue.length,
-        due: appointmentDue.map((record) => ({
-          phone: record.phone,
-          branch: record.branch,
-          phoneNumberId: record.phoneNumberId,
-          appointmentAt: record.appointmentAt?.toISOString?.() || "",
-          reminderAt: record.reminderAt?.toISOString?.() || "",
-          template: record.template
-        }))
+        separated: true,
+        previewUrl: "/api/appointment-reminders/preview",
+        sendDueUrl: "/api/appointment-reminders/send-due?confirm=SEND",
+        note: "Appointment reminders are handled by a separate frequent cron. This endpoint is for service follow-ups only."
       },
       headerImageConfigured: Boolean(FOLLOW_UP_HEADER_IMAGE_URL),
       delayDays: FOLLOW_UP_DELAY_DAYS,
       scannedMessages: messages.length,
-      scannedBookings: (bookingData.bookingRequests || []).length,
       totalOptInRecords: allOptIns.length,
       dueCount: due.length,
       due
@@ -8601,6 +8676,30 @@ app.get("/api/reminders/preview", protectInbox, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: "Reminder preview failed"
+    });
+  }
+});
+
+app.get("/api/appointment-reminders/preview", protectInbox, async (req, res) => {
+  try {
+    const { messages, bookings, appointmentDue } = await loadAppointmentReminderDueData();
+
+    return res.json({
+      ok: true,
+      mode: "preview_only",
+      cronType: "appointment_reminder_only",
+      appointmentReminder: buildAppointmentReminderPayload(appointmentDue),
+      scannedMessages: messages.length,
+      scannedBookings: bookings.length,
+      note: "This endpoint is only for confirmed appointment reminders due before the appointment."
+    });
+  } catch (error) {
+    console.error("Appointment reminder preview failed:");
+    console.error(error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Appointment reminder preview failed"
     });
   }
 });
@@ -8933,6 +9032,45 @@ app.get("/api/staff-template/test", protectInbox, async (req, res) => {
   }
 });
 
+app.get("/api/appointment-reminders/send-due", protectInbox, async (req, res) => {
+  try {
+    const confirm = (req.query.confirm || "").toString().trim();
+
+    if (confirm !== "SEND") {
+      return res.status(400).json({
+        ok: false,
+        error: "Safety check: add ?confirm=SEND to send due appointment reminders.",
+        preview_url: "/api/appointment-reminders/preview"
+      });
+    }
+
+    const { messages, bookings, appointmentDue } = await loadAppointmentReminderDueData();
+    const sendResult = await sendDueAppointmentReminderRecords(appointmentDue);
+
+    return res.json({
+      ok: sendResult.failed.length === 0,
+      cronType: "appointment_reminder_only",
+      appointmentReminder: {
+        ...buildAppointmentReminderPayload(appointmentDue),
+        sentCount: sendResult.sent.length,
+        failedCount: sendResult.failed.length,
+        sent: sendResult.sent,
+        failed: sendResult.failed
+      },
+      scannedMessages: messages.length,
+      scannedBookings: bookings.length
+    });
+  } catch (error) {
+    console.error("Sending due appointment reminders failed:");
+    console.error(error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Sending due appointment reminders failed"
+    });
+  }
+});
+
 app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
   try {
     const confirm = (req.query.confirm || "").toString().trim();
@@ -8940,7 +9078,7 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
     if (confirm !== "SEND") {
       return res.status(400).json({
         ok: false,
-        error: "Safety check: add ?confirm=SEND to send due reminders.",
+        error: "Safety check: add ?confirm=SEND to send due service follow-ups.",
         preview_url: "/api/reminders/preview"
       });
     }
@@ -8948,50 +9086,9 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
     const sheetData = await loadMessagesFromGoogleSheet();
     const messages = sheetData.messages || [];
     const due = getDueFollowUpReminders(messages);
-    const bookingData = await loadBookingRequestsFromGoogleSheetFromServer();
-    const appointmentDue = getDueAppointmentReminders(bookingData.bookingRequests || [], messages);
     const sent = [];
     const failed = [];
     const skippedOptOut = [];
-    const appointmentSent = [];
-    const appointmentFailed = [];
-
-    for (const record of appointmentDue) {
-      const templateName = getAppointmentReminderTemplateName(record.phoneNumberId);
-      const sendResult = await sendWhatsAppTemplate(record.phone, templateName, record.phoneNumberId, APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE);
-
-      if (sendResult.ok) {
-        addInboxMessage(
-          record.phone,
-          "bot",
-          getAppointmentReminderBodyForLog(record.phoneNumberId, record.appointmentAt),
-          "Appointment Reminder Sent",
-          record.phoneNumberId,
-          {
-            customerName: record.customerName || "",
-            messageType: "Appointment 1-hour Reminder"
-          }
-        );
-
-        appointmentSent.push({
-          phone: record.phone,
-          branch: record.branch,
-          phoneNumberId: record.phoneNumberId,
-          appointmentAt: record.appointmentAt?.toISOString?.() || "",
-          reminderAt: record.reminderAt?.toISOString?.() || "",
-          template: templateName
-        });
-      } else {
-        appointmentFailed.push({
-          phone: record.phone,
-          branch: record.branch,
-          phoneNumberId: record.phoneNumberId,
-          appointmentAt: record.appointmentAt?.toISOString?.() || "",
-          template: templateName,
-          result: sendResult.result
-        });
-      }
-    }
 
     for (const record of due) {
       if (isCustomerOptedOutForFollowUps(messages, record.phone, record.phoneNumberId)) {
@@ -9038,20 +9135,14 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
     }
 
     return res.json({
-      ok: failed.length === 0 && appointmentFailed.length === 0,
+      ok: failed.length === 0,
+      cronType: "service_follow_up_only",
       templateMode: "branch_specific",
       templates: getFollowUpTemplateMap(),
       appointmentReminder: {
-        enabled: APPOINTMENT_REMINDER_ENABLED,
-        templates: getAppointmentReminderTemplateMap(),
-        language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
-        leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
-        dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
-        dueCount: appointmentDue.length,
-        sentCount: appointmentSent.length,
-        failedCount: appointmentFailed.length,
-        sent: appointmentSent,
-        failed: appointmentFailed
+        separated: true,
+        previewUrl: "/api/appointment-reminders/preview",
+        sendDueUrl: "/api/appointment-reminders/send-due?confirm=SEND"
       },
       headerImageConfigured: Boolean(FOLLOW_UP_HEADER_IMAGE_URL),
       delayDays: FOLLOW_UP_DELAY_DAYS,
@@ -9073,927 +9164,6 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
     });
   }
 });
-
-function getMessageMergeKey(message = {}) {
-  return [
-    message.phone || "",
-    message.phoneNumberId || "",
-    message.time || "",
-    message.sender || "",
-    (message.body || "").toString().slice(0, 300),
-    message.messageType || ""
-  ].join("|");
-}
-
-function sortMessagesNewestFirst(messages = []) {
-  return messages.slice().sort((a, b) => {
-    const aTime = new Date(a?.time || 0).getTime() || 0;
-    const bTime = new Date(b?.time || 0).getTime() || 0;
-    return bTime - aTime;
-  });
-}
-
-function mergeInboxHistory(sheetMessages = [], memoryMessages = []) {
-  const mergedMap = new Map();
-
-  // Keep Google Sheet as the primary persisted source.
-  for (const message of sheetMessages || []) {
-    const key = getMessageMergeKey(message);
-    if (key.trim() && !mergedMap.has(key)) {
-      mergedMap.set(key, message);
-    }
-  }
-
-  // Add current in-memory messages so a partial Sheet response cannot hide live conversations.
-  for (const message of memoryMessages || []) {
-    const key = getMessageMergeKey(message);
-    if (key.trim() && !mergedMap.has(key)) {
-      mergedMap.set(key, message);
-    }
-  }
-
-  return sortMessagesNewestFirst(Array.from(mergedMap.values()));
-}
-
-const MESSAGES_API_SHEET_CACHE_TTL_MS = 5000;
-let messagesApiSheetCache = null;
-let messagesApiSheetCacheAt = 0;
-let messagesApiSheetCachePromise = null;
-
-function clearMessagesApiSheetCache(reason = "") {
-  messagesApiSheetCache = null;
-  messagesApiSheetCacheAt = 0;
-  if (reason) {
-    console.log(`[Messages API Cache] cleared: ${reason}`);
-  }
-}
-
-async function loadMessagesFromGoogleSheetForMessagesApi() {
-  const now = Date.now();
-
-  if (messagesApiSheetCache && (now - messagesApiSheetCacheAt) < MESSAGES_API_SHEET_CACHE_TTL_MS) {
-    return messagesApiSheetCache;
-  }
-
-  if (messagesApiSheetCachePromise) {
-    return messagesApiSheetCachePromise;
-  }
-
-  messagesApiSheetCachePromise = loadMessagesFromGoogleSheet()
-    .then((sheetData) => {
-      messagesApiSheetCache = sheetData || { messages: [], conversationStates: [], bookingRequests: [] };
-      messagesApiSheetCacheAt = Date.now();
-      return messagesApiSheetCache;
-    })
-    .catch((error) => {
-      console.log("Messages API cached Sheet load failed:");
-      console.log(error);
-      return messagesApiSheetCache || { messages: [], conversationStates: [], bookingRequests: [] };
-    })
-    .finally(() => {
-      messagesApiSheetCachePromise = null;
-    });
-
-  return messagesApiSheetCachePromise;
-}
-
-  app.get("/api/messages", async (req, res) => {
-  const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
-  const sheetMessages = sheetData.messages || [];
-  const memoryMessages = inboxMessages || [];
-  const conversationStates = sheetData.conversationStates || [];
-  const bookingRequests = sheetData.bookingRequests || [];
-  const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
-  const source = sheetMessages.length > 0 && memoryMessages.length > 0
-    ? "google_sheet_plus_memory"
-    : (sheetMessages.length > 0 ? "google_sheet" : "memory");
-
-  return res.json({
-    ok: true,
-    source,
-    messages: mergedMessages,
-    conversationStates,
-    bookingRequests,
-    debug: {
-      botVersion: BOT_VERSION,
-      sheetMessagesCount: sheetMessages.length,
-      memoryMessagesCount: memoryMessages.length,
-      returnedMessagesCount: mergedMessages.length,
-      conversationStatesCount: conversationStates.length,
-      bookingRequestsCount: bookingRequests.length
-    }
-  });
-});
-
-app.get("/api/bookings", protectInbox, async (req, res) => {
-  try {
-    const result = await loadBookingRequestsFromGoogleSheetFromServer();
-
-    return res.status(result.ok ? 200 : 500).json(result);
-  } catch (error) {
-    console.error("Booking requests API failed:");
-    console.error(error);
-    return res.status(500).json({ ok: false, bookingRequests: [], error: "Booking requests API failed" });
-  }
-});
-
-app.post("/api/bookings/status", protectInbox, async (req, res) => {
-  try {
-    const result = await updateBookingRequestStatusInGoogleSheetFromServer({
-      rowNumber: req.body?.rowNumber || req.body?.row || "",
-      phone: req.body?.phone || "",
-      phoneNumberId: req.body?.phoneNumberId || "",
-      status: req.body?.status || req.body?.bookingStatus || "",
-      notes: req.body?.notes || ""
-    });
-
-    return res.status(result.ok ? 200 : 500).json(result);
-  } catch (error) {
-    console.error("Booking status API failed:");
-    console.error(error);
-    return res.status(500).json({ ok: false, error: "Booking status API failed" });
-  }
-});
-
-app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
-  try {
-    const to = normalizePhoneDigits(req.body?.to || req.body?.phone || "");
-    const phoneNumberId = normalizePhoneNumberId(req.body?.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
-    const status = (req.body?.status || req.body?.bookingStatus || "").toString().trim();
-    const notes = (req.body?.notes || "").toString().trim();
-
-    if (!to) {
-      return res.status(400).json({ ok: false, error: "Missing customer phone" });
-    }
-
-    const replyLanguage = getConversationLanguage(to);
-    const messageBuild = buildBookingCustomerUpdateBody(status, notes, replyLanguage);
-
-    if (!messageBuild.ok) {
-      return res.status(400).json(messageBuild);
-    }
-
-    const updateButtons = Array.isArray(messageBuild.buttons) ? messageBuild.buttons : [];
-    const localizedUpdateBody = cleanLocalizedReplyBody(messageBuild.body, replyLanguage);
-    const localizedUpdateButtons = localizeReplyButtons(updateButtons, replyLanguage);
-    const sendResult = localizedUpdateButtons.length > 0
-      ? await sendWhatsAppButtonMessage(to, localizedUpdateBody, localizedUpdateButtons, phoneNumberId, { headerImageUrl: BOT_HEADER_IMAGE_URL, replyLanguage, skipAutoLanguage: true })
-      : await sendWhatsAppMessage(to, localizedUpdateBody, phoneNumberId, { replyLanguage, skipAutoLanguage: true });
-
-    if (sendResult?.error) {
-      return res.status(500).json({
-        ok: false,
-        error: sendResult.error?.message || "WhatsApp booking update send failed",
-        result: sendResult
-      });
-    }
-
-    const loggedUpdateBody = updateButtons.length > 0
-      ? formatButtonLog(messageBuild.body, updateButtons)
-      : messageBuild.body;
-
-    if (isApprovedBookingStatus(status)) {
-      setConversationStatus(to, "Confirmed Appointment");
-      await saveConversationStateToGoogleSheetFromServer({
-        phone: to,
-        phoneNumberId,
-        branch: getLineConfig(phoneNumberId).branch,
-        status: "Confirmed Appointment",
-        assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
-        tags: ["Booking", "Confirmed"],
-        updatedBy: "Team Confirmed Booking"
-      });
-    }
-
-    addInboxMessage(
-      to,
-      "staff",
-      loggedUpdateBody,
-      isApprovedBookingStatus(status) ? "Confirmed Appointment" : "Human Reply",
-      phoneNumberId,
-      {
-        messageType: "Booking Customer Update"
-      }
-    );
-
-    return res.json({
-      ok: true,
-      to,
-      phoneNumberId,
-      status,
-      result: sendResult
-    });
-  } catch (error) {
-    console.error("Booking customer update send failed:");
-    console.error(error);
-    return res.status(500).json({ ok: false, error: "Booking customer update send failed" });
-  }
-});
-
-
-// V31.5.8.60.3.7.3 - Manual booking Flow link:
-// Safe internal endpoint for staff to resend Service/Consultation WhatsApp Flows
-// by opening a protected URL with phone, type, and branch query parameters.
-app.get("/api/send-booking-flow", protectInbox, async (req, res) => {
-  try {
-    const to = normalizePhoneDigits(req.query?.phone || req.query?.to || "");
-    const requestedType = (req.query?.type || "service").toString().toLowerCase().trim();
-    const requestedBranch = (req.query?.branch || "dubai").toString().toLowerCase().trim();
-    const customerName = cleanCustomerName(req.query?.name || req.query?.customerName || "");
-
-    if (!to) {
-      return res.status(400).json({
-        ok: false,
-        error: "Missing customer phone",
-        example: "/api/send-booking-flow?phone=9715XXXXXXX&type=service&branch=dubai"
-      });
-    }
-
-    const isAbuDhabiBranch = requestedBranch.includes("abu") || requestedBranch.includes("ad");
-    const phoneNumberId = normalizePhoneNumberId(req.query?.phoneNumberId || (isAbuDhabiBranch ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID));
-    const lineConfig = getLineConfig(phoneNumberId);
-    const flowType = requestedType.includes("consult") || requestedType.includes("استشار")
-      ? "consultation"
-      : "service";
-    const requestType = flowType === "consultation"
-      ? "Consultation Booking"
-      : "Service Appointment";
-    const status = flowType === "consultation"
-      ? "Consultation Flow - Sent Manually"
-      : "Service Flow - Sent Manually";
-
-    const introMessage = [
-      "من فضلك استخدم نموذج الحجز السريع حتى نقدر نثبت لك الموعد المناسب.",
-      "",
-      "Please use the quick booking form so we can confirm the best available appointment for you."
-    ].join("\n");
-
-    const replyLanguage = getConversationLanguage(to);
-    const localizedIntroMessage = cleanLocalizedReplyBody(introMessage, replyLanguage);
-    const introResult = await sendWhatsAppMessage(to, localizedIntroMessage, phoneNumberId, { replyLanguage, skipAutoLanguage: true });
-
-    if (introResult?.error) {
-      return res.status(500).json({
-        ok: false,
-        step: "intro_message",
-        error: introResult.error?.message || "Intro message send failed",
-        result: introResult
-      });
-    }
-
-    addInboxMessage(
-      to,
-      "staff",
-      localizedIntroMessage,
-      "Human Reply",
-      phoneNumberId,
-      {
-        customerName,
-        messageType: "Manual Booking Flow Intro"
-      }
-    );
-
-    const flowSendResult = await sendWhatsAppFlowMessage(to, phoneNumberId, {
-      branch: lineConfig.branch,
-      customerName,
-      flowType,
-      requestType,
-      replyLanguage
-    });
-
-    if (!flowSendResult.ok) {
-      return res.status(500).json({
-        ok: false,
-        step: "booking_flow",
-        error: "Booking Flow send failed",
-        result: flowSendResult
-      });
-    }
-
-    setConversationStatus(to, status);
-
-    await saveConversationStateToGoogleSheetFromServer({
-      phone: to,
-      phoneNumberId,
-      branch: lineConfig.branch,
-      status,
-      assignee: getBranchTeamAssignee(lineConfig.branch),
-      tags: ["Booking", requestType, "Manual Flow Link"],
-      updatedBy: "Manual Send Booking Flow Link"
-    });
-
-    addInboxMessage(
-      to,
-      "bot",
-      `${requestType} Flow sent manually`,
-      status,
-      phoneNumberId,
-      {
-        customerName,
-        messageType: "Manual Booking Flow Sent"
-      }
-    );
-
-    return res.json({
-      ok: true,
-      to,
-      branch: lineConfig.branch,
-      phoneNumberId,
-      flowType,
-      requestType,
-      status,
-      result: flowSendResult
-    });
-  } catch (error) {
-    console.error("Manual booking Flow send failed:");
-    console.error(error);
-    return res.status(500).json({
-      ok: false,
-      error: "Manual booking Flow send failed"
-    });
-  }
-});
-
-app.post("/api/conversation-state", protectInbox, async (req, res) => {
-  try {
-    const sheetUrl = process.env.SHEET_WEBHOOK_URL;
-
-    if (!sheetUrl) {
-      return res.status(500).json({ ok: false, error: "SHEET_WEBHOOK_URL is missing" });
-    }
-
-    const payload = {
-      action: "saveConversationState",
-      phone: (req.body?.phone || "").toString().trim(),
-      phoneNumberId: (req.body?.phoneNumberId || "").toString().trim(),
-      branch: (req.body?.branch || "").toString().trim(),
-      conversation_status: (req.body?.conversation_status || req.body?.status || "").toString().trim(),
-      assigned_to: (req.body?.assigned_to || req.body?.assignedTo || "").toString().trim(),
-      tags: Array.isArray(req.body?.tags) ? req.body.tags : (req.body?.tags || ""),
-      last_updated_by: (req.body?.last_updated_by || "Team Inbox").toString().trim()
-    };
-
-    if (!payload.phone || !payload.phoneNumberId) {
-      return res.status(400).json({ ok: false, error: "Missing phone or phoneNumberId" });
-    }
-
-    const response = await fetch(sheetUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    const text = await response.text();
-    let result;
-
-    try {
-      result = JSON.parse(text);
-    } catch (error) {
-      result = { ok: false, error: text || "Invalid Apps Script response" };
-    }
-
-    if (!response.ok || !result.ok) {
-      return res.status(response.ok ? 500 : response.status).json(result);
-    }
-
-    return res.json(result);
-  } catch (error) {
-    console.error("Conversation state save failed:");
-    console.error(error);
-    return res.status(500).json({ ok: false, error: "Conversation state save failed" });
-  }
-});
-
-app.post("/api/send", protectInbox, async (req, res) => {
-  try {
-    const to = (req.body?.to || "").toString().trim();
-    const body = (req.body?.body || "").toString().trim();
-
-    if (!to || !body) {
-      return res.status(400).json({
-        ok: false,
-        error: "Missing to or body"
-      });
-    }
-
-    const phoneNumberId = normalizePhoneNumberId(
-      (req.body?.phoneNumberId || "").toString().trim() ||
-      conversationPhoneNumberId[to] ||
-      DUBAI_PHONE_NUMBER_ID
-    );
-
-    conversationPhoneNumberId[to] = phoneNumberId;
-
-    const staffSendGuard = await blockStaffSendIfNeeded({
-      to,
-      phoneNumberId,
-      originalBody: body
-    });
-
-    if (!staffSendGuard.ok) {
-      return res.status(staffSendGuard.statusCode || 409).json(staffSendGuard.response);
-    }
-
-    const sendResult = await sendWhatsAppMessage(to, body, phoneNumberId);
-    const sendError = getWhatsAppApiError(sendResult);
-
-    if (sendError) {
-      const failureBody = buildStaffSendFailureLogBody(body, sendResult);
-
-      addInboxMessage(to, "staff", failureBody, "Failed / Not delivered", phoneNumberId, {
-        messageType: "Failed / Not delivered",
-        statusOverride: "Failed / Not delivered"
-      });
-
-      return res.status(isWhatsAppOutside24HourWindowError(sendError) ? 409 : 500).json({
-        ok: false,
-        status: "Failed / Not delivered",
-        error: getStaffSendFailureResponseMessage(sendResult),
-        result: sendResult
-      });
-    }
-
-    setConversationStatus(to, "Human Reply");
-    addInboxMessage(to, "staff", body, "Human Reply - Sent", phoneNumberId, {
-      messageType: "Human Reply - Sent",
-      statusOverride: "Human Reply - Sent"
-    });
-    await saveConversationStateToGoogleSheetFromServer({
-      phone: to,
-      phoneNumberId,
-      branch: getLineConfig(phoneNumberId).branch,
-      status: "Human Reply",
-      assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
-      tags: ["Human Support", "Bot Paused"],
-      updatedBy: "Team Inbox Human Reply"
-    });
-
-    return res.json({ ok: true, status: "sent_to_whatsapp", result: sendResult });
-  } catch (error) {
-    console.error("Inbox send failed:");
-    console.error(error);
-    return res.status(500).json({
-      ok: false,
-      error: "Send failed"
-    });
-  }
-});
-
-
-
-
-function buildInlineImageMessageBody(mediaId, filename, caption) {
-  const payload = {
-    mediaId: (mediaId || "").toString().trim(),
-    filename: (filename || "iconic-image.jpg").toString().trim(),
-    caption: (caption || "").toString().trim()
-  };
-
-  return "[[ICONIC_INLINE_IMAGE]] " + JSON.stringify(payload);
-}
-
-function buildInlineAudioMessageBody(mediaId, filename) {
-  const payload = {
-    mediaId: (mediaId || "").toString().trim(),
-    filename: (filename || "iconic-voice-note.ogg").toString().trim()
-  };
-
-  return "[[ICONIC_INLINE_AUDIO]] " + JSON.stringify(payload);
-}
-
-function buildIncomingCustomerImageBody(message) {
-  const image = message?.image || {};
-  const mediaId = (image.id || "").toString().trim();
-
-  if (!mediaId) {
-    return "";
-  }
-
-  const mimeType = (image.mime_type || "image/jpeg").toString().trim();
-  const filename = sanitizeMediaFilename("customer-image-" + mediaId, mimeType);
-  const caption = (image.caption || "").toString().trim();
-
-  return buildInlineImageMessageBody(mediaId, filename, caption);
-}
-
-function buildIncomingCustomerAudioBody(message) {
-  const audio = message?.audio || {};
-  const mediaId = (audio.id || "").toString().trim();
-
-  if (!mediaId) {
-    return "";
-  }
-
-  const mimeType = (audio.mime_type || "audio/ogg").toString().trim();
-  const filename = sanitizeMediaFilename("customer-voice-" + mediaId, mimeType);
-
-  return buildInlineAudioMessageBody(mediaId, filename);
-}
-
-app.post("/api/send-image", protectInbox, async (req, res) => {
-  try {
-    const to = (req.body?.to || "").toString().trim();
-    const caption = (req.body?.caption || "").toString().trim();
-    const imageDataUrl = (req.body?.imageDataUrl || "").toString().trim();
-    const filename = (req.body?.filename || "iconic-image.jpg").toString().trim();
-
-    if (!to || !imageDataUrl) {
-      return res.status(400).json({
-        ok: false,
-        error: "Missing customer phone or image"
-      });
-    }
-
-    const phoneNumberId = normalizePhoneNumberId(
-      (req.body?.phoneNumberId || "").toString().trim() ||
-      conversationPhoneNumberId[to] ||
-      DUBAI_PHONE_NUMBER_ID
-    );
-
-    conversationPhoneNumberId[to] = phoneNumberId;
-
-    const staffSendGuard = await blockStaffSendIfNeeded({
-      to,
-      phoneNumberId,
-      originalBody: `Image message: ${filename}`
-    });
-
-    if (!staffSendGuard.ok) {
-      return res.status(staffSendGuard.statusCode || 409).json(staffSendGuard.response);
-    }
-
-    const sendResult = await sendWhatsAppImageMessage(to, imageDataUrl, caption, filename, phoneNumberId);
-
-    if (!sendResult.ok) {
-      addInboxMessage(to, "staff", buildStaffSendFailureLogBody(`Image message: ${filename}`, sendResult), "Failed / Not delivered", phoneNumberId, {
-        messageType: "Image Failed / Not delivered",
-        statusOverride: "Failed / Not delivered"
-      });
-
-      return res.status(sendResult.status || 500).json({
-        ok: false,
-        error: getStaffSendFailureResponseMessage(sendResult),
-        result: sendResult.result
-      });
-    }
-
-    setConversationStatus(to, "Human Reply");
-
-    const safeImageFilename = sanitizeMediaFilename(
-      filename,
-      (req.body?.mimeType || "image/jpeg").toString().trim()
-    );
-
-    addInboxMessage(
-      to,
-      "staff",
-      buildInlineImageMessageBody(sendResult.mediaId, safeImageFilename, caption),
-      "Human Reply",
-      phoneNumberId,
-      {
-        messageType: "Human Image Reply - Sent",
-        statusOverride: "Human Image Reply - Sent"
-      }
-    );
-    await saveConversationStateToGoogleSheetFromServer({
-      phone: to,
-      phoneNumberId,
-      branch: getLineConfig(phoneNumberId).branch,
-      status: "Human Reply",
-      assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
-      tags: ["Human Support", "Bot Paused"],
-      updatedBy: "Team Inbox Human Image Reply"
-    });
-
-    return res.json({ ok: true, mediaId: sendResult.mediaId, result: sendResult.result });
-  } catch (error) {
-    console.error("Inbox image send failed:");
-    console.error(error);
-    return res.status(500).json({
-      ok: false,
-      error: "Image send failed"
-    });
-  }
-});
-
-
-app.post("/api/send-audio", protectInbox, async (req, res) => {
-  try {
-    const to = (req.body?.to || "").toString().trim();
-    const audioDataUrl = (req.body?.audioDataUrl || "").toString().trim();
-    const filename = (req.body?.filename || "iconic-voice-note.ogg").toString().trim();
-
-    if (!to || !audioDataUrl) {
-      return res.status(400).json({
-        ok: false,
-        error: "Missing customer phone or voice note"
-      });
-    }
-
-    const phoneNumberId = normalizePhoneNumberId(
-      (req.body?.phoneNumberId || "").toString().trim() ||
-      conversationPhoneNumberId[to] ||
-      DUBAI_PHONE_NUMBER_ID
-    );
-
-    conversationPhoneNumberId[to] = phoneNumberId;
-
-    const staffSendGuard = await blockStaffSendIfNeeded({
-      to,
-      phoneNumberId,
-      originalBody: `Voice message: ${filename}`
-    });
-
-    if (!staffSendGuard.ok) {
-      return res.status(staffSendGuard.statusCode || 409).json(staffSendGuard.response);
-    }
-
-    const sendResult = await sendWhatsAppAudioMessage(to, audioDataUrl, filename, phoneNumberId);
-
-    if (!sendResult.ok) {
-      addInboxMessage(to, "staff", buildStaffSendFailureLogBody(`Voice message: ${filename}`, sendResult), "Failed / Not delivered", phoneNumberId, {
-        messageType: "Voice Failed / Not delivered",
-        statusOverride: "Failed / Not delivered"
-      });
-
-      return res.status(sendResult.status || 500).json({
-        ok: false,
-        error: getStaffSendFailureResponseMessage(sendResult),
-        result: sendResult.result
-      });
-    }
-
-    setConversationStatus(to, "Human Reply");
-
-    const safeAudioFilename = sanitizeMediaFilename(
-      filename,
-      (req.body?.mimeType || "audio/ogg").toString().trim()
-    );
-
-    addInboxMessage(
-      to,
-      "staff",
-      buildInlineAudioMessageBody(sendResult.mediaId, safeAudioFilename),
-      "Human Reply",
-      phoneNumberId,
-      {
-        messageType: "Human Voice Reply - Sent",
-        statusOverride: "Human Voice Reply - Sent"
-      }
-    );
-    await saveConversationStateToGoogleSheetFromServer({
-      phone: to,
-      phoneNumberId,
-      branch: getLineConfig(phoneNumberId).branch,
-      status: "Human Reply",
-      assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
-      tags: ["Human Support", "Bot Paused"],
-      updatedBy: "Team Inbox Human Voice Reply"
-    });
-
-    return res.json({ ok: true, mediaId: sendResult.mediaId, result: sendResult.result });
-  } catch (error) {
-    console.error("Inbox voice send failed:");
-    console.error(error);
-    return res.status(500).json({
-      ok: false,
-      error: "Voice send failed"
-    });
-  }
-});
-
-
-app.get("/api/media/:mediaId", protectInbox, async (req, res) => {
-  try {
-    const mediaId = (req.params?.mediaId || "").toString().trim().replace(/[^a-zA-Z0-9_-]/g, "");
-
-    if (!mediaId) {
-      return res.status(400).send("Missing media id");
-    }
-
-    const mediaMetaResponse = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`
-      }
-    });
-
-    const mediaMeta = await mediaMetaResponse.json();
-
-    if (!mediaMetaResponse.ok || !mediaMeta.url) {
-      console.log("WhatsApp media metadata failed:");
-      console.log(JSON.stringify(mediaMeta, null, 2));
-      return res.status(mediaMetaResponse.status || 500).send("Could not load media metadata");
-    }
-
-    const imageResponse = await fetch(mediaMeta.url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`
-      }
-    });
-
-    if (!imageResponse.ok) {
-      const text = await imageResponse.text();
-      console.log("WhatsApp media download failed:");
-      console.log(imageResponse.status, text);
-      return res.status(imageResponse.status || 500).send("Could not download media");
-    }
-
-    const arrayBuffer = await imageResponse.arrayBuffer();
-    const contentType = mediaMeta.mime_type || imageResponse.headers.get("content-type") || "application/octet-stream";
-
-    res.setHeader("Content-Type", contentType);
-    res.setHeader("Cache-Control", "private, max-age=3600");
-    return res.send(Buffer.from(arrayBuffer));
-  } catch (error) {
-    console.error("Media proxy failed:");
-    console.error(error);
-    return res.status(500).send("Media proxy failed");
-  }
-});
-
-app.post("/api/status", protectInbox, (req, res) => {
-  try {
-    const phone = (req.body?.phone || "").toString().trim();
-    const status = (req.body?.status || "").toString().trim();
-
-    if (!phone || !status) {
-      return res.status(400).json({
-        ok: false,
-        error: "Missing phone or status"
-      });
-    }
-
-    setConversationStatus(phone, status);
-
-    return res.json({
-      ok: true,
-      phone,
-      status
-    });
-  } catch (error) {
-    console.error("Status update failed:");
-    console.error(error);
-    return res.status(500).json({
-      ok: false,
-      error: "Status update failed"
-    });
-  }
-});
-
-
-function escapeInboxServerHtml(value = "") {
-  return (value || "").toString()
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function getInboxServerTimeValue(value = "") {
-  const time = new Date(value || 0).getTime();
-  return Number.isFinite(time) ? time : 0;
-}
-
-function buildInboxServerConversationKey(message = {}) {
-  return [
-    (message.phone || "").toString().trim(),
-    normalizePhoneNumberId(message.phoneNumberId || ""),
-    (message.branch || "").toString().trim()
-  ].join("|");
-}
-
-function getInboxServerConversationName(conversation = {}) {
-  const latest = conversation.latest || {};
-  return cleanCustomerName(latest.customerName || conversation.customerName || "") || conversation.phone || "Customer";
-}
-
-function getInboxServerBranchClass(branch = "") {
-  const cleanBranch = (branch || "").toString().toLowerCase();
-  return cleanBranch.includes("abu") ? "branch-pill branch-abu" : "branch-pill branch-dubai";
-}
-
-function buildInboxBootstrapConversations(messages = []) {
-  const conversations = new Map();
-
-  (messages || []).forEach((message) => {
-    const key = buildInboxServerConversationKey(message);
-    if (!key.trim()) return;
-
-    const current = conversations.get(key) || {
-      key,
-      phone: (message.phone || "").toString().trim(),
-      phoneNumberId: normalizePhoneNumberId(message.phoneNumberId || ""),
-      branch: (message.branch || getLineConfig(message.phoneNumberId || DUBAI_PHONE_NUMBER_ID).branch || "Dubai").toString().trim(),
-      customerName: cleanCustomerName(message.customerName || ""),
-      status: (message.status || "Open").toString().trim(),
-      latest: null,
-      messages: []
-    };
-
-    current.messages.push(message);
-    if (message.customerName && !current.customerName) current.customerName = cleanCustomerName(message.customerName);
-    if (message.status) current.status = message.status;
-
-    const currentLatestTime = getInboxServerTimeValue(current.latest?.time || "");
-    const messageTime = getInboxServerTimeValue(message.time || "");
-    if (!current.latest || messageTime >= currentLatestTime) current.latest = message;
-
-    conversations.set(key, current);
-  });
-
-  return Array.from(conversations.values()).sort((a, b) => {
-    return getInboxServerTimeValue(b.latest?.time || "") - getInboxServerTimeValue(a.latest?.time || "");
-  });
-}
-
-function renderInboxBootstrapConversationListHtml(conversations = []) {
-  if (!Array.isArray(conversations) || conversations.length === 0) {
-    return '<div class="empty">No conversations yet.</div>';
-  }
-
-  return conversations.map((conversation) => {
-    const latest = conversation.latest || {};
-    const name = getInboxServerConversationName(conversation);
-    const initials = (name || "IC").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("") || "IC";
-    const sender = (latest.sender || "").toString().trim() || "message";
-    const body = (latest.body || latest.messageType || "").toString().replace(/\s+/g, " ").trim();
-    const preview = `${sender}: ${body}`.slice(0, 95);
-    const branch = conversation.branch || "Dubai";
-    const status = conversation.status || "Open";
-
-    return [
-      `<button type="button" class="conversation-card" data-key="${escapeInboxServerHtml(conversation.key)}">`,
-      `<div class="avatar">${escapeInboxServerHtml(initials)}</div>`,
-      '<div class="conversation-main">',
-      '<div class="conv-top">',
-      '<div class="conv-identity">',
-      `<div class="conv-name">${escapeInboxServerHtml(name)}</div>`,
-      `<div class="conv-preview">${escapeInboxServerHtml(preview)}</div>`,
-      '</div>',
-      `<div class="conv-time">${escapeInboxServerHtml(latest.time || "")}</div>`,
-      '</div>',
-      '<div class="conv-footer">',
-      `<div class="badges"><span class="${getInboxServerBranchClass(branch)}">${escapeInboxServerHtml(branch)}</span><span class="status status-open">${escapeInboxServerHtml(status)}</span></div>`,
-      `<span class="message-count-badge">${escapeInboxServerHtml(String((conversation.messages || []).length))}</span>`,
-      '</div>',
-      '</div>',
-      '</button>'
-    ].join("");
-  }).join("");
-}
-
-function safeInboxBootstrapJson(value = {}) {
-  return JSON.stringify(value || {})
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026")
-    .replace(/\u2028/g, "\\u2028")
-    .replace(/\u2029/g, "\\u2029");
-}
-
-async function getInboxBootstrapDataForServerRender() {
-  try {
-    const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
-    const sheetMessages = sheetData.messages || [];
-    const memoryMessages = inboxMessages || [];
-    const messages = mergeInboxHistory(sheetMessages, memoryMessages);
-    const conversationStates = sheetData.conversationStates || [];
-    const bookingRequests = sheetData.bookingRequests || [];
-    const conversations = buildInboxBootstrapConversations(messages);
-
-    return {
-      ok: true,
-      source: sheetMessages.length > 0 && memoryMessages.length > 0
-        ? "google_sheet_plus_memory"
-        : (sheetMessages.length > 0 ? "google_sheet" : "memory"),
-      messages,
-      conversationStates,
-      bookingRequests,
-      conversations,
-      debug: {
-        sheetMessagesCount: sheetMessages.length,
-        memoryMessagesCount: memoryMessages.length,
-        returnedMessagesCount: messages.length,
-        conversationsCount: conversations.length
-      }
-    };
-  } catch (error) {
-    console.log("Inbox bootstrap server render failed:");
-    console.log(error);
-    return {
-      ok: false,
-      source: "bootstrap_error",
-      messages: [],
-      conversationStates: [],
-      bookingRequests: [],
-      conversations: [],
-      debug: { error: error?.message || String(error) }
-    };
-  }
-}
 
 app.get("/inbox", protectInbox, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
