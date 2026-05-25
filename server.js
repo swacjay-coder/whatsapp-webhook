@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-38-bot-typing-indicator-internal-test-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-39-auto-1-hour-reminder-on-confirm";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -107,6 +107,28 @@ const FOLLOW_UP_TEMPLATE_NAME_ABU_DHABI =
   "service_review_follow_up_abudhabi";
 const FOLLOW_UP_TEMPLATE_LANGUAGE = process.env.FOLLOW_UP_TEMPLATE_LANGUAGE || "en";
 const FOLLOW_UP_DELAY_DAYS = Number(process.env.FOLLOW_UP_DELAY_DAYS || process.env.REMINDER_DELAY_DAYS || 15);
+
+// V31.5.8.60.3.9.39 - Automatic appointment reminder after booking confirmation:
+// Once a booking is confirmed, the customer is automatically eligible for a 1-hour appointment reminder.
+// This does not ask the customer for extra approval. STOP still blocks automated reminders.
+const APPOINTMENT_REMINDER_TEMPLATE_NAME_DUBAI = (
+  process.env.APPOINTMENT_REMINDER_TEMPLATE_NAME_DUBAI ||
+  process.env.DUBAI_APPOINTMENT_REMINDER_TEMPLATE_NAME ||
+  "appointment_reminder_dubai"
+).toString().trim();
+const APPOINTMENT_REMINDER_TEMPLATE_NAME_ABU_DHABI = (
+  process.env.APPOINTMENT_REMINDER_TEMPLATE_NAME_ABU_DHABI ||
+  process.env.ABU_DHABI_APPOINTMENT_REMINDER_TEMPLATE_NAME ||
+  "appointment_reminder_abudhabi"
+).toString().trim();
+const APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE = (
+  process.env.APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE ||
+  "en"
+).toString().trim();
+const APPOINTMENT_REMINDER_LEAD_MINUTES = Number(process.env.APPOINTMENT_REMINDER_LEAD_MINUTES || 60);
+const APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES = Number(process.env.APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES || 20);
+const APPOINTMENT_REMINDER_ENABLED = (process.env.APPOINTMENT_REMINDER_ENABLED || "true").toString().toLowerCase() !== "false";
+
 const FOLLOW_UP_HEADER_IMAGE_URL = process.env.FOLLOW_UP_HEADER_IMAGE_URL || "";
 const MAIN_MENU_HEADER_IMAGE_URL =
   process.env.MAIN_MENU_HEADER_IMAGE_URL ||
@@ -5342,14 +5364,14 @@ function getBookingMessageField(message = "", labels = []) {
 }
 
 function getBookingRequestDetails(booking = {}) {
-  const message = booking.message || "";
+  const message = [booking.message || "", booking.notes || ""].filter(Boolean).join("\n");
   return {
-    branch: booking.branch || getBookingMessageField(message, ["Preferred branch", "Branch"]),
-    preferredDay: getBookingMessageField(message, ["Preferred day", "Day"]),
-    preferredTime: getBookingMessageField(message, ["Preferred time", "Time"]),
-    teamMember: getBookingMessageField(message, ["Team member", "Employee", "Staff"]),
-    serviceType: getBookingMessageField(message, ["Service type", "Service"]),
-    requestType: booking.requestType || getBookingMessageField(message, ["Request type", "Type"])
+    branch: booking.branch || getBookingMessageField(message, ["Preferred branch", "Branch", "الفرع"]),
+    preferredDay: getBookingMessageField(message, ["Preferred day", "Day", "اليوم"]),
+    preferredTime: getBookingMessageField(message, ["Preferred time", "Time", "الوقت", "Suggested time", "الوقت المقترح"]),
+    teamMember: getBookingMessageField(message, ["Team member", "Employee", "Staff", "الموظف"]),
+    serviceType: getBookingMessageField(message, ["Service type", "Service", "الخدمة"]),
+    requestType: booking.requestType || getBookingMessageField(message, ["Request type", "Type", "نوع الطلب"])
   };
 }
 
@@ -6063,13 +6085,10 @@ async function sendBookingActionUpdateToCustomer({ booking = {}, status = "", no
 
   if (isApprovedBookingStatus(status)) {
     setConversationStatus(customerPhone, "Confirmed Appointment");
-    await saveConversationStateToGoogleSheetFromServer({
-      phone: customerPhone,
+    await activateAppointmentReminderAfterConfirmation({
+      booking: { ...booking, phone: customerPhone, phoneNumberId },
       phoneNumberId,
-      branch: booking.branch || getLineConfig(phoneNumberId).branch,
-      status: "Confirmed Appointment",
-      assignee: getBranchTeamAssignee(booking.branch || getLineConfig(phoneNumberId).branch),
-      tags: ["Booking", "Confirmed"],
+      notes,
       updatedBy
     });
   }
@@ -7275,6 +7294,20 @@ function getFollowUpTemplateMap() {
   };
 }
 
+function getAppointmentReminderTemplateName(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+  const lineConfig = getLineConfig(phoneNumberId);
+  return lineConfig.branch === "Abu Dhabi"
+    ? APPOINTMENT_REMINDER_TEMPLATE_NAME_ABU_DHABI
+    : APPOINTMENT_REMINDER_TEMPLATE_NAME_DUBAI;
+}
+
+function getAppointmentReminderTemplateMap() {
+  return {
+    dubai: APPOINTMENT_REMINDER_TEMPLATE_NAME_DUBAI,
+    abuDhabi: APPOINTMENT_REMINDER_TEMPLATE_NAME_ABU_DHABI
+  };
+}
+
 function getCallNowTemplateName(phoneNumberId) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
 
@@ -7715,6 +7748,292 @@ function isCustomerOptedOutForFollowUps(messages = [], phone = "", phoneNumberId
 
 function getReminderBodyForLog(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
   return `Template sent: ${getFollowUpTemplateName(phoneNumberId)}`;
+}
+
+function getAppointmentReminderBodyForLog(phoneNumberId = DUBAI_PHONE_NUMBER_ID, appointmentAt = null) {
+  const templateName = getAppointmentReminderTemplateName(phoneNumberId);
+  const at = appointmentAt instanceof Date && !Number.isNaN(appointmentAt.getTime())
+    ? appointmentAt.toISOString()
+    : "";
+  return [`Appointment 1-hour reminder sent: ${templateName}`, at ? `Appointment at: ${at}` : ""].filter(Boolean).join("\n");
+}
+
+function isAppointmentReminderRow(message) {
+  const messageType = normalizeText(message.messageType);
+  const status = normalizeText(message.status);
+  const body = normalizeText(message.body);
+
+  return messageType === "appointment 1-hour reminder" ||
+    status === "appointment reminder sent" ||
+    body.includes("appointment 1-hour reminder sent") ||
+    body.includes(APPOINTMENT_REMINDER_TEMPLATE_NAME_DUBAI.toLowerCase()) ||
+    body.includes(APPOINTMENT_REMINDER_TEMPLATE_NAME_ABU_DHABI.toLowerCase());
+}
+
+function getDubaiDatePartsFromDate(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+
+  const parts = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second)
+  };
+}
+
+function getDubaiDatePartsFromSheetValue(value = "") {
+  const text = (value || "").toString().trim();
+  const match = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+
+  if (match) {
+    return {
+      month: Number(match[1]),
+      day: Number(match[2]),
+      year: Number(match[3])
+    };
+  }
+
+  const parsed = parseSheetDate(text);
+  if (parsed) {
+    return getDubaiDatePartsFromDate(parsed);
+  }
+
+  return getDubaiDatePartsFromDate(new Date());
+}
+
+function addDaysToDubaiParts(parts = {}, days = 0) {
+  const date = new Date(Date.UTC(Number(parts.year || 1970), Number(parts.month || 1) - 1, Number(parts.day || 1) + Number(days || 0), 12, 0, 0));
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+}
+
+function getDubaiWeekdayIndex(parts = {}) {
+  const date = new Date(Date.UTC(Number(parts.year || 1970), Number(parts.month || 1) - 1, Number(parts.day || 1), 12, 0, 0));
+  return date.getUTCDay();
+}
+
+function getWeekdayIndexFromText(value = "") {
+  const text = compactText(value);
+  const days = [
+    { index: 0, keys: ["sunday", "sun", "الأحد", "الاحد", "حد"] },
+    { index: 1, keys: ["monday", "mon", "الاثنين", "الإثنين", "اثنين"] },
+    { index: 2, keys: ["tuesday", "tue", "الثلاثاء", "ثلاثاء"] },
+    { index: 3, keys: ["wednesday", "wed", "الأربعاء", "الاربعاء", "اربعاء"] },
+    { index: 4, keys: ["thursday", "thu", "الخميس", "خميس"] },
+    { index: 5, keys: ["friday", "fri", "الجمعة", "جمعه"] },
+    { index: 6, keys: ["saturday", "sat", "السبت", "سبت"] }
+  ];
+
+  for (const day of days) {
+    if (day.keys.some((key) => text.includes(compactText(key)))) {
+      return day.index;
+    }
+  }
+
+  return null;
+}
+
+function extractRelativeDayText(value = "") {
+  const text = compactText(value);
+  if (!text) return "";
+
+  if (text.includes("day after") || text.includes("after tomorrow") || text.includes("بعد بكرا") || text.includes("بعد غد")) return "day_after_tomorrow";
+  if (text.includes("tomorrow") || text.includes("بكرا") || text.includes("غدا") || text.includes("غداً")) return "tomorrow";
+  if (text.includes("today") || text.includes("اليوم")) return "today";
+
+  const weekdayIndex = getWeekdayIndexFromText(text);
+  return weekdayIndex === null ? "" : `weekday:${weekdayIndex}`;
+}
+
+function parseAppointmentTimeParts(value = "") {
+  const text = (value || "").toString().trim();
+  if (!text) return null;
+
+  const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.|ص|م|صباح|صباحاً|مساء|مساءً)?/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  const marker = (match[3] || "").toString().toLowerCase();
+
+  if (minute < 0 || minute > 59 || hour < 0 || hour > 23) return null;
+
+  const isPm = marker.includes("p") || marker.includes("م") || marker.includes("مساء");
+  const isAm = marker.includes("a") || marker.includes("ص") || marker.includes("صباح");
+
+  if (isPm && hour < 12) hour += 12;
+  if (isAm && hour === 12) hour = 0;
+
+  // Business hours are afternoon-heavy; if the customer/team wrote just "3" keep it as 3 PM, not 3 AM.
+  if (!isPm && !isAm && hour >= 1 && hour <= 7) {
+    hour += 12;
+  }
+
+  return { hour, minute };
+}
+
+function resolveAppointmentDubaiDateParts(dayText = "", baseParts = getDubaiDatePartsFromDate(new Date())) {
+  const relative = extractRelativeDayText(dayText);
+
+  if (relative === "today") return addDaysToDubaiParts(baseParts, 0);
+  if (relative === "tomorrow") return addDaysToDubaiParts(baseParts, 1);
+  if (relative === "day_after_tomorrow") return addDaysToDubaiParts(baseParts, 2);
+
+  if (relative.startsWith("weekday:")) {
+    const target = Number(relative.split(":")[1]);
+    const current = getDubaiWeekdayIndex(baseParts);
+    let diff = target - current;
+    if (diff < 0) diff += 7;
+    return addDaysToDubaiParts(baseParts, diff);
+  }
+
+  return null;
+}
+
+function buildDubaiAppointmentDate(parts = {}, time = {}) {
+  if (!parts || !time) return null;
+
+  const utcMs = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(time.hour) - 4,
+    Number(time.minute || 0),
+    0
+  );
+
+  const date = new Date(utcMs);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseAppointmentDateTimeFromBooking(booking = {}) {
+  const details = getBookingRequestDetails(booking);
+  const baseParts = getDubaiDatePartsFromSheetValue(booking.date || booking.lastUpdated || "");
+  const combinedText = [booking.notes || "", booking.message || "", details.preferredDay || "", details.preferredTime || ""].filter(Boolean).join("\n");
+
+  const explicitDate = combinedText.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  const timeParts = parseAppointmentTimeParts(details.preferredTime || combinedText);
+  if (!timeParts) return null;
+
+  let dateParts = null;
+  if (explicitDate) {
+    dateParts = { month: Number(explicitDate[1]), day: Number(explicitDate[2]), year: Number(explicitDate[3]) };
+  } else {
+    const timeRelative = extractRelativeDayText(details.preferredTime || "");
+    dateParts = resolveAppointmentDubaiDateParts(timeRelative || details.preferredDay || combinedText, baseParts);
+  }
+
+  if (!dateParts) return null;
+
+  return buildDubaiAppointmentDate(dateParts, timeParts);
+}
+
+function getAppointmentReminderKey(phone = "", phoneNumberId = "", appointmentAt = null) {
+  const cleanPhone = normalizePhoneDigits(phone);
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const appointmentKey = appointmentAt instanceof Date && !Number.isNaN(appointmentAt.getTime())
+    ? appointmentAt.toISOString()
+    : "";
+  return `${cleanPhone}|${cleanPhoneNumberId}|${appointmentKey}`;
+}
+
+function hasAppointmentReminderBeenSent(messages = [], phone = "", phoneNumberId = "", appointmentAt = null) {
+  const key = getAppointmentReminderKey(phone, phoneNumberId, appointmentAt);
+  if (!key.includes("|")) return false;
+
+  return (messages || []).some((message) => {
+    if (!isAppointmentReminderRow(message)) return false;
+    const messagePhone = normalizePhoneDigits(message.phone || "");
+    const messagePhoneNumberId = normalizePhoneNumberId(message.phoneNumberId || "");
+    const body = (message.body || "").toString();
+
+    return key.startsWith(`${messagePhone}|${messagePhoneNumberId}|`) &&
+      body.includes(appointmentAt?.toISOString?.() || "");
+  });
+}
+
+function getDueAppointmentReminders(bookings = [], messages = []) {
+  if (!APPOINTMENT_REMINDER_ENABLED) return [];
+
+  const now = new Date();
+  const leadMs = APPOINTMENT_REMINDER_LEAD_MINUTES * 60 * 1000;
+  const dueWindowMs = APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES * 60 * 1000;
+
+  return (bookings || []).map((booking) => {
+    const phone = normalizePhoneDigits(booking.phone || "");
+    const phoneNumberId = normalizePhoneNumberId(booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+    const appointmentAt = parseAppointmentDateTimeFromBooking(booking);
+    const reminderAt = appointmentAt ? new Date(appointmentAt.getTime() - leadMs) : null;
+
+    return {
+      booking,
+      phone,
+      customerName: booking.customerName || "",
+      branch: booking.branch || getLineConfig(phoneNumberId).branch,
+      phoneNumberId,
+      appointmentAt,
+      reminderAt,
+      template: getAppointmentReminderTemplateName(phoneNumberId)
+    };
+  }).filter((record) => {
+    const status = compactText(record.booking.status || "");
+    if (!record.phone || !record.appointmentAt || !record.reminderAt) return false;
+    if (!isConfirmedAppointmentStatus(status) && !status.includes("confirmed")) return false;
+    if (isCustomerOptedOutForFollowUps(messages, record.phone, record.phoneNumberId)) return false;
+    if (hasAppointmentReminderBeenSent(messages, record.phone, record.phoneNumberId, record.appointmentAt)) return false;
+
+    const nowMs = now.getTime();
+    const reminderMs = record.reminderAt.getTime();
+    const appointmentMs = record.appointmentAt.getTime();
+
+    return nowMs >= reminderMs && nowMs <= Math.min(appointmentMs, reminderMs + dueWindowMs);
+  });
+}
+
+async function activateAppointmentReminderAfterConfirmation({ booking = {}, phoneNumberId = DUBAI_PHONE_NUMBER_ID, notes = "", updatedBy = "Booking Confirmation" } = {}) {
+  const customerPhone = normalizePhoneDigits(booking.phone || "");
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  if (!customerPhone) return { ok: false, skipped: true, reason: "missing_customer_phone" };
+
+  const bookingWithNotes = { ...booking, notes: notes || booking.notes || "" };
+  const appointmentAt = parseAppointmentDateTimeFromBooking(bookingWithNotes);
+  const lineConfig = getLineConfig(finalPhoneNumberId);
+
+  await saveConversationStateToGoogleSheetFromServer({
+    phone: customerPhone,
+    phoneNumberId: finalPhoneNumberId,
+    branch: booking.branch || lineConfig.branch,
+    status: "Confirmed Appointment",
+    assignee: getBranchTeamAssignee(booking.branch || lineConfig.branch),
+    tags: ["Booking", "Confirmed", "Appointment Reminder Auto Scheduled", `${APPOINTMENT_REMINDER_LEAD_MINUTES} Minutes Before`],
+    updatedBy
+  });
+
+  const logBody = [
+    "Appointment reminder auto scheduled ✅",
+    `Branch: ${booking.branch || lineConfig.branch}`,
+    `Template: ${getAppointmentReminderTemplateName(finalPhoneNumberId)}`,
+    appointmentAt ? `Appointment at: ${appointmentAt.toISOString()}` : "Appointment time could not be parsed yet",
+    `Reminder lead: ${APPOINTMENT_REMINDER_LEAD_MINUTES} minutes before`
+  ].filter(Boolean).join("\n");
+
+  addInboxMessage(customerPhone, "bot", logBody, "Appointment Reminder Scheduled", finalPhoneNumberId, {
+    customerName: booking.customerName || "",
+    messageType: "Appointment Reminder Auto Scheduled"
+  });
+
+  return { ok: Boolean(appointmentAt), appointmentAt, template: getAppointmentReminderTemplateName(finalPhoneNumberId) };
 }
 
 function normalizeIntentTags(tags) {
@@ -8160,6 +8479,13 @@ app.get("/api/version", (req, res) => {
     ok: true,
     version: BOT_VERSION,
     callNowTemplates: getCallNowTemplateMap(),
+    appointmentReminder: {
+      enabled: APPOINTMENT_REMINDER_ENABLED,
+      templates: getAppointmentReminderTemplateMap(),
+      language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
+      leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
+      dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES
+    },
     locations: {
       dubai: DUBAI_LOCATION_URL,
       abuDhabi: ABU_DHABI_LOCATION_URL
@@ -8236,15 +8562,34 @@ app.get("/api/reminders/preview", protectInbox, async (req, res) => {
     const messages = sheetData.messages || [];
     const due = getDueFollowUpReminders(messages);
     const allOptIns = buildLatestOptInRecords(messages);
+    const bookingData = await loadBookingRequestsFromGoogleSheetFromServer();
+    const appointmentDue = getDueAppointmentReminders(bookingData.bookingRequests || [], messages);
 
     return res.json({
       ok: true,
       mode: "preview_only",
       templateMode: "branch_specific",
       templates: getFollowUpTemplateMap(),
+      appointmentReminder: {
+        enabled: APPOINTMENT_REMINDER_ENABLED,
+        templates: getAppointmentReminderTemplateMap(),
+        language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
+        leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
+        dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
+        dueCount: appointmentDue.length,
+        due: appointmentDue.map((record) => ({
+          phone: record.phone,
+          branch: record.branch,
+          phoneNumberId: record.phoneNumberId,
+          appointmentAt: record.appointmentAt?.toISOString?.() || "",
+          reminderAt: record.reminderAt?.toISOString?.() || "",
+          template: record.template
+        }))
+      },
       headerImageConfigured: Boolean(FOLLOW_UP_HEADER_IMAGE_URL),
       delayDays: FOLLOW_UP_DELAY_DAYS,
       scannedMessages: messages.length,
+      scannedBookings: (bookingData.bookingRequests || []).length,
       totalOptInRecords: allOptIns.length,
       dueCount: due.length,
       due
@@ -8603,9 +8948,50 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
     const sheetData = await loadMessagesFromGoogleSheet();
     const messages = sheetData.messages || [];
     const due = getDueFollowUpReminders(messages);
+    const bookingData = await loadBookingRequestsFromGoogleSheetFromServer();
+    const appointmentDue = getDueAppointmentReminders(bookingData.bookingRequests || [], messages);
     const sent = [];
     const failed = [];
     const skippedOptOut = [];
+    const appointmentSent = [];
+    const appointmentFailed = [];
+
+    for (const record of appointmentDue) {
+      const templateName = getAppointmentReminderTemplateName(record.phoneNumberId);
+      const sendResult = await sendWhatsAppTemplate(record.phone, templateName, record.phoneNumberId, APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE);
+
+      if (sendResult.ok) {
+        addInboxMessage(
+          record.phone,
+          "bot",
+          getAppointmentReminderBodyForLog(record.phoneNumberId, record.appointmentAt),
+          "Appointment Reminder Sent",
+          record.phoneNumberId,
+          {
+            customerName: record.customerName || "",
+            messageType: "Appointment 1-hour Reminder"
+          }
+        );
+
+        appointmentSent.push({
+          phone: record.phone,
+          branch: record.branch,
+          phoneNumberId: record.phoneNumberId,
+          appointmentAt: record.appointmentAt?.toISOString?.() || "",
+          reminderAt: record.reminderAt?.toISOString?.() || "",
+          template: templateName
+        });
+      } else {
+        appointmentFailed.push({
+          phone: record.phone,
+          branch: record.branch,
+          phoneNumberId: record.phoneNumberId,
+          appointmentAt: record.appointmentAt?.toISOString?.() || "",
+          template: templateName,
+          result: sendResult.result
+        });
+      }
+    }
 
     for (const record of due) {
       if (isCustomerOptedOutForFollowUps(messages, record.phone, record.phoneNumberId)) {
@@ -8652,9 +9038,21 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
     }
 
     return res.json({
-      ok: failed.length === 0,
+      ok: failed.length === 0 && appointmentFailed.length === 0,
       templateMode: "branch_specific",
       templates: getFollowUpTemplateMap(),
+      appointmentReminder: {
+        enabled: APPOINTMENT_REMINDER_ENABLED,
+        templates: getAppointmentReminderTemplateMap(),
+        language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
+        leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
+        dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
+        dueCount: appointmentDue.length,
+        sentCount: appointmentSent.length,
+        failedCount: appointmentFailed.length,
+        sent: appointmentSent,
+        failed: appointmentFailed
+      },
       headerImageConfigured: Boolean(FOLLOW_UP_HEADER_IMAGE_URL),
       delayDays: FOLLOW_UP_DELAY_DAYS,
       dueCount: due.length,
