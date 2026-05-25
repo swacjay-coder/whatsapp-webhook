@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-21-localized-team-inbox-handoff-log";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-22-full-localized-team-inbox-log";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -574,6 +574,65 @@ function getDefaultMessageType(sender, status) {
   return status || "Message";
 }
 
+function localizeInboxLogButtonTitle(title = "", language = "en") {
+  const cleanTitle = (title || "").toString().trim();
+
+  if (!cleanTitle) {
+    return cleanTitle;
+  }
+
+  if (language === "ar" && cleanTitle === "Open Location") {
+    return "افتح الموقع";
+  }
+
+  return pickLocalizedButtonTitle(cleanTitle, language);
+}
+
+function localizeInboxLogButtonBlock(buttonBlock = "", language = "en") {
+  return (buttonBlock || "")
+    .toString()
+    .split("\n")
+    .map((line) => {
+      const match = line.match(/^(\s*•\s*)(.+?)\s*$/);
+
+      if (!match) {
+        return line;
+      }
+
+      return `${match[1]}${localizeInboxLogButtonTitle(match[2], language)}`;
+    })
+    .join("\n")
+    .trim();
+}
+
+function localizeInboxBotLogBody(phone, body = "", options = {}) {
+  const originalBody = (body || "").toString();
+
+  if (!originalBody) {
+    return originalBody;
+  }
+
+  const replyLanguage = options.replyLanguage || getConversationLanguage(phone, originalBody);
+  const buttonMarkerMatch = originalBody.match(/\n\n(Buttons?|CTA Button):\n/i);
+
+  if (buttonMarkerMatch && typeof buttonMarkerMatch.index === "number") {
+    const markerStart = buttonMarkerMatch.index;
+    const markerText = buttonMarkerMatch[0];
+    const markerLabel = buttonMarkerMatch[1];
+    const messagePart = originalBody.slice(0, markerStart);
+    const buttonBlock = originalBody.slice(markerStart + markerText.length);
+    const localizedMessage = cleanLocalizedReplyBody(messagePart, replyLanguage);
+    const localizedButtons = localizeInboxLogButtonBlock(buttonBlock, replyLanguage);
+
+    return [
+      localizedMessage,
+      localizedButtons ? `${markerLabel}:\n${localizedButtons}` : ""
+    ].filter(Boolean).join("\n\n").trim();
+  }
+
+  return cleanLocalizedReplyBody(originalBody, replyLanguage);
+}
+
 function fixLoadedEmptyCustomerBody(message = {}) {
   const sender = (message.sender || "").toString().trim();
   const body = (message.body || "").toString();
@@ -600,13 +659,17 @@ function addInboxMessage(phone, sender, body, status = "Bot", phoneNumberId = nu
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || conversationPhoneNumberId[phone] || DUBAI_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
 
+  const inboxBody = sender === "bot"
+    ? localizeInboxBotLogBody(phone, body, options)
+    : body;
+
   const item = {
     time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
     phone,
     customerName: options.customerName || "",
     branch: lineConfig.branch,
     sender,
-    body,
+    body: inboxBody,
     status: conversationStatus[phone] || status,
     messageType: options.messageType || getDefaultMessageType(sender, status),
     phoneNumberId: finalPhoneNumberId
@@ -5664,6 +5727,10 @@ function formatButtonLog(body, buttons) {
   return `${body}\n\nButtons:\n${buttonText}`;
 }
 
+function formatCtaLog(body, displayText) {
+  return `${body}\n\nCTA Button:\n• ${displayText}`;
+}
+
 function getFollowUpTemplateName(phoneNumberId) {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
 
@@ -6787,7 +6854,7 @@ app.get("/api/location/test", protectInbox, async (req, res) => {
       addInboxMessage(
         to,
         "bot",
-        getLocationBodyForLog(phoneNumberId),
+        formatCtaLog(locationBody, "Open Location"),
         "Location Test",
         phoneNumberId,
         {
@@ -21692,7 +21759,7 @@ app.post("/webhook", async (req, res) => {
         addInboxMessage(
           from,
           "bot",
-          getLocationBodyForLog(incomingPhoneNumberId),
+          formatCtaLog(locationBody, "Open Location"),
           "Location Requested",
           incomingPhoneNumberId,
           {
@@ -21812,7 +21879,7 @@ app.post("/webhook", async (req, res) => {
         addInboxMessage(
           from,
           "bot",
-          `[Video sent] ${AUTO_REPLY_VIDEO_FILENAME}\n${videoCaption}`,
+          videoCaption,
           "Media Requested",
           incomingPhoneNumberId,
           {
