@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-31-suggested-time-customer-accept-notify-staff";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-32-abu-dhabi-direct-consultation-chat-booking";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -4348,6 +4348,19 @@ function detectSmartBookingStaff(text = "") {
 }
 
 function mergeSmartBookingStaffIntoDraft(draft = {}, text = "") {
+  // V31.5.8.60.3.9.32:
+  // Direct consultation chat booking must follow the incoming WhatsApp line branch.
+  // Do not let a staff name in the customer's text switch Abu Dhabi to Dubai or Dubai to Abu Dhabi.
+  if (draft.directConsultationChatBooking || draft.skipStaffQuestion) {
+    return {
+      ...draft,
+      teamMember: "",
+      requestType: draft.requestType || "Consultation Booking",
+      directConsultationChatBooking: true,
+      skipStaffQuestion: true
+    };
+  }
+
   const detectedStaff = detectSmartBookingStaff(text || draft.rawRequest || "");
   if (!detectedStaff) {
     return draft;
@@ -4665,7 +4678,7 @@ function buildSmartBookingConfirmationBody(draft = {}, preferredTime = "", langu
 
 function buildSmartBookingRequestMessage(draft = {}, preferredTime = "", originalText = "") {
   const requestType = draft.requestType || (draft.serviceType ? "Service Appointment" : "WhatsApp Smart Natural Booking V3");
-  const source = draft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.30" : "WhatsApp Smart Natural Booking V3";
+  const source = draft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.32" : "WhatsApp Smart Natural Booking V3";
 
   return [
     `Source: ${source}`,
@@ -6084,7 +6097,7 @@ async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", prof
 
   const smartRequestType = finalDraft.requestType || (finalDraft.serviceType ? "Service Appointment" : "WhatsApp Smart Natural Booking V3.9.14");
   const smartSource = finalDraft.directConsultationChatBooking
-    ? "Source: WhatsApp Direct Consultation Chat Booking V3.9.30"
+    ? "Source: WhatsApp Direct Consultation Chat Booking V3.9.32"
     : "Source: WhatsApp Smart Natural Booking V3.9.14";
 
   const flowData = {
@@ -6184,6 +6197,19 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
 
   if (existingDraft) {
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
+
+    // V31.5.8.60.3.9.32:
+    // Keep direct consultation chat booking branch locked to the WhatsApp line.
+    // This makes Abu Dhabi run the same chat-booking cycle as Dubai, but routed to Abu Dhabi.
+    if (existingDraft.directConsultationChatBooking || existingDraft.skipStaffQuestion) {
+      existingDraft.branch = lineConfig.branch || existingDraft.branch || "Dubai";
+      existingDraft.phoneNumberId = incomingPhoneNumberId;
+      existingDraft.teamMember = "";
+      existingDraft.requestType = "Consultation Booking";
+      existingDraft.directConsultationChatBooking = true;
+      existingDraft.skipStaffQuestion = true;
+    }
+
     smartBookingDrafts[from] = existingDraft;
   }
 
@@ -6262,7 +6288,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       status: "Booking Request",
       assignee: getBranchTeamAssignee(selectedBranch),
       tags: ["Booking", finalDraft.requestType || "Smart Natural Booking V3.14", "Need Confirmation"],
-      updatedBy: finalDraft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.30" : "WhatsApp Smart Natural Booking V3.14"
+      updatedBy: finalDraft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.32" : "WhatsApp Smart Natural Booking V3.14"
     });
     await saveBookingRequestToGoogleSheetFromServer({
       phone: from,
@@ -22965,7 +22991,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (isConsultationFlowText(originalText || text)) {
-      // V31.5.8.60.3.9.30 - Direct consultation chat booking:
+      // V31.5.8.60.3.9.32 - Direct consultation chat booking:
       // For clear consultation booking intent, do not open WhatsApp Flow immediately.
       // Auto-detect the branch from the incoming WhatsApp line, then ask day and time in chat.
       const directConsultationHandled = await handleSmartWhatsAppBooking({
