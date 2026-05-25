@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-28-smarter-intent-router";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-29-smart-context-router";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -566,6 +566,7 @@ const inboxMessages = [];
 const conversationStatus = {};
 const conversationPhoneNumberId = {};
 const conversationLanguage = {};
+const conversationSmartContext = {};
 
 function getDefaultMessageType(sender, status) {
   if (sender === "customer") return "Customer Message";
@@ -1772,6 +1773,286 @@ function getClarifyingIntentButtons() {
     { id: "booking_menu", title: "حجز / Booking" },
     { id: "talk_to_team", title: "الفريق / Team" }
   ];
+}
+
+
+// V31.5.8.60.3.9.29 - Smart context router helpers:
+// Keeps a small in-memory topic trail so the bot can answer follow-up replies
+// like "غالي", "طيب كم تقريباً؟", "yes", or "ما فهمت" without repeating itself.
+function rememberSmartIntentContext(phone, topic = "", text = "", language = "en") {
+  const cleanPhone = normalizePhoneDigits(phone);
+  const cleanTopic = (topic || "").toString().trim();
+
+  if (!cleanPhone || !cleanTopic) return null;
+
+  const previous = conversationSmartContext[cleanPhone] || {};
+  const cleanText = compactText(text || "");
+  const repeated = previous.topic === cleanTopic && previous.lastText === cleanText;
+
+  const nextContext = {
+    topic: cleanTopic,
+    lastText: cleanText,
+    language: language === "ar" ? "ar" : "en",
+    count: repeated ? Number(previous.count || 1) + 1 : 1,
+    updatedAt: Date.now()
+  };
+
+  conversationSmartContext[cleanPhone] = nextContext;
+  conversationSmartContext[phone] = nextContext;
+  return nextContext;
+}
+
+function getSmartIntentContext(phone) {
+  const cleanPhone = normalizePhoneDigits(phone);
+  const context = conversationSmartContext[cleanPhone] || conversationSmartContext[phone] || null;
+
+  if (!context || !context.updatedAt) return null;
+
+  // Keep context only for a practical customer chat window.
+  if ((Date.now() - Number(context.updatedAt || 0)) > (6 * 60 * 60 * 1000)) {
+    if (cleanPhone) delete conversationSmartContext[cleanPhone];
+    if (phone) delete conversationSmartContext[phone];
+    return null;
+  }
+
+  return context;
+}
+
+function isSimpleAffirmationText(text = "") {
+  const value = compactText(text);
+  return value === "yes" ||
+    value === "y" ||
+    value === "ok" ||
+    value === "okay" ||
+    value === "sure" ||
+    value === "yes please" ||
+    value === "please" ||
+    value === "تمام" ||
+    value === "اي" ||
+    value === "أي" ||
+    value === "نعم" ||
+    value === "اوكي" ||
+    value === "أوكي" ||
+    value === "موافق" ||
+    value === "اكيد" ||
+    value === "أكيد";
+}
+
+function isApproximatePriceFollowUpText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "approximately", "approx", "roughly", "range", "price range", "around how much", "how much approximately", "how much roughly",
+    "تقريبا", "تقريباً", "كم تقريبا", "كم تقريباً", "رينج", "حدود كم", "تقريبا كم", "تقريباً كم", "يعني كم", "طيب كم", "اقل شي", "أقل شي"
+  ]);
+}
+
+function isShortContextFollowUpText(text = "") {
+  const value = compactText(text);
+  if (!value || value.length > 80) return false;
+
+  return isSimpleAffirmationText(value) ||
+    value === "why" ||
+    value === "كيف" ||
+    value === "ليش" ||
+    value === "طيب" ||
+    value === "and" ||
+    value === "then" ||
+    value.includes("more") ||
+    value.includes("details") ||
+    value.includes("explain") ||
+    value.includes("وضح") ||
+    value.includes("اشرح") ||
+    value.includes("تفاصيل");
+}
+
+function isHumanAssistanceIntentText(text = "") {
+  const value = compactText(text);
+  if (!value) return false;
+
+  return hasAnyIntentPhrase(value, [
+    "someone call me", "can someone call me", "call me back", "need someone", "need a person", "real person", "agent", "specialist", "speak to someone", "i want someone to call",
+    "بدي حدا", "اريد حدا", "أريد حدا", "حدا يكلمني", "حدا يحكيني", "كلموني", "اتصلوا فيني", "اتصلو فيني", "تواصلوا معي", "بدي موظف", "بدي مختص", "بدي الفريق", "حولني للموظف", "حولني للفريق"
+  ]);
+}
+
+function isWomenSuitabilityIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "women", "woman", "female", "ladies", "for women", "for ladies", "does it work for women", "girl",
+    "نساء", "للنساء", "سيدات", "بنات", "امرأة", "للحرمة", "للبنات", "ينفع للنساء", "يناسب النساء"
+  ]);
+}
+
+function isFullBaldSuitabilityIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "full bald", "fully bald", "bald", "baldness", "no hair", "complete hair loss", "alopecia", "can it cover full head",
+    "صلع كامل", "اصلع", "أصلع", "ما عندي شعر", "بدون شعر", "تغطية كاملة", "كل الراس", "الرأس كامل", "الثعلبة", "فراغ كبير"
+  ]);
+}
+
+function buildPriceQualificationBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName}، خلينا نقرب لك الصورة.` : "تمام، خلينا نقرب لك الصورة.";
+    return [
+      intro,
+      "",
+      "حتى نعطيك توجيه أقرب للسعر، نحتاج نعرف نقطة واحدة أولاً:",
+      "هل المطلوب تغطية خفيفة / فراغات، أم حل كامل؟",
+      "",
+      "إذا تحب تختصر الوقت، احجز استشارة والفريق يعطيك التوجيه الأنسب لحالتك."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName}, let us narrow it down.` : "Sure, let us narrow it down.";
+  return [
+    intro,
+    "",
+    "To guide you more accurately on price, we need one detail first:",
+    "Do you need light coverage / gaps, or a full solution?",
+    "",
+    "To save time, you can book a consultation and our team will guide you based on your case."
+  ].join("\n");
+}
+
+function buildSmartReadyToBookBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName} ✅` : "تمام ✅";
+    return [
+      intro,
+      "",
+      "أفضل خطوة الآن هي اختيار نوع الحجز:",
+      "إذا أنت عميل جديد اختر استشارة، وإذا عميل حالي وتحتاج متابعة أو تركيب اختر سيرفس."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Great ${cleanName} ✅` : "Great ✅";
+  return [
+    intro,
+    "",
+    "The best next step is to choose the right booking type:",
+    "If you are a new client, choose Consultation. If you are an existing client and need follow-up or fitting, choose Service."
+  ].join("\n");
+}
+
+function buildSmartNaturalFollowupBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `صحيح ${cleanName}، الهدف أن لا يكون واضحاً.` : "صحيح، الهدف أن لا يكون واضحاً.";
+    return [
+      intro,
+      "",
+      "النتيجة الطبيعية تعتمد على 3 أشياء: لون مناسب، كثافة غير مبالغ فيها، وخط أمامي مناسب لشكل الوجه.",
+      "",
+      "حتى نحدد الأنسب لك، الاستشارة القصيرة هي أفضل خطوة."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Exactly ${cleanName}, the goal is for it not to look obvious.` : "Exactly, the goal is for it not to look obvious.";
+  return [
+    intro,
+    "",
+    "A natural result depends on 3 things: the right color, balanced density, and a front line that suits your face shape.",
+    "",
+    "To choose the right option for you, a short consultation is the best step."
+  ].join("\n");
+}
+
+function buildWomenSuitabilityBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `نعم ${cleanName}، الخدمة مناسبة للرجال والنساء.` : "نعم، الخدمة مناسبة للرجال والنساء.";
+    return [
+      intro,
+      "",
+      "نختار الحل حسب شكل الفراغات، كثافة الشعر، واللوك المطلوب مع الحفاظ على الخصوصية والمظهر الطبيعي.",
+      "",
+      "أفضل خطوة هي استشارة قصيرة حتى يحدد الفريق الأنسب للحالة."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Yes ${cleanName}, the service is suitable for men and women.` : "Yes, the service is suitable for men and women.";
+  return [
+    intro,
+    "",
+    "The solution depends on the hair gaps, density, and the look you want, while keeping the result private and natural.",
+    "",
+    "The best step is a short consultation so the team can guide you properly."
+  ].join("\n");
+}
+
+function buildFullBaldSuitabilityBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `ممكن ${cleanName}، لكن لازم تقييم الحالة أولاً.` : "ممكن، لكن لازم تقييم الحالة أولاً.";
+    return [
+      intro,
+      "",
+      "في حالات الصلع الكامل أو المساحات الكبيرة، نحتاج نحدد التغطية، الشكل المناسب، وطريقة التثبيت حتى تكون النتيجة طبيعية ومريحة.",
+      "",
+      "احجز استشارة قصيرة والفريق يوضح لك إذا الحل مناسب لحالتك."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `It can be possible ${cleanName}, but the case needs to be checked first.` : "It can be possible, but the case needs to be checked first.";
+  return [
+    intro,
+    "",
+    "For full baldness or large areas, we need to check the coverage, suitable style, and fitting method so the result looks natural and feels comfortable.",
+    "",
+    "Book a short consultation and the team will confirm what suits your case."
+  ].join("\n");
+}
+
+function getSmartConsultTeamButtons() {
+  return [
+    { id: "consult_menu", title: "Consult | استشارة" },
+    { id: "talk_to_team", title: "Team | فريقنا" },
+    { id: "results", title: "Results | نتائج" }
+  ];
+}
+
+function getSmartContextAwareReply({ phone, text = "", customerName = "", language = "en" }) {
+  const context = getSmartIntentContext(phone);
+  const value = compactText(text);
+
+  if (!context || !value) return null;
+
+  if (isSimpleAffirmationText(value) && ["price", "expensive", "natural", "density", "hair_type", "warranty", "women", "full_bald"].includes(context.topic)) {
+    return {
+      topic: "booking_choice",
+      status: "Booking Menu",
+      messageType: "Smart Context - Ready To Book",
+      body: buildSmartReadyToBookBody(customerName, language),
+      buttons: getDirectBookingChoiceButtons()
+    };
+  }
+
+  if ((isApproximatePriceFollowUpText(value) || (isPriceIntentText(value) && ["price", "expensive"].includes(context.topic))) && ["price", "expensive"].includes(context.topic)) {
+    return {
+      topic: "price_qualification",
+      status: "Price Qualification",
+      messageType: "Smart Context - Price Qualification",
+      body: buildPriceQualificationBody(customerName, language),
+      buttons: getSmartConsultTeamButtons()
+    };
+  }
+
+  if (["natural"].includes(context.topic) && (isShortContextFollowUpText(value) || isNaturalLookIntentText(value))) {
+    return {
+      topic: "natural_followup",
+      status: "Natural Look Follow-up",
+      messageType: "Smart Context - Natural Follow-up",
+      body: buildSmartNaturalFollowupBody(customerName, language),
+      buttons: getSmartConsultTeamButtons()
+    };
+  }
+
+  return null;
 }
 
 function buildWorkingHoursBody(phoneNumberId = DUBAI_PHONE_NUMBER_ID, language = "en") {
@@ -22454,6 +22735,24 @@ app.post("/webhook", async (req, res) => {
         `📍 ${lineConfig.branch} branch location:\n${lineConfig.locationUrl}`;
     }
 
+    /* V31.5.8.60.3.9.29 — Fast human assistance handoff */
+    else if (isHumanAssistanceIntentText(originalText || text)) {
+      setConversationStatus(from, "Talk to Team");
+      rememberSmartIntentContext(from, "human_help", originalText || text, replyLanguage);
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: "Talk to Team",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
+        tags: ["Human Support", "Bot Paused", "Smart Context"],
+        updatedBy: "Smart Context Human Handoff"
+      });
+
+      replyText = buildTeamHandoffBody(profileName);
+      replyButtons = null;
+    }
+
     /* ساعات العمل / الدوام */
     else if (isWorkingHoursIntentText(originalText || text)) {
       setConversationStatus(from, "Working Hours Requested");
@@ -22686,17 +22985,47 @@ app.post("/webhook", async (req, res) => {
       replyButtons = getServiceSubMenuButtons();
     }
 
+    /* V31.5.8.60.3.9.29 — Smart context follow-up router */
+    else if (getSmartContextAwareReply({ phone: from, text: originalText || text, customerName: profileName, language: replyLanguage })) {
+      const smartContextReply = getSmartContextAwareReply({ phone: from, text: originalText || text, customerName: profileName, language: replyLanguage });
+      setConversationStatus(from, smartContextReply.status || "Smart Context Reply");
+      rememberSmartIntentContext(from, smartContextReply.topic || "smart_context", originalText || text, replyLanguage);
+
+      replyText = smartContextReply.body;
+      replyButtons = smartContextReply.buttons || getSmartConsultTeamButtons();
+    }
+
     /* V31.5.8.60.3.9.28 — Smart current-client/service intent */
     else if (isCurrentClientServiceIntentText(originalText || text)) {
       setConversationStatus(from, "Service Appointment");
+      rememberSmartIntentContext(from, "service", originalText || text, replyLanguage);
 
       replyText = buildCurrentClientServiceBody(profileName, replyLanguage);
       replyButtons = getServiceSubMenuButtons();
     }
 
+    /* V31.5.8.60.3.9.29 — Women suitability question */
+    else if (isWomenSuitabilityIntentText(originalText || text)) {
+      setConversationStatus(from, "Women Suitability Question");
+      rememberSmartIntentContext(from, "women", originalText || text, replyLanguage);
+
+      replyText = buildWomenSuitabilityBody(profileName, replyLanguage);
+      replyButtons = getSmartConsultTeamButtons();
+    }
+
+    /* V31.5.8.60.3.9.29 — Full baldness suitability question */
+    else if (isFullBaldSuitabilityIntentText(originalText || text)) {
+      setConversationStatus(from, "Full Baldness Question");
+      rememberSmartIntentContext(from, "full_bald", originalText || text, replyLanguage);
+
+      replyText = buildFullBaldSuitabilityBody(profileName, replyLanguage);
+      replyButtons = getSmartConsultTeamButtons();
+    }
+
     /* V31.5.8.60.3.9.28 — Expensive / price objection */
     else if (isExpensiveObjectionIntentText(originalText || text)) {
       setConversationStatus(from, "Price Objection");
+      rememberSmartIntentContext(from, "expensive", originalText || text, replyLanguage);
 
       replyText = buildExpensiveObjectionBody(profileName, replyLanguage);
       replyButtons = getConsultActionButtons();
@@ -22705,6 +23034,7 @@ app.post("/webhook", async (req, res) => {
     /* V31.5.8.60.3.9.28 — Density question */
     else if (isDensityIntentText(originalText || text)) {
       setConversationStatus(from, "Density Question");
+      rememberSmartIntentContext(from, "density", originalText || text, replyLanguage);
 
       replyText = buildDensityIntentBody(profileName, replyLanguage);
       replyButtons = getConsultActionButtons();
@@ -22713,6 +23043,7 @@ app.post("/webhook", async (req, res) => {
     /* V31.5.8.60.3.9.28 — Hair type question */
     else if (isHairTypeIntentText(originalText || text)) {
       setConversationStatus(from, "Hair Type Question");
+      rememberSmartIntentContext(from, "hair_type", originalText || text, replyLanguage);
 
       replyText = buildHairTypeIntentBody(profileName, replyLanguage);
       replyButtons = getConsultActionButtons();
@@ -22721,6 +23052,7 @@ app.post("/webhook", async (req, res) => {
     /* V31.5.8.60.3.9.28 — Duration / maintenance question */
     else if (isDurationMaintenanceIntentText(originalText || text)) {
       setConversationStatus(from, "Duration Maintenance Question");
+      rememberSmartIntentContext(from, "duration_maintenance", originalText || text, replyLanguage);
 
       replyText = buildDurationMaintenanceIntentBody(profileName, replyLanguage);
       replyButtons = getDirectBookingChoiceButtons();
@@ -22729,6 +23061,7 @@ app.post("/webhook", async (req, res) => {
     /* V31.5.8.60.3.9.28 — Warranty / guarantee question */
     else if (isWarrantyIntentText(originalText || text)) {
       setConversationStatus(from, "Warranty Question");
+      rememberSmartIntentContext(from, "warranty", originalText || text, replyLanguage);
 
       replyText = buildWarrantyIntentBody(profileName, replyLanguage);
       replyButtons = getConsultActionButtons();
@@ -22749,6 +23082,7 @@ app.post("/webhook", async (req, res) => {
     /* مظهر طبيعي */
     else if (isNaturalLookIntentText(originalText || text)) {
       setConversationStatus(from, "Service Interest");
+      rememberSmartIntentContext(from, "natural", originalText || text, replyLanguage);
 
       replyText = buildNaturalIntentBody(profileName, replyLanguage);
       replyButtons = getActionButtons();
@@ -22757,6 +23091,7 @@ app.post("/webhook", async (req, res) => {
     /* السعر */
     else if (isPriceIntentText(originalText || text)) {
       setConversationStatus(from, "Price Question");
+      rememberSmartIntentContext(from, "price", originalText || text, replyLanguage);
 
       replyText = buildPriceIntentBody(profileName, replyLanguage);
       replyButtons = getConsultActionButtons();
@@ -22765,6 +23100,7 @@ app.post("/webhook", async (req, res) => {
     /* استشارة خاصة */
     else if (isConsultationIntentText(originalText || text)) {
       setConversationStatus(from, "Consultation Request");
+      rememberSmartIntentContext(from, "consultation", originalText || text, replyLanguage);
 
       replyText = buildConsultationIntentBody(profileName, replyLanguage);
       replyButtons = getConsultActionButtons();
