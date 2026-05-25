@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-25-remove-1-hour-reminder-keep-20-day-followup";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-26-staff-send-status-and-optout-guard";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -670,7 +670,7 @@ function addInboxMessage(phone, sender, body, status = "Bot", phoneNumberId = nu
     branch: lineConfig.branch,
     sender,
     body: inboxBody,
-    status: conversationStatus[phone] || status,
+    status: options.statusOverride || conversationStatus[phone] || status,
     messageType: options.messageType || getDefaultMessageType(sender, status),
     phoneNumberId: finalPhoneNumberId
   };
@@ -2065,6 +2065,65 @@ async function sendWhatsAppMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_
   }
 
   return result;
+}
+
+function getWhatsAppApiError(sendResult = {}) {
+  if (!sendResult || typeof sendResult !== "object") {
+    return null;
+  }
+
+  if (sendResult.error) {
+    return sendResult.error;
+  }
+
+  if (sendResult.result && sendResult.result.error) {
+    return sendResult.result.error;
+  }
+
+  return null;
+}
+
+function isWhatsAppOutside24HourWindowError(error = {}) {
+  const code = (error.code || error.error_code || "").toString().trim();
+  const message = normalizeText(error.message || error.error_user_msg || error.details || "");
+
+  return code === "131047" ||
+    code === "470" ||
+    message.includes("24 hour") ||
+    message.includes("24-hour") ||
+    message.includes("outside") ||
+    message.includes("re-engagement") ||
+    message.includes("customer care window");
+}
+
+function getWhatsAppFailureReasonArabic(sendResult = {}) {
+  const error = getWhatsAppApiError(sendResult) || {};
+  const rawMessage = (error.error_user_msg || error.message || error.details || "").toString().trim();
+
+  if (isWhatsAppOutside24HourWindowError(error)) {
+    return "خارج نافذة واتساب 24 ساعة. لازم العميل يرسل أولاً لفتح المحادثة، أو يتم استخدام Template معتمدة من واتساب.";
+  }
+
+  return rawMessage || "واتساب رفض الإرسال أو لم يؤكد قبول الرسالة.";
+}
+
+function buildStaffSendFailureLogBody(originalBody = "", sendResult = {}) {
+  const cleanBody = (originalBody || "").toString().trim();
+  const reason = getWhatsAppFailureReasonArabic(sendResult);
+
+  return [
+    "⚠️ Failed / Not delivered",
+    "فشل الإرسال / لم تصل للعميل",
+    "",
+    cleanBody ? "نص الرسالة:" : "",
+    cleanBody,
+    "",
+    `السبب: ${reason}`
+  ].filter(Boolean).join("\n");
+}
+
+function getStaffSendFailureResponseMessage(sendResult = {}) {
+  return `فشل الإرسال / لم تصل للعميل. ${getWhatsAppFailureReasonArabic(sendResult)}`;
 }
 
 
@@ -6336,6 +6395,28 @@ function getDueFollowUpReminders(messages, delayDays = FOLLOW_UP_DELAY_DAYS) {
   });
 }
 
+function findFollowUpOptRecord(messages = [], phone = "", phoneNumberId = "") {
+  const cleanPhone = normalizePhoneDigits(phone);
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
+
+  if (!cleanPhone) {
+    return null;
+  }
+
+  return buildLatestOptInRecords(messages).find((record) => {
+    const recordPhone = normalizePhoneDigits(record.phone);
+    const recordPhoneNumberId = normalizePhoneNumberId(record.phoneNumberId || "");
+
+    return recordPhone === cleanPhone &&
+      (!cleanPhoneNumberId || recordPhoneNumberId === cleanPhoneNumberId);
+  }) || null;
+}
+
+function isCustomerOptedOutForFollowUps(messages = [], phone = "", phoneNumberId = "") {
+  const record = findFollowUpOptRecord(messages, phone, phoneNumberId);
+  return Boolean(record && record.optedOut);
+}
+
 function getReminderBodyForLog(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
   return `Template sent: ${getFollowUpTemplateName(phoneNumberId)}`;
 }
@@ -6899,6 +6980,18 @@ app.get("/api/reminders/test", protectInbox, async (req, res) => {
     const phoneNumberId = requestedPhoneNumberId ||
       (branch.includes("abu") ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID);
 
+    const sheetData = await loadMessagesFromGoogleSheet();
+    const messages = sheetData.messages || [];
+
+    if (isCustomerOptedOutForFollowUps(messages, to, phoneNumberId)) {
+      return res.status(403).json({
+        ok: false,
+        blocked: true,
+        reason: "opted_out",
+        error: "This customer sent STOP. Follow-up/reminder templates are blocked for this number."
+      });
+    }
+
     const templateName = getFollowUpTemplateName(phoneNumberId);
     const sendResult = await sendWhatsAppTemplate(to, templateName, phoneNumberId, FOLLOW_UP_TEMPLATE_LANGUAGE);
 
@@ -7216,8 +7309,19 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
     const due = getDueFollowUpReminders(messages);
     const sent = [];
     const failed = [];
+    const skippedOptOut = [];
 
     for (const record of due) {
+      if (isCustomerOptedOutForFollowUps(messages, record.phone, record.phoneNumberId)) {
+        skippedOptOut.push({
+          phone: record.phone,
+          branch: record.branch,
+          phoneNumberId: record.phoneNumberId,
+          reason: "Customer sent STOP"
+        });
+        continue;
+      }
+
       const templateName = getFollowUpTemplateName(record.phoneNumberId);
       const sendResult = await sendWhatsAppTemplate(record.phone, templateName, record.phoneNumberId, FOLLOW_UP_TEMPLATE_LANGUAGE);
 
@@ -7260,8 +7364,10 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
       dueCount: due.length,
       sentCount: sent.length,
       failedCount: failed.length,
+      skippedOptOutCount: skippedOptOut.length,
       sent,
-      failed
+      failed,
+      skippedOptOut
     });
   } catch (error) {
     console.error("Sending due reminders failed:");
@@ -7684,9 +7790,30 @@ app.post("/api/send", protectInbox, async (req, res) => {
 
     conversationPhoneNumberId[to] = phoneNumberId;
 
-    await sendWhatsAppMessage(to, body, phoneNumberId);
+    const sendResult = await sendWhatsAppMessage(to, body, phoneNumberId);
+    const sendError = getWhatsAppApiError(sendResult);
+
+    if (sendError) {
+      const failureBody = buildStaffSendFailureLogBody(body, sendResult);
+
+      addInboxMessage(to, "staff", failureBody, "Failed / Not delivered", phoneNumberId, {
+        messageType: "Failed / Not delivered",
+        statusOverride: "Failed / Not delivered"
+      });
+
+      return res.status(isWhatsAppOutside24HourWindowError(sendError) ? 409 : 500).json({
+        ok: false,
+        status: "Failed / Not delivered",
+        error: getStaffSendFailureResponseMessage(sendResult),
+        result: sendResult
+      });
+    }
+
     setConversationStatus(to, "Human Reply");
-    addInboxMessage(to, "staff", body, "Human Reply", phoneNumberId, { messageType: "Human Reply" });
+    addInboxMessage(to, "staff", body, "Human Reply - Sent", phoneNumberId, {
+      messageType: "Human Reply - Sent",
+      statusOverride: "Human Reply - Sent"
+    });
     await saveConversationStateToGoogleSheetFromServer({
       phone: to,
       phoneNumberId,
@@ -7697,7 +7824,7 @@ app.post("/api/send", protectInbox, async (req, res) => {
       updatedBy: "Team Inbox Human Reply"
     });
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, status: "sent_to_whatsapp", result: sendResult });
   } catch (error) {
     console.error("Inbox send failed:");
     console.error(error);
@@ -7784,9 +7911,14 @@ app.post("/api/send-image", protectInbox, async (req, res) => {
     const sendResult = await sendWhatsAppImageMessage(to, imageDataUrl, caption, filename, phoneNumberId);
 
     if (!sendResult.ok) {
+      addInboxMessage(to, "staff", buildStaffSendFailureLogBody(`Image message: ${filename}`, sendResult), "Failed / Not delivered", phoneNumberId, {
+        messageType: "Image Failed / Not delivered",
+        statusOverride: "Failed / Not delivered"
+      });
+
       return res.status(sendResult.status || 500).json({
         ok: false,
-        error: sendResult.result?.error?.message || sendResult.result?.error || "Image send failed",
+        error: getStaffSendFailureResponseMessage(sendResult),
         result: sendResult.result
       });
     }
@@ -7804,7 +7936,10 @@ app.post("/api/send-image", protectInbox, async (req, res) => {
       buildInlineImageMessageBody(sendResult.mediaId, safeImageFilename, caption),
       "Human Reply",
       phoneNumberId,
-      { messageType: "Human Image Reply" }
+      {
+        messageType: "Human Image Reply - Sent",
+        statusOverride: "Human Image Reply - Sent"
+      }
     );
     await saveConversationStateToGoogleSheetFromServer({
       phone: to,
@@ -7852,9 +7987,14 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
     const sendResult = await sendWhatsAppAudioMessage(to, audioDataUrl, filename, phoneNumberId);
 
     if (!sendResult.ok) {
+      addInboxMessage(to, "staff", buildStaffSendFailureLogBody(`Voice message: ${filename}`, sendResult), "Failed / Not delivered", phoneNumberId, {
+        messageType: "Voice Failed / Not delivered",
+        statusOverride: "Failed / Not delivered"
+      });
+
       return res.status(sendResult.status || 500).json({
         ok: false,
-        error: sendResult.result?.error?.message || sendResult.result?.error || "Voice send failed",
+        error: getStaffSendFailureResponseMessage(sendResult),
         result: sendResult.result
       });
     }
@@ -7872,7 +8012,10 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
       buildInlineAudioMessageBody(sendResult.mediaId, safeAudioFilename),
       "Human Reply",
       phoneNumberId,
-      { messageType: "Human Voice Reply" }
+      {
+        messageType: "Human Voice Reply - Sent",
+        statusOverride: "Human Voice Reply - Sent"
+      }
     );
     await saveConversationStateToGoogleSheetFromServer({
       phone: to,
@@ -20574,7 +20717,8 @@ async function sendReply() {
       markConversationRead(selectedConversationKey);
       loadMessages();
     } else {
-      resultBox.textContent = "Failed: " + (data.error || "Unknown error");
+      resultBox.textContent = data.error || "فشل الإرسال / لم تصل للعميل.";
+      loadMessages();
     }
   } catch (error) {
     resultBox.textContent = "Failed: network or server error.";
