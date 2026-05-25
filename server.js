@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-27-hard-block-staff-log-before-whatsapp-success";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-28-smarter-intent-router";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -1526,6 +1526,252 @@ function buildConsultationIntentBody(customerName = "", language = "en") {
     "",
     "Choose Book Consultation or talk to the team."
   ].join("\n");
+}
+
+
+// V31.5.8.60.3.9.28 - Smarter intent router helpers:
+// These are deterministic keyword routes, not external AI. They improve common customer questions
+// while keeping the stable booking/flow/reminder/staff protections untouched.
+function isExpensiveObjectionIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "expensive", "too expensive", "why expensive", "why so expensive", "high price", "price high", "costly",
+    "cheaper", "discount", "best price", "last price", "final price",
+    "غالي", "غالية", "ليش غالي", "ليش غالية", "السعر غالي", "كتير غالي", "كثير غالي", "غاليه", "غالي جداً", "غالي جدا",
+    "رخيص", "أرخص", "ارخص", "خصم", "آخر سعر", "اخر سعر", "أفضل سعر", "افضل سعر"
+  ]);
+}
+
+function isDensityIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "density", "hair density", "thick", "thickness", "heavy density", "light density", "full coverage", "coverage",
+    "كثافة", "الكثافة", "كثافتها", "خفيفة", "ثقيلة", "تغطية", "تغطية كاملة", "فراغات", "صلع", "مساحة"
+  ]);
+}
+
+function isHairTypeIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "type", "hair type", "what type", "which type", "material", "human hair", "natural hair", "system type", "base type",
+    "نوع", "النوع", "نوعها", "شو نوعها", "اي نوع", "طبيعي ولا", "شعر طبيعي", "نوع الشعر", "الخامة", "الخامات"
+  ]);
+}
+
+function isDurationMaintenanceIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "how long", "last", "lasts", "duration", "maintenance", "service", "cleaning", "refit", "adjustment", "follow up",
+    "كم يدوم", "قديش يدوم", "مدة", "المدة", "يصمد", "يعيش", "كم يعيش", "صيانة", "سيرفس", "تنظيف", "تعديل", "متابعة", "تركيب ثاني"
+  ]);
+}
+
+function isWarrantyIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "warranty", "guarantee", "guaranteed", "guaranty", "promise", "refund", "return",
+    "ضمان", "كفالة", "مضمون", "مضمونة", "ترجيع", "استرجاع", "يرجع"
+  ]);
+}
+
+function isCurrentClientServiceIntentText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "existing client", "old client", "current client", "i am client", "i am your client", "service appointment", "maintenance appointment",
+    "عميل قديم", "عميل حالي", "انا عميل", "أنا عميل", "صيانة", "سيرفس", "متابعة", "تعديل", "زيارة خدمة", "موعد خدمة"
+  ]);
+}
+
+function isUnclearHelpIntentText(text = "") {
+  const value = compactText(text);
+  if (!value || value.length > 120) return false;
+
+  return hasAnyIntentPhrase(value, [
+    "i don't understand", "i dont understand", "not clear", "unclear", "explain", "what do you mean", "help me", "what should i do",
+    "ما فهمت", "مو واضح", "مش واضح", "وضح", "اشرح", "شو يعني", "ساعدني", "ما بعرف", "كيف يعني"
+  ]);
+}
+
+function buildExpensiveObjectionBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `أفهم عليك ${cleanName}، السعر مهم أكيد.` : "أفهم عليك، السعر مهم أكيد.";
+    return [
+      intro,
+      "",
+      "Hair Replacement مو قطعة جاهزة فقط؛ السعر يعتمد على المساحة، الكثافة، نوع الشعر، وطريقة التركيب حتى تطلع النتيجة طبيعية وغير واضحة.",
+      "",
+      "حتى ما نعطيك رقم عشوائي، الأفضل نحجز لك استشارة قصيرة ويشرح لك الفريق الخيار المناسب حسب حالتك.",
+      "",
+      "تحب نحجز لك استشارة؟"
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `I understand ${cleanName}, price matters.` : "I understand, price matters.";
+  return [
+    intro,
+    "",
+    "Hair Replacement is not just a ready-made piece. The price depends on the area, density, hair type, and fitting method so the result looks natural and private.",
+    "",
+    "To avoid giving you a random number, the best step is a short consultation where our team can guide you based on your case.",
+    "",
+    "Would you like to book a consultation?"
+  ].join("\n");
+}
+
+function buildDensityIntentBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName}، الكثافة تنحسب حسب الحالة.` : "تمام، الكثافة تنحسب حسب الحالة.";
+    return [
+      intro,
+      "",
+      "الكثافة لازم تكون مناسبة لشكل الوجه والشعر الموجود حتى تكون النتيجة طبيعية، مو مبالغ فيها ولا واضحة.",
+      "",
+      "الفريق يحددها بعد ما يعرف مساحة التغطية واللوك المطلوب.",
+      "",
+      "تقدر تحجز استشارة أو ترسل تفاصيل أكثر للفريق."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName}, density depends on the case.` : "Sure, density depends on the case.";
+  return [
+    intro,
+    "",
+    "The density should match your face shape and existing hair so the result looks natural, not too heavy or obvious.",
+    "",
+    "Our team decides it after checking the coverage area and the look you want.",
+    "",
+    "You can book a consultation or send more details to the team."
+  ].join("\n");
+}
+
+function buildHairTypeIntentBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `أكيد ${cleanName}، النوع يختلف حسب الحالة.` : "أكيد، النوع يختلف حسب الحالة.";
+    return [
+      intro,
+      "",
+      "نختار نوع الشعر والنظام حسب اللون، الكثافة، شكل التسريحة، وطريقة الاستخدام اليومية.",
+      "",
+      "الهدف أن يكون الشكل طبيعي ومريح ومناسب لك، لذلك الأفضل يحدده المختص بعد استشارة قصيرة.",
+      "",
+      "تحب نحجز لك استشارة أو تتواصل مع الفريق؟"
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName}, the type depends on your case.` : "Sure, the type depends on your case.";
+  return [
+    intro,
+    "",
+    "The hair system type is chosen based on color, density, hairstyle, and daily use.",
+    "",
+    "The goal is a natural and comfortable result, so the specialist should recommend the best option after a short consultation.",
+    "",
+    "Would you like to book a consultation or talk to the team?"
+  ].join("\n");
+}
+
+function buildDurationMaintenanceIntentBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName}، المدة تعتمد على الاستخدام والعناية.` : "تمام، المدة تعتمد على الاستخدام والعناية.";
+    return [
+      intro,
+      "",
+      "عادةً يحتاج Hair Replacement متابعة وسيرفس حسب الاستخدام، التعرّق، ونمط الحياة. الفريق يشرح لك الجدول المناسب بعد ما يعرف حالتك.",
+      "",
+      "إذا أنت عميل حالي وتحتاج سيرفس، اختر Book Service. وإذا جديد، الأفضل استشارة أولاً."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName}, duration depends on use and care.` : "Sure, duration depends on use and care.";
+  return [
+    intro,
+    "",
+    "Hair Replacement needs follow-up/service depending on usage, sweating, and lifestyle. Our team can explain the right service schedule after checking your case.",
+    "",
+    "If you are an existing client, choose Book Service. If you are new, consultation is the best first step."
+  ].join("\n");
+}
+
+function buildWarrantyIntentBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `سؤالك مهم ${cleanName}.` : "سؤالك مهم.";
+    return [
+      intro,
+      "",
+      "الفريق يوضح لك كل التفاصيل قبل الحجز: نوع الحل، العناية، المتابعة، وما الذي يناسب حالتك بالضبط.",
+      "",
+      "الأفضل عدم إعطاء وعد عام قبل تقييم الحالة، حتى تكون المعلومة دقيقة وواضحة.",
+      "",
+      "تحب تتواصل مع الفريق؟"
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Good question ${cleanName}.` : "Good question.";
+  return [
+    intro,
+    "",
+    "Our team explains all details before booking: the suitable solution, care, follow-up, and what fits your case exactly.",
+    "",
+    "We avoid giving a general promise before checking the case, so the information stays accurate and clear.",
+    "",
+    "Would you like to talk to the team?"
+  ].join("\n");
+}
+
+function buildCurrentClientServiceBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName} 👌` : "تمام 👌";
+    return [
+      intro,
+      "",
+      "إذا أنت عميل حالي وتحتاج سيرفس، متابعة، تركيب، أو تعديل، اختر Book Service حتى نرتب لك الطلب بالطريقة الصحيحة."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName} 👌` : "Sure 👌";
+  return [
+    intro,
+    "",
+    "If you are an existing client and need service, follow-up, fitting, or adjustment, choose Book Service so we can arrange it properly."
+  ].join("\n");
+}
+
+function buildClarifyingIntentBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName}، خليني أساعدك بشكل أوضح.` : "تمام، خليني أساعدك بشكل أوضح.";
+    return [
+      intro,
+      "",
+      "هل تقصد السعر، الحجز، النتائج، أو التحدث مع الفريق؟",
+      "",
+      "اختر الخيار الأقرب حتى أعطيك رد مناسب بدون كلام عام."
+    ].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName}, let me guide you more clearly.` : "Sure, let me guide you more clearly.";
+  return [
+    intro,
+    "",
+    "Do you mean price, booking, results, or talking to the team?",
+    "",
+    "Choose the closest option so I can give you the right answer."
+  ].join("\n");
+}
+
+function getClarifyingIntentButtons() {
+  return [
+    { id: "price_info", title: "السعر / Price" },
+    { id: "booking_menu", title: "حجز / Booking" },
+    { id: "talk_to_team", title: "الفريق / Team" }
+  ];
 }
 
 function buildWorkingHoursBody(phoneNumberId = DUBAI_PHONE_NUMBER_ID, language = "en") {
@@ -22440,6 +22686,54 @@ app.post("/webhook", async (req, res) => {
       replyButtons = getServiceSubMenuButtons();
     }
 
+    /* V31.5.8.60.3.9.28 — Smart current-client/service intent */
+    else if (isCurrentClientServiceIntentText(originalText || text)) {
+      setConversationStatus(from, "Service Appointment");
+
+      replyText = buildCurrentClientServiceBody(profileName, replyLanguage);
+      replyButtons = getServiceSubMenuButtons();
+    }
+
+    /* V31.5.8.60.3.9.28 — Expensive / price objection */
+    else if (isExpensiveObjectionIntentText(originalText || text)) {
+      setConversationStatus(from, "Price Objection");
+
+      replyText = buildExpensiveObjectionBody(profileName, replyLanguage);
+      replyButtons = getConsultActionButtons();
+    }
+
+    /* V31.5.8.60.3.9.28 — Density question */
+    else if (isDensityIntentText(originalText || text)) {
+      setConversationStatus(from, "Density Question");
+
+      replyText = buildDensityIntentBody(profileName, replyLanguage);
+      replyButtons = getConsultActionButtons();
+    }
+
+    /* V31.5.8.60.3.9.28 — Hair type question */
+    else if (isHairTypeIntentText(originalText || text)) {
+      setConversationStatus(from, "Hair Type Question");
+
+      replyText = buildHairTypeIntentBody(profileName, replyLanguage);
+      replyButtons = getConsultActionButtons();
+    }
+
+    /* V31.5.8.60.3.9.28 — Duration / maintenance question */
+    else if (isDurationMaintenanceIntentText(originalText || text)) {
+      setConversationStatus(from, "Duration Maintenance Question");
+
+      replyText = buildDurationMaintenanceIntentBody(profileName, replyLanguage);
+      replyButtons = getDirectBookingChoiceButtons();
+    }
+
+    /* V31.5.8.60.3.9.28 — Warranty / guarantee question */
+    else if (isWarrantyIntentText(originalText || text)) {
+      setConversationStatus(from, "Warranty Question");
+
+      replyText = buildWarrantyIntentBody(profileName, replyLanguage);
+      replyButtons = getConsultActionButtons();
+    }
+
     /* 2 — الخدمات: بوابة ذكية أعمق */
     else if (isServicesIntentText(originalText || text) &&
       !isPriceIntentText(originalText || text) &&
@@ -22498,6 +22792,14 @@ app.post("/webhook", async (req, res) => {
 
       replyText = buildTeamHandoffBody(profileName);
       replyButtons = null;
+    }
+
+    /* V31.5.8.60.3.9.28 — unclear/help clarification */
+    else if (isUnclearHelpIntentText(originalText || text)) {
+      setConversationStatus(from, "Needs Clarification");
+
+      replyText = buildClarifyingIntentBody(profileName, replyLanguage);
+      replyButtons = getClarifyingIntentButtons();
     }
 
     /* القائمة الرئيسية */
