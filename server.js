@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-33-abu-dhabi-consultation-intent-priority-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-34-abu-dhabi-bot-cycle-parity-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -4562,18 +4562,25 @@ function isSmartBookingStandaloneStaffOnly(text = "") {
 
 function buildSmartBookingAskDayBody(draft = {}, customerName = "", language = "en") {
   const cleanName = namePhrase(customerName);
+  const isDirectConsultation = Boolean(draft.directConsultationChatBooking || draft.requestType === "Consultation Booking");
+  const branch = draft.branch || "Dubai";
+  const branchAr = getFastBookingBranchArabic(branch);
+
   if (language === "ar") {
     return [
       cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
       "",
-      (draft.teamMember && !draft.skipStaffQuestion) ? `مع ${draft.teamMember}.` : "",
+      isDirectConsultation ? `طلبك حجز استشارة في فرع ${branchAr}.` : "",
+      (!isDirectConsultation && draft.teamMember && !draft.skipStaffQuestion) ? `مع ${draft.teamMember}.` : "",
       "اختر اليوم المناسب:"
     ].filter(Boolean).join("\n");
   }
+
   return [
-    cleanName ? `Done ${cleanName} ✅` : "Done ✅",
+    cleanName ? `Sure ${cleanName} ✅` : "Sure ✅",
     "",
-    (draft.teamMember && !draft.skipStaffQuestion) ? `With ${draft.teamMember}.` : "",
+    isDirectConsultation ? `You are booking a consultation at our ${branch} branch.` : "",
+    (!isDirectConsultation && draft.teamMember && !draft.skipStaffQuestion) ? `With ${draft.teamMember}.` : "",
     "Please choose the suitable day:"
   ].filter(Boolean).join("\n");
 }
@@ -4678,7 +4685,7 @@ function buildSmartBookingConfirmationBody(draft = {}, preferredTime = "", langu
 
 function buildSmartBookingRequestMessage(draft = {}, preferredTime = "", originalText = "") {
   const requestType = draft.requestType || (draft.serviceType ? "Service Appointment" : "WhatsApp Smart Natural Booking V3");
-  const source = draft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.33" : "WhatsApp Smart Natural Booking V3";
+  const source = draft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.34" : "WhatsApp Smart Natural Booking V3";
 
   return [
     `Source: ${source}`,
@@ -6097,7 +6104,7 @@ async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", prof
 
   const smartRequestType = finalDraft.requestType || (finalDraft.serviceType ? "Service Appointment" : "WhatsApp Smart Natural Booking V3.9.14");
   const smartSource = finalDraft.directConsultationChatBooking
-    ? "Source: WhatsApp Direct Consultation Chat Booking V3.9.33"
+    ? "Source: WhatsApp Direct Consultation Chat Booking V3.9.34"
     : "Source: WhatsApp Smart Natural Booking V3.9.14";
 
   const flowData = {
@@ -6288,7 +6295,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       status: "Booking Request",
       assignee: getBranchTeamAssignee(selectedBranch),
       tags: ["Booking", finalDraft.requestType || "Smart Natural Booking V3.14", "Need Confirmation"],
-      updatedBy: finalDraft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.33" : "WhatsApp Smart Natural Booking V3.14"
+      updatedBy: finalDraft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.34" : "WhatsApp Smart Natural Booking V3.14"
     });
     await saveBookingRequestToGoogleSheetFromServer({
       phone: from,
@@ -6618,9 +6625,23 @@ function isConsultationFlowText(text) {
     value.includes("consult |") ||
     value.includes("book consult") ||
     value.includes("book consultation") ||
+    value.includes("book a consultation") ||
     value.includes("i want consultation") ||
+    value.includes("i want to book a consultation") ||
+    value.includes("i need consultation") ||
+    value.includes("need consultation") ||
+    value.includes("consultation appointment") ||
+    value.includes("appointment for consultation") ||
     value.includes("حجز استشارة") ||
     value.includes("حجز استشاره") ||
+    value.includes("احجز استشارة") ||
+    value.includes("احجز استشاره") ||
+    value.includes("بدي احجز استشارة") ||
+    value.includes("بدي احجز استشاره") ||
+    value.includes("اريد احجز استشارة") ||
+    value.includes("أريد احجز استشارة") ||
+    value.includes("ابغى احجز استشارة") ||
+    value.includes("موعد استشارة") ||
     value.includes("بدي استشارة") ||
     value.includes("بدي استشاره") ||
     value.includes("اريد استشارة") ||
@@ -6662,7 +6683,7 @@ function isDirectBookingChoiceText(text) {
 
   if (!value) return false;
 
-  if (isBookServiceFlowText(value) || isConsultationFlowText(value) || isTalkToTeamText(value)) {
+  if (isBookServiceFlowText(value) || isDirectConsultationChatBookingText(value) || isConsultationFlowText(value) || isTalkToTeamText(value)) {
     return false;
   }
 
@@ -22853,6 +22874,29 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // V31.5.8.60.3.9.34 - Abu Dhabi bot-cycle parity fix:
+    // Clear consultation booking requests must enter the chat-booking cycle
+    // before generic booking menus, real-intent helpers, or fallback replies.
+    // This keeps Abu Dhabi aligned with Dubai while preserving branch routing
+    // from the incoming WhatsApp line.
+    if (isDirectConsultationChatBookingText(originalText || text)) {
+      const directConsultationHandled = await handleSmartWhatsAppBooking({
+        from,
+        message,
+        originalText,
+        text,
+        incomingPhoneNumberId,
+        lineConfig,
+        profileName,
+        replyLanguage,
+        forceConsultationChatBooking: true
+      });
+
+      if (directConsultationHandled) {
+        return res.sendStatus(200);
+      }
+    }
+
     const realCustomerIntentHandled = await handleRealCustomerIntentUpgrade({
       from,
       message,
@@ -22993,7 +23037,7 @@ app.post("/webhook", async (req, res) => {
     const isAbuDhabiConsultationPriorityIntent = isAbuDhabiLine(incomingPhoneNumberId, lineConfig.displayNumber) && isDirectConsultationChatBookingText(originalText || text);
 
     if (isConsultationFlowText(originalText || text) || isAbuDhabiConsultationPriorityIntent) {
-      // V31.5.8.60.3.9.33 - Abu Dhabi consultation intent priority fix:
+      // V31.5.8.60.3.9.34 - Abu Dhabi bot-cycle parity fix:
       // Abu Dhabi must behave like Dubai for clear consultation booking messages,
       // for example: "I want to book a consultation".
       // Handle this before the generic Booking Menu so Abu Dhabi does not show
