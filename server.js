@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-30-direct-consultation-chat-booking";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-31-suggested-time-customer-accept-notify-staff";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -149,6 +149,10 @@ const STAFF_BOOKING_ALERT_TEMPLATE_HEADER_IMAGE_URL = (
 const pendingStaffTemplateFallbackByMessageId = new Map();
 const pendingStaffBookingActionsByStaffNumber = new Map();
 const pendingStaffBookingActionsByTemplateMessageId = new Map();
+// V31.5.8.60.3.9.31 - Suggested time customer confirmation context:
+// When staff suggests another time, remember which staff number proposed it so
+// a short customer reply like "تمام" / "yes" can notify the same staff member.
+const pendingCustomerSuggestedTimeActionsByPhone = new Map();
 
 
 // V31.5.8.34 - WhatsApp Dynamic Flow Booking Prep:
@@ -5455,6 +5459,349 @@ async function sendStaffActionAck(staffNumber = "", body = "", route = {}) {
   });
 }
 
+function cleanupSuggestedTimeCustomerContexts() {
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  for (const [phone, context] of pendingCustomerSuggestedTimeActionsByPhone.entries()) {
+    if ((context?.createdAt || 0) < cutoff) {
+      pendingCustomerSuggestedTimeActionsByPhone.delete(phone);
+    }
+  }
+}
+
+function rememberCustomerSuggestedTimeAction({ customerPhone = "", staffNumber = "", booking = {}, suggestedTime = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, branch = "" } = {}) {
+  const cleanPhone = normalizePhoneDigits(customerPhone || booking.phone || "");
+  const cleanStaffNumber = normalizeWhatsAppRecipientDigits(staffNumber || "");
+
+  if (!cleanPhone) return false;
+
+  pendingCustomerSuggestedTimeActionsByPhone.set(cleanPhone, {
+    customerPhone: cleanPhone,
+    staffNumber: cleanStaffNumber,
+    bookingRowNumber: booking.rowNumber || "",
+    suggestedTime: (suggestedTime || "").toString().trim(),
+    phoneNumberId: normalizePhoneNumberId(phoneNumberId || booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID),
+    branch: branch || booking.branch || getLineConfig(phoneNumberId || booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID).branch,
+    customerName: booking.customerName || "",
+    createdAt: Date.now()
+  });
+
+  cleanupSuggestedTimeCustomerContexts();
+  return true;
+}
+
+function getRememberedCustomerSuggestedTimeAction(customerPhone = "") {
+  cleanupSuggestedTimeCustomerContexts();
+  const cleanPhone = normalizePhoneDigits(customerPhone || "");
+  return cleanPhone ? (pendingCustomerSuggestedTimeActionsByPhone.get(cleanPhone) || null) : null;
+}
+
+function isSuggestedTimeBookingStatusValue(status = "") {
+  const value = compactText(status || "");
+  return value.includes("suggest") ||
+    value.includes("new time") ||
+    value.includes("وقت مقترح") ||
+    value.includes("تعديل الوقت");
+}
+
+function isCustomerAcceptSuggestedTimeText(text = "") {
+  const value = compactText(text || "");
+  if (!value) return false;
+
+  return isSimpleAffirmationText(value) ||
+    hasAnyIntentPhrase(value, [
+      "confirm", "confirmed", "i confirm", "works for me", "this works", "that works", "good for me", "ok confirmed", "yes confirm",
+      "مناسب", "يناسب", "يناسبني", "موافق", "اكد", "أكد", "تم", "تمام مناسب", "تمام اكد", "تمام أكد", "اكيد", "أكيد"
+    ]);
+}
+
+function isCustomerRejectSuggestedTimeText(text = "") {
+  const value = compactText(text || "");
+  if (!value) return false;
+
+  return value === "no" ||
+    value === "n" ||
+    value === "لا" ||
+    value === "لأ" ||
+    value === "لاء" ||
+    hasAnyIntentPhrase(value, [
+      "not suitable", "does not work", "doesn't work", "another time", "change time", "different time", "later", "earlier",
+      "مو مناسب", "غير مناسب", "ما بيناسب", "ما يناسب", "وقت ثاني", "غير الوقت", "بدي وقت تاني", "وقت آخر", "وقت اخر"
+    ]);
+}
+
+async function findLatestSuggestedTimeBookingForCustomer(customerPhone = "", phoneNumberId = "") {
+  const cleanPhone = normalizePhoneDigits(customerPhone || "");
+  if (!cleanPhone) return null;
+
+  const result = await loadBookingRequestsFromGoogleSheetFromServer();
+  const bookings = Array.isArray(result.bookingRequests) ? result.bookingRequests : [];
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
+  const recentCutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+  const matches = bookings.filter((booking) => {
+    const bookingPhone = normalizePhoneDigits(booking.phone || "");
+    const bookingPhoneNumberId = normalizePhoneNumberId(booking.phoneNumberId || "");
+    const status = booking.status || "";
+    const bookingDate = parseSheetDate(booking.lastUpdated || booking.date || "");
+    const bookingTime = bookingDate?.getTime?.() || 0;
+    const isRecent = !bookingTime || bookingTime >= recentCutoff;
+
+    return bookingPhone === cleanPhone &&
+      (!cleanPhoneNumberId || !bookingPhoneNumberId || bookingPhoneNumberId === cleanPhoneNumberId) &&
+      isRecent &&
+      isSuggestedTimeBookingStatusValue(status);
+  });
+
+  matches.sort((a, b) => {
+    const rowA = Number(a.rowNumber || 0);
+    const rowB = Number(b.rowNumber || 0);
+    if (rowA !== rowB) return rowB - rowA;
+
+    const dateA = parseSheetDate(a.lastUpdated || a.date || "")?.getTime() || 0;
+    const dateB = parseSheetDate(b.lastUpdated || b.date || "")?.getTime() || 0;
+    return dateB - dateA;
+  });
+
+  return matches[0] || null;
+}
+
+function getSuggestedTimeFromBooking(booking = {}, rememberedContext = null) {
+  const rememberedTime = (rememberedContext?.suggestedTime || "").toString().trim();
+  if (rememberedTime) return rememberedTime;
+
+  const notes = (booking.notes || "").toString().trim();
+  if (!notes) return "";
+
+  const suggestedMatch = notes.match(/(?:Suggested time|الوقت المقترح)\s*:\s*([^\n]+)/i);
+  if (suggestedMatch?.[1]) return suggestedMatch[1].trim();
+
+  return notes;
+}
+
+function buildSuggestedTimeCustomerAckBody(suggestedTime = "", customerName = "", language = "en") {
+  const cleanName = cleanCustomerName(customerName || "");
+  const isArabic = language === "ar";
+
+  if (isArabic) {
+    return [
+      `${BUSINESS_NAME_SPACED} ✨`,
+      "",
+      cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
+      "تم تسجيل موافقتك على الوقت المقترح.",
+      suggestedTime ? `الوقت المقترح: ${suggestedTime}` : "",
+      "",
+      "تم إبلاغ الفريق، وسيتم متابعة تأكيد الموعد لك."
+    ].filter(Boolean).join("\n");
+  }
+
+  return [
+    `${BUSINESS_NAME_SPACED} ✨`,
+    "",
+    cleanName ? `Done ${cleanName} ✅` : "Done ✅",
+    "Your approval for the suggested time has been recorded.",
+    suggestedTime ? `Suggested time: ${suggestedTime}` : "",
+    "",
+    "The team has been notified and will follow up to confirm the appointment."
+  ].filter(Boolean).join("\n");
+}
+
+function buildSuggestedTimeCustomerDeclineBody(suggestedTime = "", customerName = "", language = "en") {
+  const cleanName = cleanCustomerName(customerName || "");
+  const isArabic = language === "ar";
+
+  if (isArabic) {
+    return [
+      `${BUSINESS_NAME_SPACED} ✨`,
+      "",
+      cleanName ? `تمام ${cleanName}، وصلت ملاحظتك ✅` : "تمام، وصلت ملاحظتك ✅",
+      suggestedTime ? `الوقت المقترح كان: ${suggestedTime}` : "",
+      "الفريق سيقترح لك وقتاً آخر أو يتابع معك مباشرة."
+    ].filter(Boolean).join("\n");
+  }
+
+  return [
+    `${BUSINESS_NAME_SPACED} ✨`,
+    "",
+    cleanName ? `Got it ${cleanName} ✅` : "Got it ✅",
+    suggestedTime ? `Suggested time was: ${suggestedTime}` : "",
+    "The team will suggest another time or follow up with you directly."
+  ].filter(Boolean).join("\n");
+}
+
+function buildSuggestedTimeStaffNotifyBody({ booking = {}, customerPhone = "", customerName = "", suggestedTime = "", customerReply = "", action = "accepted" } = {}) {
+  const actionTitle = action === "declined" ? "Customer rejected suggested time ⚠️" : "Customer accepted suggested time ✅";
+  const details = getBookingRequestDetails(booking);
+
+  return [
+    actionTitle,
+    "",
+    `Branch: ${booking.branch || details.branch || ""}`,
+    `Customer: ${customerName || booking.customerName || ""}`,
+    `Phone: ${customerPhone || booking.phone || ""}`,
+    suggestedTime ? `Suggested time: ${suggestedTime}` : "",
+    customerReply ? `Customer reply: ${customerReply}` : "",
+    details.requestType ? `Type: ${details.requestType}` : (booking.requestType ? `Type: ${booking.requestType}` : ""),
+    "",
+    action === "declined"
+      ? "Please suggest another time or follow up in Team Inbox."
+      : "Please confirm the booking in Team Inbox."
+  ].filter(Boolean).join("\n");
+}
+
+async function notifyStaffAboutSuggestedTimeCustomerReply({ booking = {}, customerPhone = "", profileName = "", suggestedTime = "", customerReply = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, rememberedContext = null, action = "accepted" } = {}) {
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const lineConfig = getLineConfig(cleanPhoneNumberId);
+  const body = buildSuggestedTimeStaffNotifyBody({
+    booking,
+    customerPhone,
+    customerName: profileName || booking.customerName || "",
+    suggestedTime,
+    customerReply,
+    action
+  });
+
+  let numbers = [];
+  let routing = getStaffNotificationRouting(cleanPhoneNumberId);
+
+  const rememberedStaff = normalizeWhatsAppRecipientDigits(rememberedContext?.staffNumber || "");
+  if (rememberedStaff) {
+    numbers = [rememberedStaff];
+    routing = {
+      ...routing,
+      number: rememberedStaff,
+      envName: "remembered_staff_suggested_time_context",
+      branch: booking.branch || rememberedContext?.branch || lineConfig.branch,
+      phoneNumberId: cleanPhoneNumberId
+    };
+  } else {
+    const staffInfo = getStaffNotificationNumbers(cleanPhoneNumberId);
+    numbers = staffInfo.numbers || [];
+    routing = staffInfo.routing || routing;
+  }
+
+  if (!numbers.length) {
+    console.log("[Suggested Time Customer Reply] skipped staff notify: no staff number", { customerPhone, phoneNumberId: cleanPhoneNumberId });
+    return { ok: false, skipped: true, reason: "no_staff_number" };
+  }
+
+  const flowData = {
+    branch: booking.branch || rememberedContext?.branch || lineConfig.branch,
+    customerName: profileName || booking.customerName || "",
+    phone: customerPhone,
+    requestType: action === "declined" ? "Suggested Time Rejected" : "Suggested Time Accepted",
+    serviceInterest: action === "declined" ? "Suggested Time Rejected" : "Suggested Time Accepted",
+    preferredDay: getBookingRequestDetails(booking).preferredDay || "",
+    preferredTime: suggestedTime || getBookingRequestDetails(booking).preferredTime || "",
+    notes: customerReply || ""
+  };
+
+  const results = [];
+  for (const staffNumber of numbers) {
+    const textResult = await sendStaffNotificationTextMessage(staffNumber, body, cleanPhoneNumberId, routing);
+    const finalResult = await handleStaffTemplateFallbackIfTextBlocked(textResult, {
+      staffNumber,
+      flowData,
+      customerPhone,
+      phoneNumberId: cleanPhoneNumberId,
+      routing
+    });
+    results.push({ staffNumber, ...finalResult });
+  }
+
+  return { ok: results.every((item) => item.ok), results };
+}
+
+async function handleCustomerSuggestedTimeReply({ from, message, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en" }) {
+  const input = (originalText || text || "").toString().trim();
+  if (!input) return false;
+
+  const isAccept = isCustomerAcceptSuggestedTimeText(input);
+  const isDecline = isCustomerRejectSuggestedTimeText(input);
+  if (!isAccept && !isDecline) return false;
+
+  const booking = await findLatestSuggestedTimeBookingForCustomer(from, incomingPhoneNumberId);
+  if (!booking) return false;
+
+  const rememberedContext = getRememberedCustomerSuggestedTimeAction(from);
+  const suggestedTime = getSuggestedTimeFromBooking(booking, rememberedContext);
+  const action = isDecline ? "declined" : "accepted";
+  const status = action === "declined" ? "Customer Rejected Suggested Time" : "Customer Accepted Suggested Time";
+  const notePrefix = action === "declined" ? "Customer rejected suggested time" : "Customer accepted suggested time";
+  const updateNotes = [
+    suggestedTime ? `Suggested time: ${suggestedTime}` : "",
+    `${notePrefix}: ${input}`
+  ].filter(Boolean).join("\n");
+
+  logCustomerActionForInbox({
+    from,
+    message,
+    profileName,
+    rawText: input,
+    fallbackAction: input,
+    status,
+    phoneNumberId: incomingPhoneNumberId,
+    messageType: action === "declined" ? "Customer Suggested Time Rejected" : "Customer Suggested Time Accepted"
+  });
+
+  if (booking.rowNumber) {
+    await updateBookingRequestStatusInGoogleSheetFromServer({
+      rowNumber: booking.rowNumber,
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      status,
+      notes: updateNotes
+    });
+  }
+
+  setConversationStatus(from, status);
+  await saveConversationStateToGoogleSheetFromServer({
+    phone: from,
+    phoneNumberId: incomingPhoneNumberId,
+    branch: booking.branch || lineConfig.branch,
+    status,
+    assignee: getBranchTeamAssignee(booking.branch || lineConfig.branch),
+    tags: ["Booking", action === "declined" ? "Suggested Time Rejected" : "Suggested Time Accepted"],
+    updatedBy: "Customer Suggested Time Reply"
+  });
+
+  const staffNotifyResult = await notifyStaffAboutSuggestedTimeCustomerReply({
+    booking,
+    customerPhone: from,
+    profileName,
+    suggestedTime,
+    customerReply: input,
+    phoneNumberId: incomingPhoneNumberId,
+    rememberedContext,
+    action
+  });
+
+  const staffLogBody = [
+    action === "declined" ? "Suggested time rejection staff notify sent" : "Suggested time acceptance staff notify sent",
+    staffNotifyResult?.ok ? "✅" : "⚠️",
+    `Branch: ${booking.branch || lineConfig.branch}`,
+    `Suggested time: ${suggestedTime || ""}`,
+    staffNotifyResult?.reason ? `Reason: ${staffNotifyResult.reason}` : ""
+  ].filter(Boolean).join("\n");
+  addInboxMessage(from, "bot", staffLogBody, staffNotifyResult?.ok ? "Staff Notify Sent" : "Staff Notify Failed", incomingPhoneNumberId, {
+    customerName: profileName,
+    messageType: action === "declined" ? "Suggested Time Rejection Staff Notify" : "Suggested Time Acceptance Staff Notify"
+  });
+
+  const customerAckBody = action === "declined"
+    ? buildSuggestedTimeCustomerDeclineBody(suggestedTime, profileName, replyLanguage)
+    : buildSuggestedTimeCustomerAckBody(suggestedTime, profileName, replyLanguage);
+  await sendWhatsAppMessage(from, customerAckBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+  addInboxMessage(from, "bot", customerAckBody, status, incomingPhoneNumberId, {
+    customerName: profileName,
+    messageType: action === "declined" ? "Suggested Time Rejection Customer Ack" : "Suggested Time Acceptance Customer Ack"
+  });
+
+  const cleanPhone = normalizePhoneDigits(from);
+  if (cleanPhone) pendingCustomerSuggestedTimeActionsByPhone.delete(cleanPhone);
+
+  return true;
+}
+
 async function sendBookingActionUpdateToCustomer({ booking = {}, status = "", notes = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, updatedBy = "Staff Booking Action" }) {
   const customerPhone = normalizePhoneDigits(booking.phone || "");
   if (!customerPhone) {
@@ -5560,6 +5907,15 @@ async function handleStaffBookingAction({ from, message = null, originalText = "
       await sendStaffActionAck(route.staffNumber, `Suggested time failed ⚠️\n${sendResult.error || "Unknown error"}`, route);
       return true;
     }
+
+    rememberCustomerSuggestedTimeAction({
+      customerPhone,
+      staffNumber: route.staffNumber,
+      booking,
+      suggestedTime,
+      phoneNumberId,
+      branch: route.branch
+    });
 
     await sendStaffActionAck(route.staffNumber, buildStaffActionAckBody("suggest_time_sent", booking, suggestedTime), route);
     console.log("[Staff Booking Action] suggested time sent", JSON.stringify({ staff: route.staffNumber, customerPhone, phoneNumberId, suggestedTime }, null, 2));
@@ -22455,6 +22811,21 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+
+    const suggestedTimeReplyHandled = await handleCustomerSuggestedTimeReply({
+      from,
+      message,
+      originalText,
+      text,
+      incomingPhoneNumberId,
+      lineConfig,
+      profileName,
+      replyLanguage
+    });
+
+    if (suggestedTimeReplyHandled) {
+      return res.sendStatus(200);
+    }
 
     const realCustomerIntentHandled = await handleRealCustomerIntentUpgrade({
       from,
