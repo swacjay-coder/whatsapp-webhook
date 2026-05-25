@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-35-staff-flow-confirm-direct-customer-confirmation";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-36-suggested-time-customer-ok-auto-confirm";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -5635,6 +5635,27 @@ function getSuggestedTimeFromBooking(booking = {}, rememberedContext = null) {
   return notes;
 }
 
+function buildSuggestedTimeConfirmedNotesForCustomer(booking = {}, suggestedTime = "", language = "en") {
+  const details = getBookingRequestDetails(booking);
+  const isArabic = language === "ar";
+  const lines = [];
+
+  if (details.preferredDay) {
+    lines.push(`${isArabic ? "اليوم" : "Day"}: ${getSmartBookingDayLabel(details.preferredDay, language)}`);
+  }
+
+  if (suggestedTime) {
+    lines.push(`${isArabic ? "الوقت" : "Time"}: ${suggestedTime}`);
+  } else if (details.preferredTime) {
+    lines.push(`${isArabic ? "الوقت" : "Time"}: ${details.preferredTime}`);
+  }
+
+  if (details.teamMember) lines.push(`${isArabic ? "الموظف" : "Team member"}: ${details.teamMember}`);
+  if (details.serviceType) lines.push(`${isArabic ? "الخدمة" : "Service"}: ${details.serviceType}`);
+
+  return lines.join("\n");
+}
+
 function buildSuggestedTimeCustomerAckBody(suggestedTime = "", customerName = "", language = "en") {
   const cleanName = cleanCustomerName(customerName || "");
   const isArabic = language === "ar";
@@ -5686,7 +5707,11 @@ function buildSuggestedTimeCustomerDeclineBody(suggestedTime = "", customerName 
 }
 
 function buildSuggestedTimeStaffNotifyBody({ booking = {}, customerPhone = "", customerName = "", suggestedTime = "", customerReply = "", action = "accepted" } = {}) {
-  const actionTitle = action === "declined" ? "Customer rejected suggested time ⚠️" : "Customer accepted suggested time ✅";
+  const isDeclined = action === "declined";
+  const isAutoConfirmed = action === "accepted_confirmed" || action === "confirmed";
+  const actionTitle = isDeclined
+    ? "Customer rejected suggested time ⚠️"
+    : (isAutoConfirmed ? "Customer accepted suggested time and booking was confirmed ✅" : "Customer accepted suggested time ✅");
   const details = getBookingRequestDetails(booking);
 
   return [
@@ -5699,9 +5724,9 @@ function buildSuggestedTimeStaffNotifyBody({ booking = {}, customerPhone = "", c
     customerReply ? `Customer reply: ${customerReply}` : "",
     details.requestType ? `Type: ${details.requestType}` : (booking.requestType ? `Type: ${booking.requestType}` : ""),
     "",
-    action === "declined"
+    isDeclined
       ? "Please suggest another time or follow up in Team Inbox."
-      : "Please confirm the booking in Team Inbox."
+      : (isAutoConfirmed ? "The customer has been notified directly. No Team Inbox confirmation is needed." : "Please confirm the booking in Team Inbox.")
   ].filter(Boolean).join("\n");
 }
 
@@ -5745,8 +5770,8 @@ async function notifyStaffAboutSuggestedTimeCustomerReply({ booking = {}, custom
     branch: booking.branch || rememberedContext?.branch || lineConfig.branch,
     customerName: profileName || booking.customerName || "",
     phone: customerPhone,
-    requestType: action === "declined" ? "Suggested Time Rejected" : "Suggested Time Accepted",
-    serviceInterest: action === "declined" ? "Suggested Time Rejected" : "Suggested Time Accepted",
+    requestType: action === "declined" ? "Suggested Time Rejected" : (action === "accepted_confirmed" ? "Suggested Time Accepted - Confirmed" : "Suggested Time Accepted"),
+    serviceInterest: action === "declined" ? "Suggested Time Rejected" : (action === "accepted_confirmed" ? "Suggested Time Accepted - Confirmed" : "Suggested Time Accepted"),
     preferredDay: getBookingRequestDetails(booking).preferredDay || "",
     preferredTime: suggestedTime || getBookingRequestDetails(booking).preferredTime || "",
     notes: customerReply || ""
@@ -5781,9 +5806,9 @@ async function handleCustomerSuggestedTimeReply({ from, message, originalText, t
 
   const rememberedContext = getRememberedCustomerSuggestedTimeAction(from);
   const suggestedTime = getSuggestedTimeFromBooking(booking, rememberedContext);
-  const action = isDecline ? "declined" : "accepted";
-  const status = action === "declined" ? "Customer Rejected Suggested Time" : "Customer Accepted Suggested Time";
-  const notePrefix = action === "declined" ? "Customer rejected suggested time" : "Customer accepted suggested time";
+  const action = isDecline ? "declined" : "accepted_confirmed";
+  const status = isDecline ? "Customer Rejected Suggested Time" : "Confirmed Appointment";
+  const notePrefix = isDecline ? "Customer rejected suggested time" : "Customer accepted suggested time and booking auto-confirmed";
   const updateNotes = [
     suggestedTime ? `Suggested time: ${suggestedTime}` : "",
     `${notePrefix}: ${input}`
@@ -5795,31 +5820,81 @@ async function handleCustomerSuggestedTimeReply({ from, message, originalText, t
     profileName,
     rawText: input,
     fallbackAction: input,
-    status,
+    status: isDecline ? "Customer Rejected Suggested Time" : "Customer Accepted Suggested Time",
     phoneNumberId: incomingPhoneNumberId,
-    messageType: action === "declined" ? "Customer Suggested Time Rejected" : "Customer Suggested Time Accepted"
+    messageType: isDecline ? "Customer Suggested Time Rejected" : "Customer Suggested Time Accepted"
   });
 
-  if (booking.rowNumber) {
-    await updateBookingRequestStatusInGoogleSheetFromServer({
-      rowNumber: booking.rowNumber,
+  if (isDecline) {
+    if (booking.rowNumber) {
+      await updateBookingRequestStatusInGoogleSheetFromServer({
+        rowNumber: booking.rowNumber,
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        status: "Customer Rejected Suggested Time",
+        notes: updateNotes
+      });
+    }
+
+    setConversationStatus(from, "Customer Rejected Suggested Time");
+    await saveConversationStateToGoogleSheetFromServer({
       phone: from,
       phoneNumberId: incomingPhoneNumberId,
-      status,
-      notes: updateNotes
+      branch: booking.branch || lineConfig.branch,
+      status: "Customer Rejected Suggested Time",
+      assignee: getBranchTeamAssignee(booking.branch || lineConfig.branch),
+      tags: ["Booking", "Suggested Time Rejected"],
+      updatedBy: "Customer Suggested Time Reply"
+    });
+  } else {
+    const confirmationNotes = buildSuggestedTimeConfirmedNotesForCustomer(booking, suggestedTime, replyLanguage) || updateNotes;
+    const confirmResult = await sendBookingActionUpdateToCustomer({
+      booking,
+      status: "Confirmed",
+      notes: confirmationNotes,
+      phoneNumberId: incomingPhoneNumberId,
+      updatedBy: "Customer Accepted Suggested Time - Auto Confirm"
+    });
+
+    if (!confirmResult.ok) {
+      const failedLogBody = [
+        "Customer accepted suggested time, but confirmation send failed ⚠️",
+        `Branch: ${booking.branch || lineConfig.branch}`,
+        `Suggested time: ${suggestedTime || ""}`,
+        `Reason: ${confirmResult.error || "Unknown error"}`
+      ].filter(Boolean).join("\n");
+      addInboxMessage(from, "bot", failedLogBody, "Customer Confirmation Failed", incomingPhoneNumberId, {
+        customerName: profileName,
+        messageType: "Suggested Time Accepted - Confirmation Failed"
+      });
+
+      await notifyStaffAboutSuggestedTimeCustomerReply({
+        booking,
+        customerPhone: from,
+        profileName,
+        suggestedTime,
+        customerReply: `${input} / confirmation failed: ${confirmResult.error || "Unknown error"}`,
+        phoneNumberId: incomingPhoneNumberId,
+        rememberedContext,
+        action: "accepted"
+      });
+
+      const cleanPhone = normalizePhoneDigits(from);
+      if (cleanPhone) pendingCustomerSuggestedTimeActionsByPhone.delete(cleanPhone);
+      return true;
+    }
+
+    setConversationStatus(from, "Confirmed Appointment");
+    await saveConversationStateToGoogleSheetFromServer({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      branch: booking.branch || lineConfig.branch,
+      status: "Confirmed Appointment",
+      assignee: getBranchTeamAssignee(booking.branch || lineConfig.branch),
+      tags: ["Booking", "Confirmed", "Suggested Time Accepted"],
+      updatedBy: "Customer Accepted Suggested Time - Auto Confirm"
     });
   }
-
-  setConversationStatus(from, status);
-  await saveConversationStateToGoogleSheetFromServer({
-    phone: from,
-    phoneNumberId: incomingPhoneNumberId,
-    branch: booking.branch || lineConfig.branch,
-    status,
-    assignee: getBranchTeamAssignee(booking.branch || lineConfig.branch),
-    tags: ["Booking", action === "declined" ? "Suggested Time Rejected" : "Suggested Time Accepted"],
-    updatedBy: "Customer Suggested Time Reply"
-  });
 
   const staffNotifyResult = await notifyStaffAboutSuggestedTimeCustomerReply({
     booking,
@@ -5833,7 +5908,7 @@ async function handleCustomerSuggestedTimeReply({ from, message, originalText, t
   });
 
   const staffLogBody = [
-    action === "declined" ? "Suggested time rejection staff notify sent" : "Suggested time acceptance staff notify sent",
+    isDecline ? "Suggested time rejection staff notify sent" : "Suggested time accepted and booking auto-confirm staff notify sent",
     staffNotifyResult?.ok ? "✅" : "⚠️",
     `Branch: ${booking.branch || lineConfig.branch}`,
     `Suggested time: ${suggestedTime || ""}`,
@@ -5841,17 +5916,17 @@ async function handleCustomerSuggestedTimeReply({ from, message, originalText, t
   ].filter(Boolean).join("\n");
   addInboxMessage(from, "bot", staffLogBody, staffNotifyResult?.ok ? "Staff Notify Sent" : "Staff Notify Failed", incomingPhoneNumberId, {
     customerName: profileName,
-    messageType: action === "declined" ? "Suggested Time Rejection Staff Notify" : "Suggested Time Acceptance Staff Notify"
+    messageType: isDecline ? "Suggested Time Rejection Staff Notify" : "Suggested Time Accepted Auto Confirm Staff Notify"
   });
 
-  const customerAckBody = action === "declined"
-    ? buildSuggestedTimeCustomerDeclineBody(suggestedTime, profileName, replyLanguage)
-    : buildSuggestedTimeCustomerAckBody(suggestedTime, profileName, replyLanguage);
-  await sendWhatsAppMessage(from, customerAckBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
-  addInboxMessage(from, "bot", customerAckBody, status, incomingPhoneNumberId, {
-    customerName: profileName,
-    messageType: action === "declined" ? "Suggested Time Rejection Customer Ack" : "Suggested Time Acceptance Customer Ack"
-  });
+  if (isDecline) {
+    const customerAckBody = buildSuggestedTimeCustomerDeclineBody(suggestedTime, profileName, replyLanguage);
+    await sendWhatsAppMessage(from, customerAckBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+    addInboxMessage(from, "bot", customerAckBody, "Customer Rejected Suggested Time", incomingPhoneNumberId, {
+      customerName: profileName,
+      messageType: "Suggested Time Rejection Customer Ack"
+    });
+  }
 
   const cleanPhone = normalizePhoneDigits(from);
   if (cleanPhone) pendingCustomerSuggestedTimeActionsByPhone.delete(cleanPhone);
