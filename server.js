@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-23-customer-replies-and-bot-context-visible";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-24-context-safe-no-reply-routing";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -1572,7 +1572,9 @@ function compactText(value) {
 
 function isOptInText(text) {
   const value = compactText(text);
-  return value === "yes, i agree to receive appointment reminders and service follow-ups from iconic hair care." ||
+  return value === "reminder_opt_in_yes" ||
+    value === "agree" ||
+    value === "yes, i agree to receive appointment reminders and service follow-ups from iconic hair care." ||
     value === "yes, i agree to receive appointment reminders and service-follow-ups from iconic hair care." ||
     value === "yes, i agree to receive appointment reminder and service follow-up from iconic hair care." ||
     value === "yes, i agree to receive appointment reminders and service follow-ups from iconic hair care" ||
@@ -1606,7 +1608,10 @@ function isOptOutText(text) {
 
 function isReminderOptInDeclineText(text) {
   const value = compactText(text);
-  return value === "لا شكراً / no" ||
+  return value === "reminder_opt_in_no" ||
+    value === "لا أوافق" ||
+    value === "لا اوافق" ||
+    value === "لا شكراً / no" ||
     value === "لا شكرا / no" ||
     value === "لا / no" ||
     value === "no" ||
@@ -1617,6 +1622,145 @@ function isReminderOptInDeclineText(text) {
     value === "لا شكرا" ||
     value === "ليس الآن" ||
     value === "ليس الان";
+}
+
+function getIncomingInteractiveActionId(message = null) {
+  if (!message) return "";
+
+  if (message.type === "interactive") {
+    return (message.interactive?.button_reply?.id || message.interactive?.list_reply?.id || "").toString().trim();
+  }
+
+  if (message.type === "button") {
+    return (message.button?.payload || "").toString().trim();
+  }
+
+  return "";
+}
+
+function isPlainNoLikeText(text = "") {
+  const value = compactText(text);
+  return value === "no" ||
+    value === "no, thanks" ||
+    value === "no thanks" ||
+    value === "not now" ||
+    value === "لا" ||
+    value === "لا شكراً" ||
+    value === "لا شكرا" ||
+    value === "ليس الآن" ||
+    value === "ليس الان";
+}
+
+function isReminderOptInNoActionId(actionId = "") {
+  const value = compactText(actionId);
+  return value === "reminder_opt_in_no";
+}
+
+function hasActiveSmartBookingContextForNo(phone = "") {
+  const draft = smartBookingDrafts[phone] || null;
+  return Boolean(draft && (
+    draft.waitingForBookingConfirm ||
+    draft.waitingForTime ||
+    draft.waitingForWeekday ||
+    draft.waitingForStaff ||
+    draft.preferredDay ||
+    draft.preferredTime ||
+    draft.teamMember
+  ));
+}
+
+async function hasRecentReminderOptInPrompt(phone = "", phoneNumberId = "") {
+  try {
+    const loaded = await loadMessagesFromGoogleSheet();
+    const messages = Array.isArray(loaded.messages) ? loaded.messages : [];
+    const cleanPhone = (phone || "").toString().trim();
+    const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
+
+    const recent = messages
+      .filter((item) => {
+        if ((item.phone || "").toString().trim() !== cleanPhone) return false;
+        if (cleanPhoneNumberId && normalizePhoneNumberId(item.phoneNumberId || "") !== cleanPhoneNumberId) return false;
+        return true;
+      })
+      .slice(0, 8);
+
+    const lastCustomerIndex = recent.findIndex((item) => (item.sender || "").toString().toLowerCase() === "customer");
+    const scanLimit = lastCustomerIndex >= 0 ? lastCustomerIndex : recent.length;
+    const beforeCurrentCustomer = recent.slice(0, scanLimit >= 0 ? scanLimit : recent.length);
+
+    return beforeCurrentCustomer.some((item) => {
+      const sender = (item.sender || "").toString().toLowerCase();
+      const messageType = compactText(item.messageType || "");
+      const body = compactText(item.body || "");
+      return sender === "bot" && (
+        messageType.includes("reminder opt-in prompt") ||
+        body.includes("do you agree to receive service follow-up reminders") ||
+        body.includes("هل توافق على استلام تذكير")
+      );
+    });
+  } catch (error) {
+    console.log("Recent reminder opt-in prompt lookup failed:");
+    console.log(error);
+    return false;
+  }
+}
+
+async function shouldTreatAsReminderOptInDecline({ text = "", actionId = "", from = "", phoneNumberId = "" } = {}) {
+  if (!isReminderOptInDeclineText(actionId || text)) return false;
+
+  if (isReminderOptInNoActionId(actionId)) {
+    return true;
+  }
+
+  // A plain "No" is used in many bot flows, especially availability booking.
+  // Do not classify it as service reminder decline while a smart booking draft is active.
+  if (isPlainNoLikeText(text) && hasActiveSmartBookingContextForNo(from)) {
+    return false;
+  }
+
+  if (!isPlainNoLikeText(text)) {
+    return true;
+  }
+
+  return await hasRecentReminderOptInPrompt(from, phoneNumberId);
+}
+
+function isSmartBookingNegativeConfirmationText(text = "") {
+  const value = normalizeSmartBookingSearchText(text);
+  if (!value) return false;
+
+  return value === "no" ||
+    value === "no thanks" ||
+    value === "no thank you" ||
+    value === "not now" ||
+    value === "maybe later" ||
+    value === "لا" ||
+    value === "لا شكرا" ||
+    value === "لا شكراً" ||
+    value === "ليس الان" ||
+    value === "ليس الآن" ||
+    value === "مو هلق" ||
+    value === "مش هلق";
+}
+
+function buildSmartBookingNoBookingBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    return [
+      cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
+      "",
+      "ما رح أعمل طلب حجز الآن.",
+      "إذا احتجت مساعدة أو وقت آخر، فريقنا جاهز يساعدك داخل المحادثة."
+    ].join("\n");
+  }
+
+  return [
+    cleanName ? `No problem ${cleanName} ✅` : "No problem ✅",
+    "",
+    "I will not create a booking request now.",
+    "If you need help or another time, our team can assist you here."
+  ].join("\n");
 }
 
 function isAutoVideoRequestText(text) {
@@ -5091,6 +5235,16 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   if (existingDraft && existingDraft.waitingForBookingConfirm) {
     logSmartCustomerReply("Availability Reply", "Customer Availability Reply");
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
+
+    if (isSmartBookingNegativeConfirmationText(input)) {
+      delete smartBookingDrafts[from];
+      setConversationStatus(from, "Availability - Booking Declined");
+      const noBookingBody = buildSmartBookingNoBookingBody(profileName, replyLanguage);
+      await sendWhatsAppMessage(from, noBookingBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+      addInboxMessage(from, "bot", noBookingBody, "Availability - Booking Declined", incomingPhoneNumberId, { customerName: profileName, messageType: "Availability Booking Declined Reply" });
+      return true;
+    }
+
     if (isSmartBookingAskTeamText(input)) {
       delete smartBookingDrafts[from];
       setConversationStatus(from, "Talk to Team");
@@ -21190,9 +21344,15 @@ app.post("/webhook", async (req, res) => {
     }
 
     const optEventDate = getDubaiTimestamp();
-    const isOptInMessage = isOptInText(text);
-    const isOptOutMessage = isOptOutText(text);
-    const isReminderDeclineMessage = isReminderOptInDeclineText(text);
+    const incomingActionId = getIncomingInteractiveActionId(message);
+    const isOptInMessage = isOptInText(text) || isOptInText(incomingActionId);
+    const isOptOutMessage = isOptOutText(text) || isOptOutText(incomingActionId);
+    const isReminderDeclineMessage = await shouldTreatAsReminderOptInDecline({
+      text,
+      actionId: incomingActionId,
+      from,
+      phoneNumberId: incomingPhoneNumberId
+    });
 
     if (isResumeBotText(originalText || text)) {
       setConversationStatus(from, "Bot Active");
