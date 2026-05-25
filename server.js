@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-29-smart-context-router";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-30-direct-consultation-chat-booking";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -4549,14 +4549,14 @@ function buildSmartBookingAskDayBody(draft = {}, customerName = "", language = "
     return [
       cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
       "",
-      draft.teamMember ? `مع ${draft.teamMember}.` : "",
+      (draft.teamMember && !draft.skipStaffQuestion) ? `مع ${draft.teamMember}.` : "",
       "اختر اليوم المناسب:"
     ].filter(Boolean).join("\n");
   }
   return [
     cleanName ? `Done ${cleanName} ✅` : "Done ✅",
     "",
-    draft.teamMember ? `With ${draft.teamMember}.` : "",
+    (draft.teamMember && !draft.skipStaffQuestion) ? `With ${draft.teamMember}.` : "",
     "Please choose the suitable day:"
   ].filter(Boolean).join("\n");
 }
@@ -4581,7 +4581,7 @@ function buildSmartBookingAskWeekdayBody(draft = {}, customerName = "", language
 
 function buildSmartBookingAskTimeBody(draft = {}, customerName = "", language = "en") {
   const cleanName = namePhrase(customerName);
-  const staffText = draft.teamMember ? ` ${language === "ar" ? "مع" : "with"} ${draft.teamMember}` : "";
+  const staffText = (draft.teamMember && !draft.skipStaffQuestion) ? ` ${language === "ar" ? "مع" : "with"} ${draft.teamMember}` : "";
   const dayLabel = getSmartBookingDayLabel(draft.preferredDay, language);
 
   if (language === "ar") {
@@ -4625,44 +4625,51 @@ function buildSmartBookingConfirmationBody(draft = {}, preferredTime = "", langu
   const branch = draft.branch || "Dubai";
   const branchAr = getFastBookingBranchArabic(branch);
   const dayLabel = getSmartBookingDayLabel(draft.preferredDay, language);
+  const isConsultationChatBooking = Boolean(draft.directConsultationChatBooking || draft.requestType === "Consultation Booking");
+  const teamMemberLineAr = (draft.teamMember && !draft.skipStaffQuestion) ? `الموظف: ${draft.teamMember}` : "";
+  const teamMemberLineEn = (draft.teamMember && !draft.skipStaffQuestion) ? `Team member: ${draft.teamMember}` : "";
 
   if (language === "ar") {
     return [
       `${BUSINESS_NAME_SPACED} ✨`,
       "",
-      "تم استلام طلب الحجز ✅",
+      isConsultationChatBooking ? "تم استلام طلب الاستشارة ✅" : "تم استلام طلب الحجز ✅",
       "",
       `الفرع: ${branchAr}`,
       `اليوم: ${dayLabel}`,
       `الوقت: ${preferredTime}`,
-      draft.teamMember ? `الموظف: ${draft.teamMember}` : "",
+      teamMemberLineAr,
       "",
-      "الموعد بانتظار تأكيد الفريق.",
+      "الطلب بانتظار تأكيد الفريق.",
       "فريقنا سيراجع التوفر ويؤكد لك الموعد قريباً."
     ].filter((line) => line !== "").join("\n");
   }
   return [
     `${BUSINESS_NAME_SPACED} ✨`,
     "",
-    "Your booking request has been received ✅",
+    isConsultationChatBooking ? "Your consultation request has been received ✅" : "Your booking request has been received ✅",
     "",
     `Branch: ${branch}`,
     `Day: ${dayLabel}`,
     `Time: ${preferredTime}`,
-    draft.teamMember ? `Team member: ${draft.teamMember}` : "",
+    teamMemberLineEn,
     "",
-    "Your appointment is pending team confirmation.",
+    "Your request is pending team confirmation.",
     "Our team will check availability and confirm shortly."
   ].filter((line) => line !== "").join("\n");
 }
 
 function buildSmartBookingRequestMessage(draft = {}, preferredTime = "", originalText = "") {
+  const requestType = draft.requestType || (draft.serviceType ? "Service Appointment" : "WhatsApp Smart Natural Booking V3");
+  const source = draft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.30" : "WhatsApp Smart Natural Booking V3";
+
   return [
-    "Source: WhatsApp Smart Natural Booking V3",
+    `Source: ${source}`,
+    `Request type: ${requestType}`,
     `Preferred branch: ${draft.branch || ""}`,
     `Preferred day: ${draft.preferredDay || ""}`,
     `Preferred time: ${preferredTime || ""}`,
-    `Team member: ${draft.teamMember || ""}`,
+    (draft.teamMember && !draft.skipStaffQuestion) ? `Team member: ${draft.teamMember}` : "Team member: ",
     draft.serviceType ? `Service type: ${draft.serviceType}` : "Service type: ",
     draft.urgent ? "Urgency: Urgent" : "Urgency: ",
     "Flyksoft Status: Not added",
@@ -5719,17 +5726,22 @@ async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", prof
     : (process.env.DUBAI_STAFF_NUMBER || DUBAI_STAFF_NUMBER || DEFAULT_DUBAI_STAFF_NUMBER || "");
   const staffNumber = normalizeWhatsAppRecipientDigits(rawStaffNumber);
 
+  const smartRequestType = finalDraft.requestType || (finalDraft.serviceType ? "Service Appointment" : "WhatsApp Smart Natural Booking V3.9.14");
+  const smartSource = finalDraft.directConsultationChatBooking
+    ? "Source: WhatsApp Direct Consultation Chat Booking V3.9.30"
+    : "Source: WhatsApp Smart Natural Booking V3.9.14";
+
   const flowData = {
     branch: finalDraft.branch || getLineConfig(routingPhoneNumberId).branch,
     customerName: profileName || "",
     phone: customerPhone || "",
-    requestType: finalDraft.serviceType ? "Service Appointment" : "WhatsApp Smart Natural Booking V3.9.14",
-    serviceInterest: finalDraft.serviceType ? "Service Appointment" : "WhatsApp Smart Natural Booking V3.9.14",
+    requestType: smartRequestType,
+    serviceInterest: smartRequestType,
     preferredDay: finalDraft.preferredDay || "",
     preferredTime: preferredTime || "",
-    teamMember: finalDraft.teamMember || "",
+    teamMember: (finalDraft.skipStaffQuestion ? "" : (finalDraft.teamMember || "")),
     serviceType: finalDraft.serviceType || "",
-    notes: finalDraft.urgent ? "Source: WhatsApp Smart Natural Booking V3.9.14 - Urgent request" : "Source: WhatsApp Smart Natural Booking V3.9.14"
+    notes: finalDraft.urgent ? `${smartSource} - Urgent request` : smartSource
   };
 
   console.log(`[Smart Booking Direct Staff Notify] preparing branch=${flowData.branch} fromPhoneNumberId=${routingPhoneNumberId} to=${staffNumber || "MISSING"} env=${envName} raw=${rawStaffNumber || "MISSING"} teamMember=${flowData.teamMember || ""}`);
@@ -5789,7 +5801,7 @@ async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", prof
   };
 }
 
-async function handleSmartWhatsAppBooking({ from, message, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en" }) {
+async function handleSmartWhatsAppBooking({ from, message, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en", forceConsultationChatBooking = false }) {
   const input = originalText || text || "";
   let existingDraft = smartBookingDrafts[from] || null;
 
@@ -5799,7 +5811,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   const detectedDay = explicitWeekday || chosenDayButton || naturalDay;
   const inputTime = getSmartBookingTimeFromText(input);
 
-  console.log(`[Smart Booking Router] input=${JSON.stringify(input)} from=${from} existingDraft=${Boolean(existingDraft)} language=${replyLanguage} detectedDay=${detectedDay || ""} time=${inputTime.ok ? inputTime.time : ""}`);
+  console.log(`[Smart Booking Router] input=${JSON.stringify(input)} from=${from} existingDraft=${Boolean(existingDraft)} language=${replyLanguage} detectedDay=${detectedDay || ""} time=${inputTime.ok ? inputTime.time : ""} forceConsultationChatBooking=${Boolean(forceConsultationChatBooking)}`);
 
   const logSmartCustomerReply = (status = "Smart Booking", messageType = "Customer Smart Booking Reply") => {
     logCustomerActionForInbox({
@@ -5827,7 +5839,20 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     return false;
   }
 
-  if (!existingDraft && !isSmartBookingNaturalRequest(input)) return false;
+  if (!existingDraft && !forceConsultationChatBooking && !isSmartBookingNaturalRequest(input)) return false;
+
+  const askForDay = async (draft) => {
+    draft.waitingForWeekday = false;
+    draft.waitingForTime = false;
+    draft.waitingForStaff = false;
+    smartBookingDrafts[from] = draft;
+    setConversationStatus(from, "Smart Booking - Choose Day");
+    const askDayBody = buildSmartBookingAskDayBody(draft, profileName, replyLanguage);
+    const dayButtons = getSmartBookingWeekdayButtons(replyLanguage);
+    await sendWhatsAppButtonMessage(from, askDayBody, dayButtons, incomingPhoneNumberId, { replyLanguage });
+    addInboxMessage(from, "bot", formatButtonLog(askDayBody, dayButtons), "Smart Booking - Choose Day", incomingPhoneNumberId, { customerName: profileName, messageType: "Smart Booking Ask Day" });
+    return true;
+  };
 
   const askForWeekday = async (draft) => {
     draft.waitingForWeekday = true;
@@ -5880,8 +5905,8 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       branch: selectedBranch,
       status: "Booking Request",
       assignee: getBranchTeamAssignee(selectedBranch),
-      tags: ["Booking", "Smart Natural Booking V3.14", "Need Confirmation"],
-      updatedBy: "WhatsApp Smart Natural Booking V3.14"
+      tags: ["Booking", finalDraft.requestType || "Smart Natural Booking V3.14", "Need Confirmation"],
+      updatedBy: finalDraft.directConsultationChatBooking ? "WhatsApp Direct Consultation Chat Booking V3.9.30" : "WhatsApp Smart Natural Booking V3.14"
     });
     await saveBookingRequestToGoogleSheetFromServer({
       phone: from,
@@ -5889,7 +5914,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       customerName: profileName,
       branch: selectedBranch,
       message: requestMessage,
-      requestType: "WhatsApp Smart Natural Booking V3.14",
+      requestType: finalDraft.requestType || "WhatsApp Smart Natural Booking V3.14",
       bookingStatus: "Pending"
     });
     addInboxMessage(from, "customer", requestMessage, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "WhatsApp Smart Natural Booking Submit" });
@@ -5970,7 +5995,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       return askForWeekday(existingDraft);
     }
 
-    if (!existingDraft.teamMember) {
+    if (!existingDraft.teamMember && !existingDraft.skipStaffQuestion) {
       return askForStaff(existingDraft);
     }
 
@@ -5992,7 +6017,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       return askForWeekday(existingDraft);
     }
 
-    if (!existingDraft.teamMember) {
+    if (!existingDraft.teamMember && !existingDraft.skipStaffQuestion) {
       return askForStaff(existingDraft);
     }
 
@@ -6019,7 +6044,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     existingDraft.preferredDay = weekday;
     if (inputTime.ok) existingDraft.preferredTime = inputTime.time;
 
-    if (!existingDraft.teamMember) {
+    if (!existingDraft.teamMember && !existingDraft.skipStaffQuestion) {
       return askForStaff(existingDraft);
     }
 
@@ -6079,13 +6104,17 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
 
   const staff = detectSmartBookingStaff(input);
   const detectedDayForNewDraft = detectedDay;
-  const branch = staff?.branch || lineConfig.branch || "Dubai";
+  const directConsultationChatBooking = Boolean(forceConsultationChatBooking || isDirectConsultationChatBookingText(input));
+  const branch = directConsultationChatBooking ? (lineConfig.branch || "Dubai") : (staff?.branch || lineConfig.branch || "Dubai");
   const draft = {
     branch,
     preferredDay: detectedDayForNewDraft || "",
     preferredTime: inputTime.ok ? inputTime.time : "",
-    teamMember: staff?.name || "",
-    serviceType: detectSmartBookingServiceType(input),
+    teamMember: directConsultationChatBooking ? "" : (staff?.name || ""),
+    serviceType: directConsultationChatBooking ? "" : detectSmartBookingServiceType(input),
+    requestType: directConsultationChatBooking ? "Consultation Booking" : "",
+    directConsultationChatBooking,
+    skipStaffQuestion: directConsultationChatBooking,
     urgent: isSmartBookingUrgentText(input),
     rawRequest: input,
     startedAt: getDubaiTimestamp(),
@@ -6111,7 +6140,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     return askForWeekday(draft);
   }
 
-  if (!draft.teamMember) {
+  if (!draft.teamMember && !draft.skipStaffQuestion) {
     return askForStaff(draft);
   }
 
@@ -6214,6 +6243,36 @@ function isConsultationFlowText(text) {
     value.includes("بدي استشاره") ||
     value.includes("اريد استشارة") ||
     value.includes("أريد استشارة");
+}
+
+
+function isDirectConsultationChatBookingText(text = "") {
+  const value = compactText(text);
+
+  if (!value) return false;
+
+  return isConsultationFlowText(value) ||
+    value.includes("book consultation") ||
+    value.includes("book a consultation") ||
+    value.includes("book consult") ||
+    value.includes("i want to book a consultation") ||
+    value.includes("i need consultation") ||
+    value.includes("need consultation") ||
+    value.includes("consultation appointment") ||
+    value.includes("appointment for consultation") ||
+    value.includes("حجز استشارة") ||
+    value.includes("حجز استشاره") ||
+    value.includes("احجز استشارة") ||
+    value.includes("احجز استشاره") ||
+    value.includes("بدي احجز استشارة") ||
+    value.includes("بدي احجز استشاره") ||
+    value.includes("اريد احجز استشارة") ||
+    value.includes("أريد احجز استشارة") ||
+    value.includes("ابغى احجز استشارة") ||
+    value.includes("موعد استشارة") ||
+    value.includes("استشارة في دبي") ||
+    value.includes("استشارة في ابوظبي") ||
+    value.includes("استشارة في أبوظبي");
 }
 
 function isDirectBookingChoiceText(text) {
@@ -22535,64 +22594,23 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (isConsultationFlowText(originalText || text)) {
-      const consultationActionText = getSmartCustomerActionText(message, originalText || text) || "Consult | استشارة";
-      const consultationCustomerBody = buildCustomerActionBody(profileName, consultationActionText);
-
-      addInboxMessage(
+      // V31.5.8.60.3.9.30 - Direct consultation chat booking:
+      // For clear consultation booking intent, do not open WhatsApp Flow immediately.
+      // Auto-detect the branch from the incoming WhatsApp line, then ask day and time in chat.
+      const directConsultationHandled = await handleSmartWhatsAppBooking({
         from,
-        "customer",
-        consultationCustomerBody,
-        "Consultation Booking",
+        message,
+        originalText,
+        text,
         incomingPhoneNumberId,
-        {
-          customerName: profileName,
-          messageType: "Customer Consultation Flow Request"
-        }
-      );
-
-      setConversationStatus(from, "Consultation Flow - Opened");
-      await saveConversationStateToGoogleSheetFromServer({
-        phone: from,
-        phoneNumberId: incomingPhoneNumberId,
-        branch: lineConfig.branch,
-        status: "Consultation Flow - Opened",
-        assignee: getBranchTeamAssignee(lineConfig.branch),
-        tags: ["Booking", "Consultation", "WhatsApp Flow"],
-        updatedBy: "Consultation Booking Flow"
+        lineConfig,
+        profileName,
+        replyLanguage,
+        forceConsultationChatBooking: true
       });
 
-      const flowSendResult = await sendWhatsAppFlowMessage(from, incomingPhoneNumberId, {
-        branch: lineConfig.branch,
-        customerName: profileName,
-        flowType: "consultation",
-        requestType: "Consultation Booking",
-        replyLanguage
-      });
-
-      if (flowSendResult.ok) {
-        const selectedConsultationConfig = getBookingFlowConfigForLine(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
-
-        addInboxMessage(
-          from,
-          "bot",
-          `Consultation Booking Flow sent: ${selectedConsultationConfig.flowId}`,
-          "Consultation Flow - Opened",
-          incomingPhoneNumberId,
-          {
-            customerName: profileName,
-            messageType: "Consultation Booking Flow Sent"
-          }
-        );
-      } else {
-        const fallbackConsultationText =
-          `${BUSINESS_NAME_SPACED} ✨\n\n` +
-          "تعذر فتح نموذج حجز الاستشارة حالياً. فريقنا سيتابع معك داخل المحادثة.\n\n" +
-          "------------------------------\n\n" +
-          `${BUSINESS_NAME_SPACED} ✨\n\n` +
-          "The consultation booking form could not be opened right now. Our team will assist you inside this chat.";
-
-        await sendWhatsAppMessage(from, fallbackConsultationText, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
-        addInboxMessage(from, "bot", fallbackConsultationText, "Consultation Flow Fallback", incomingPhoneNumberId, { customerName: profileName, messageType: "Consultation Booking Flow Fallback" });
+      if (directConsultationHandled) {
+        return res.sendStatus(200);
       }
 
       return res.sendStatus(200);
