@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-20-staff-action-context-link-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-21-localized-team-inbox-handoff-log";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -5000,8 +5000,9 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       delete smartBookingDrafts[from];
       setConversationStatus(from, "Talk to Team");
       const teamBody = buildTeamHandoffBody(profileName);
-      await sendWhatsAppMessage(from, teamBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
-      addInboxMessage(from, "bot", teamBody, "Talk to Team", incomingPhoneNumberId, { customerName: profileName, messageType: "Availability Ask Team Handoff" });
+      const localizedTeamBody = cleanLocalizedReplyBody(teamBody, replyLanguage);
+      await sendWhatsAppMessage(from, localizedTeamBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
+      addInboxMessage(from, "bot", localizedTeamBody, "Talk to Team", incomingPhoneNumberId, { customerName: profileName, messageType: "Availability Ask Team Handoff" });
       return true;
     }
 
@@ -21386,11 +21387,12 @@ app.post("/webhook", async (req, res) => {
       });
 
       const teamHandoffBody = buildTeamHandoffBody(profileName);
-      await sendWhatsAppMessage(from, teamHandoffBody, incomingPhoneNumberId, { autoLocalize: true, replyLanguage });
+      const localizedTeamHandoffBody = cleanLocalizedReplyBody(teamHandoffBody, replyLanguage);
+      await sendWhatsAppMessage(from, localizedTeamHandoffBody, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
       addInboxMessage(
         from,
         "bot",
-        teamHandoffBody,
+        localizedTeamHandoffBody,
         "Talk to Team",
         incomingPhoneNumberId,
         {
