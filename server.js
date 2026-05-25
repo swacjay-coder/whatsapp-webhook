@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-36-suggested-time-customer-ok-auto-confirm";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-37-bot-typing-indicator";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -2553,6 +2553,70 @@ function logCustomerActionForInbox({ from, message, profileName = "", rawText = 
 
 function getCustomerChatLink(customerNumber) {
   return `https://wa.me/${customerNumber}`;
+}
+
+// V31.5.8.60.3.9.37 - Bot typing indicator:
+// Show WhatsApp "typing..." briefly before bot replies to customer messages.
+// This is intentionally used only for inbound customer webhook messages, not staff sends,
+// staff notifications, templates, reminders, or follow-up cron jobs.
+const BOT_TYPING_INDICATOR_ENABLED = (process.env.BOT_TYPING_INDICATOR_ENABLED || "true").toString().toLowerCase() !== "false";
+const BOT_TYPING_DELAY_MS = Math.max(0, Math.min(2500, Number(process.env.BOT_TYPING_DELAY_MS || 900)));
+
+function sleep(ms = 0) {
+  const delay = Number(ms || 0);
+  if (!delay || delay <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+async function sendWhatsAppTypingIndicator(to, incomingMessageId = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const cleanMessageId = (incomingMessageId || "").toString().trim();
+
+  if (!BOT_TYPING_INDICATOR_ENABLED || !ACCESS_TOKEN || !finalPhoneNumberId || !cleanMessageId) {
+    return { ok: false, skipped: true };
+  }
+
+  const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
+  const payload = {
+    messaging_product: "whatsapp",
+    status: "read",
+    message_id: cleanMessageId,
+    typing_indicator: { type: "text" }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      console.log("WhatsApp typing indicator failed:");
+      console.log(JSON.stringify(result, null, 2));
+      return { ok: false, status: response.status, result };
+    }
+
+    return { ok: true, status: response.status, result };
+  } catch (error) {
+    console.log("WhatsApp typing indicator threw error:");
+    console.log(error);
+    return { ok: false, error: error?.message || String(error) };
+  }
+}
+
+async function showBotTypingBeforeReply({ to, incomingMessageId, phoneNumberId, fromInternalNumber = false } = {}) {
+  if (fromInternalNumber || !BOT_TYPING_INDICATOR_ENABLED) {
+    return;
+  }
+
+  await sendWhatsAppTypingIndicator(to, incomingMessageId, phoneNumberId);
+  await sleep(BOT_TYPING_DELAY_MS);
 }
 
 async function sendWhatsAppMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
@@ -22586,7 +22650,9 @@ app.post("/webhook", async (req, res) => {
     // Internal staff/test numbers must be suppressed from Team Inbox live notifications,
     // but they must NOT be skipped from the bot workflow. This lets the owner test
     // the bot normally from a staff/test phone while avoiding repeated inbox alerts.
-    if (isSuppressedCustomerNotificationNumber(from)) {
+    const isInternalStaffOrTestNumber = isSuppressedCustomerNotificationNumber(from);
+
+    if (isInternalStaffOrTestNumber) {
       console.log("[Internal Staff/Test Number] inbound allowed for bot workflow; inbox notification suppressed", {
         from,
         incomingPhoneNumberId,
@@ -22594,6 +22660,13 @@ app.post("/webhook", async (req, res) => {
         text: suppressedInternalText
       });
     }
+
+    await showBotTypingBeforeReply({
+      to: from,
+      incomingMessageId: message.id || "",
+      phoneNumberId: incomingPhoneNumberId,
+      fromInternalNumber: isInternalStaffOrTestNumber
+    });
 
       // V60.2.4 Services / Results / How it works premium route
       const iconicServicesRawText = (
