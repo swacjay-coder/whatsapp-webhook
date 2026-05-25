@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-39-auto-1-hour-reminder-on-confirm";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-40-1-safe-appointment-reminder-cron-endpoints";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -8484,7 +8484,9 @@ app.get("/api/version", (req, res) => {
       templates: getAppointmentReminderTemplateMap(),
       language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
       leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
-      dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES
+      dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
+      previewEndpoint: "/api/appointment-reminders/preview",
+      sendDueEndpoint: "/api/appointment-reminders/send-due?confirm=SEND"
     },
     locations: {
       dubai: DUBAI_LOCATION_URL,
@@ -8601,6 +8603,136 @@ app.get("/api/reminders/preview", protectInbox, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: "Reminder preview failed"
+    });
+  }
+});
+
+
+app.get("/api/appointment-reminders/preview", protectInbox, async (req, res) => {
+  try {
+    const sheetData = await loadMessagesFromGoogleSheet();
+    const messages = sheetData.messages || [];
+    const bookingData = await loadBookingRequestsFromGoogleSheetFromServer();
+    const appointmentDue = getDueAppointmentReminders(bookingData.bookingRequests || [], messages);
+
+    return res.json({
+      ok: true,
+      mode: "appointment_reminder_preview_only",
+      appointmentReminder: {
+        enabled: APPOINTMENT_REMINDER_ENABLED,
+        templates: getAppointmentReminderTemplateMap(),
+        language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
+        leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
+        dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
+        scannedBookings: (bookingData.bookingRequests || []).length,
+        scannedMessages: messages.length,
+        dueCount: appointmentDue.length,
+        due: appointmentDue.map((record) => ({
+          phone: record.phone,
+          customerName: record.customerName || "",
+          branch: record.branch,
+          phoneNumberId: record.phoneNumberId,
+          appointmentAt: record.appointmentAt?.toISOString?.() || "",
+          reminderAt: record.reminderAt?.toISOString?.() || "",
+          template: record.template
+        }))
+      }
+    });
+  } catch (error) {
+    console.error("Appointment reminder preview failed:");
+    console.error(error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Appointment reminder preview failed"
+    });
+  }
+});
+
+app.get("/api/appointment-reminders/send-due", protectInbox, async (req, res) => {
+  try {
+    const confirm = (req.query.confirm || "").toString().trim();
+
+    if (confirm !== "SEND") {
+      return res.status(400).json({
+        ok: false,
+        error: "Safety check: add ?confirm=SEND to send due appointment reminders.",
+        preview_url: "/api/appointment-reminders/preview"
+      });
+    }
+
+    const sheetData = await loadMessagesFromGoogleSheet();
+    const messages = sheetData.messages || [];
+    const bookingData = await loadBookingRequestsFromGoogleSheetFromServer();
+    const appointmentDue = getDueAppointmentReminders(bookingData.bookingRequests || [], messages);
+    const sent = [];
+    const failed = [];
+
+    for (const record of appointmentDue) {
+      const templateName = getAppointmentReminderTemplateName(record.phoneNumberId);
+      const sendResult = await sendWhatsAppTemplate(record.phone, templateName, record.phoneNumberId, APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE);
+
+      if (sendResult.ok) {
+        addInboxMessage(
+          record.phone,
+          "bot",
+          getAppointmentReminderBodyForLog(record.phoneNumberId, record.appointmentAt),
+          "Appointment Reminder Sent",
+          record.phoneNumberId,
+          {
+            customerName: record.customerName || "",
+            messageType: "Appointment 1-hour Reminder"
+          }
+        );
+
+        sent.push({
+          phone: record.phone,
+          customerName: record.customerName || "",
+          branch: record.branch,
+          phoneNumberId: record.phoneNumberId,
+          appointmentAt: record.appointmentAt?.toISOString?.() || "",
+          reminderAt: record.reminderAt?.toISOString?.() || "",
+          template: templateName
+        });
+      } else {
+        failed.push({
+          phone: record.phone,
+          customerName: record.customerName || "",
+          branch: record.branch,
+          phoneNumberId: record.phoneNumberId,
+          appointmentAt: record.appointmentAt?.toISOString?.() || "",
+          reminderAt: record.reminderAt?.toISOString?.() || "",
+          template: templateName,
+          result: sendResult.result
+        });
+      }
+    }
+
+    return res.json({
+      ok: failed.length === 0,
+      mode: "appointment_reminder_send_due_only",
+      appointmentReminder: {
+        enabled: APPOINTMENT_REMINDER_ENABLED,
+        templates: getAppointmentReminderTemplateMap(),
+        language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
+        leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
+        dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
+        scannedBookings: (bookingData.bookingRequests || []).length,
+        scannedMessages: messages.length,
+        dueCount: appointmentDue.length,
+        sentCount: sent.length,
+        failedCount: failed.length,
+        sent,
+        failed
+      }
+    });
+  } catch (error) {
+    console.error("Sending due appointment reminders failed:");
+    console.error(error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Sending due appointment reminders failed"
     });
   }
 });
@@ -8948,50 +9080,9 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
     const sheetData = await loadMessagesFromGoogleSheet();
     const messages = sheetData.messages || [];
     const due = getDueFollowUpReminders(messages);
-    const bookingData = await loadBookingRequestsFromGoogleSheetFromServer();
-    const appointmentDue = getDueAppointmentReminders(bookingData.bookingRequests || [], messages);
     const sent = [];
     const failed = [];
     const skippedOptOut = [];
-    const appointmentSent = [];
-    const appointmentFailed = [];
-
-    for (const record of appointmentDue) {
-      const templateName = getAppointmentReminderTemplateName(record.phoneNumberId);
-      const sendResult = await sendWhatsAppTemplate(record.phone, templateName, record.phoneNumberId, APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE);
-
-      if (sendResult.ok) {
-        addInboxMessage(
-          record.phone,
-          "bot",
-          getAppointmentReminderBodyForLog(record.phoneNumberId, record.appointmentAt),
-          "Appointment Reminder Sent",
-          record.phoneNumberId,
-          {
-            customerName: record.customerName || "",
-            messageType: "Appointment 1-hour Reminder"
-          }
-        );
-
-        appointmentSent.push({
-          phone: record.phone,
-          branch: record.branch,
-          phoneNumberId: record.phoneNumberId,
-          appointmentAt: record.appointmentAt?.toISOString?.() || "",
-          reminderAt: record.reminderAt?.toISOString?.() || "",
-          template: templateName
-        });
-      } else {
-        appointmentFailed.push({
-          phone: record.phone,
-          branch: record.branch,
-          phoneNumberId: record.phoneNumberId,
-          appointmentAt: record.appointmentAt?.toISOString?.() || "",
-          template: templateName,
-          result: sendResult.result
-        });
-      }
-    }
 
     for (const record of due) {
       if (isCustomerOptedOutForFollowUps(messages, record.phone, record.phoneNumberId)) {
@@ -9038,20 +9129,14 @@ app.get("/api/reminders/send-due", protectInbox, async (req, res) => {
     }
 
     return res.json({
-      ok: failed.length === 0 && appointmentFailed.length === 0,
+      ok: failed.length === 0,
+      mode: "follow_up_send_due_only",
       templateMode: "branch_specific",
       templates: getFollowUpTemplateMap(),
       appointmentReminder: {
-        enabled: APPOINTMENT_REMINDER_ENABLED,
-        templates: getAppointmentReminderTemplateMap(),
-        language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
-        leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
-        dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
-        dueCount: appointmentDue.length,
-        sentCount: appointmentSent.length,
-        failedCount: appointmentFailed.length,
-        sent: appointmentSent,
-        failed: appointmentFailed
+        separated: true,
+        previewUrl: "/api/appointment-reminders/preview",
+        sendDueUrl: "/api/appointment-reminders/send-due?confirm=SEND"
       },
       headerImageConfigured: Boolean(FOLLOW_UP_HEADER_IMAGE_URL),
       delayDays: FOLLOW_UP_DELAY_DAYS,
