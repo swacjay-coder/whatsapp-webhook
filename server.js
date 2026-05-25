@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-22-full-localized-team-inbox-log";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-23-customer-replies-and-bot-context-visible";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -4206,11 +4206,25 @@ function detectSmartBookingServiceType(text = "") {
   return "";
 }
 
-async function handleRealCustomerIntentUpgrade({ from, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en" }) {
+async function handleRealCustomerIntentUpgrade({ from, message, originalText, text, incomingPhoneNumberId, lineConfig, profileName, replyLanguage = "en" }) {
   const input = originalText || text || "";
   if (!input) return false;
 
+  const logRealCustomerIntent = (status = "Customer Message", messageType = "Customer Message", fallbackAction = "") => {
+    logCustomerActionForInbox({
+      from,
+      message,
+      profileName,
+      rawText: input,
+      fallbackAction: fallbackAction || input,
+      status,
+      phoneNumberId: incomingPhoneNumberId,
+      messageType
+    });
+  };
+
   if (isSharjahBranchIntentText(input)) {
+    logRealCustomerIntent("Location Requested", "Customer Sharjah Branch Request");
     setConversationStatus(from, "Location Requested");
     const body = buildSharjahBranchIntentBody(profileName, replyLanguage);
     const buttons = getBranchChoiceButtons(replyLanguage);
@@ -4220,6 +4234,7 @@ async function handleRealCustomerIntentUpgrade({ from, originalText, text, incom
   }
 
   if (isSmartBookingEarlierTimeText(input)) {
+    logRealCustomerIntent("Need Follow-up", "Customer Earlier Time Request");
     setConversationStatus(from, "Need Follow-up");
     const body = buildEarlierTimeBody(profileName, replyLanguage);
     await sendWhatsAppMessage(from, body, incomingPhoneNumberId, { replyLanguage, skipAutoLanguage: true });
@@ -4228,6 +4243,7 @@ async function handleRealCustomerIntentUpgrade({ from, originalText, text, incom
   }
 
   if (isSpecialistExclusionText(input)) {
+    logRealCustomerIntent("Smart Booking - Specialist Preference", "Customer Specialist Exclusion Request");
     setConversationStatus(from, "Smart Booking - Specialist Preference");
     const body = buildSpecialistExclusionBody(input, profileName, replyLanguage);
     const buttons = getSmartBookingStaffPreferenceButtons(replyLanguage);
@@ -4237,6 +4253,7 @@ async function handleRealCustomerIntentUpgrade({ from, originalText, text, incom
   }
 
   if (isSmartBookingUrgentText(input) && !isSmartBookingNaturalRequest(input)) {
+    logRealCustomerIntent("Need Follow-up", "Customer Urgent Request");
     setConversationStatus(from, "Need Follow-up");
     const body = buildUrgentIntentBody(profileName, replyLanguage);
     const buttons = getSmartBookingStaffPreferenceButtons(replyLanguage);
@@ -4246,6 +4263,7 @@ async function handleRealCustomerIntentUpgrade({ from, originalText, text, incom
   }
 
   if (isSmartBookingAvailabilityQuestionText(input)) {
+    logRealCustomerIntent("Availability Question", "Customer Availability Question");
     const staff = detectSmartBookingStaff(input);
     const explicitWeekday = detectSmartBookingExplicitWeekday(input);
     const naturalDay = detectSmartBookingDay(input);
@@ -4947,6 +4965,19 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
 
   console.log(`[Smart Booking Router] input=${JSON.stringify(input)} from=${from} existingDraft=${Boolean(existingDraft)} language=${replyLanguage} detectedDay=${detectedDay || ""} time=${inputTime.ok ? inputTime.time : ""}`);
 
+  const logSmartCustomerReply = (status = "Smart Booking", messageType = "Customer Smart Booking Reply") => {
+    logCustomerActionForInbox({
+      from,
+      message,
+      profileName,
+      rawText: input,
+      fallbackAction: input,
+      status,
+      phoneNumberId: incomingPhoneNumberId,
+      messageType
+    });
+  };
+
   if (existingDraft) {
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
     smartBookingDrafts[from] = existingDraft;
@@ -5058,6 +5089,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
 
 
   if (existingDraft && existingDraft.waitingForBookingConfirm) {
+    logSmartCustomerReply("Availability Reply", "Customer Availability Reply");
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
     if (isSmartBookingAskTeamText(input)) {
       delete smartBookingDrafts[from];
@@ -5104,6 +5136,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   }
 
   if (existingDraft && detectedDay) {
+    logSmartCustomerReply("Smart Booking - Day Reply", "Customer Smart Booking Day Reply");
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
     existingDraft.preferredDay = detectedDay;
     existingDraft.rawRequest = existingDraft.rawRequest || input;
@@ -5125,6 +5158,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   }
 
   if (existingDraft && existingDraft.waitingForWeekday) {
+    logSmartCustomerReply("Smart Booking - Weekday Reply", "Customer Smart Booking Weekday Reply");
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
     const weekday = detectedDay;
     if (!weekday) {
@@ -5151,6 +5185,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   }
 
   if (existingDraft && existingDraft.waitingForStaff) {
+    logSmartCustomerReply("Smart Booking - Specialist Reply", "Customer Smart Booking Specialist Reply");
     const detectedStaff = detectSmartBookingStaff(input || "");
     const noPreference = isSmartBookingAnySpecialistText(input || "");
 
@@ -5182,6 +5217,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   }
 
   if (existingDraft && existingDraft.waitingForTime) {
+    logSmartCustomerReply("Smart Booking - Time Reply", "Customer Smart Booking Time Reply");
     existingDraft = mergeSmartBookingStaffIntoDraft(existingDraft, input || existingDraft.rawRequest || "");
     smartBookingDrafts[from] = existingDraft;
     const parsedTime = getSmartBookingTimeFromText(input);
@@ -21399,6 +21435,7 @@ app.post("/webhook", async (req, res) => {
 
     const realCustomerIntentHandled = await handleRealCustomerIntentUpgrade({
       from,
+      message,
       originalText,
       text,
       incomingPhoneNumberId,
