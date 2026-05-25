@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-26-staff-send-status-and-optout-guard";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-27-hard-block-staff-log-before-whatsapp-success";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -2124,6 +2124,130 @@ function buildStaffSendFailureLogBody(originalBody = "", sendResult = {}) {
 
 function getStaffSendFailureResponseMessage(sendResult = {}) {
   return `فشل الإرسال / لم تصل للعميل. ${getWhatsAppFailureReasonArabic(sendResult)}`;
+}
+
+function getDubaiNowPseudoDate() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }));
+}
+
+function isSameConversationPhone(message = {}, phone = "", phoneNumberId = "") {
+  const cleanPhone = normalizePhoneDigits(phone);
+  const messagePhone = normalizePhoneDigits(message.phone || "");
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
+  const messagePhoneNumberId = normalizePhoneNumberId(message.phoneNumberId || "");
+
+  if (!cleanPhone || !messagePhone || cleanPhone !== messagePhone) {
+    return false;
+  }
+
+  return !cleanPhoneNumberId || !messagePhoneNumberId || messagePhoneNumberId === cleanPhoneNumberId;
+}
+
+function getLatestCustomerMessageRecord(messages = [], phone = "", phoneNumberId = "") {
+  const matched = (messages || [])
+    .filter((message) => {
+      return isSameConversationPhone(message, phone, phoneNumberId) &&
+        normalizeText(message.sender || "") === "customer";
+    })
+    .map((message) => ({
+      message,
+      date: parseSheetDate(message.time || message.opt_out_date || message.opt_in_date)
+    }))
+    .filter((item) => item.date && !Number.isNaN(item.date.getTime()))
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  return matched[0] || null;
+}
+
+function buildStaffSendBlockedResult(reason = "outside_24h", details = {}) {
+  const optedOutText = details.optedOut
+    ? " العميل أرسل STOP سابقاً، لذلك التذكيرات والمتابعات التلقائية موقوفة لهذا الرقم."
+    : "";
+  const lastCustomerText = details.lastCustomerTime
+    ? ` آخر رسالة من العميل كانت: ${details.lastCustomerTime}.`
+    : " لا توجد رسالة حديثة من العميل محفوظة ضمن نافذة 24 ساعة.";
+
+  return {
+    ok: false,
+    error: {
+      code: "STAFF_FREE_TEXT_BLOCKED",
+      reason,
+      message: `لا يمكن إرسال رسالة عادية الآن. المحادثة خارج نافذة واتساب 24 ساعة.${lastCustomerText}${optedOutText} يجب أن يرسل العميل رسالة أولاً، أو يتم استخدام Template معتمدة من واتساب.`,
+      error_user_msg: `خارج نافذة واتساب 24 ساعة. لازم العميل يرسل أولاً لفتح المحادثة، أو يتم استخدام Template معتمدة من واتساب.${optedOutText}`
+    }
+  };
+}
+
+async function getStaffFreeTextSendGuard(phone = "", phoneNumberId = "") {
+  try {
+    const cleanPhone = normalizePhoneDigits(phone);
+    if (!cleanPhone) {
+      return { ok: false, sendResult: buildStaffSendBlockedResult("missing_phone") };
+    }
+
+    const sheetData = await loadMessagesFromGoogleSheet();
+    const sheetMessages = Array.isArray(sheetData.messages) ? sheetData.messages : [];
+    const memoryMessages = Array.isArray(inboxMessages) ? inboxMessages : [];
+    const messages = [...sheetMessages, ...memoryMessages];
+    const optedOut = isCustomerOptedOutForFollowUps(messages, cleanPhone, phoneNumberId);
+    const latestCustomer = getLatestCustomerMessageRecord(messages, cleanPhone, phoneNumberId);
+
+    if (!latestCustomer) {
+      return {
+        ok: false,
+        sendResult: buildStaffSendBlockedResult("no_recent_customer_message", { optedOut })
+      };
+    }
+
+    const now = getDubaiNowPseudoDate();
+    const ageMs = now.getTime() - latestCustomer.date.getTime();
+    const windowMs = 24 * 60 * 60 * 1000;
+
+    if (ageMs > windowMs) {
+      return {
+        ok: false,
+        sendResult: buildStaffSendBlockedResult("outside_24h", {
+          optedOut,
+          lastCustomerTime: latestCustomer.message.time || ""
+        })
+      };
+    }
+
+    return {
+      ok: true,
+      optedOut,
+      lastCustomerTime: latestCustomer.message.time || ""
+    };
+  } catch (error) {
+    console.error("Staff free-text guard failed:");
+    console.error(error);
+    return { ok: true, warning: "guard_failed" };
+  }
+}
+
+async function blockStaffSendIfNeeded({ to, phoneNumberId, originalBody = "" }) {
+  const guard = await getStaffFreeTextSendGuard(to, phoneNumberId);
+
+  if (guard.ok) {
+    return { ok: true };
+  }
+
+  const sendResult = guard.sendResult || buildStaffSendBlockedResult("blocked");
+  addInboxMessage(to, "staff", buildStaffSendFailureLogBody(originalBody, sendResult), "Failed / Not delivered", phoneNumberId, {
+    messageType: "Failed / Not delivered",
+    statusOverride: "Failed / Not delivered"
+  });
+
+  return {
+    ok: false,
+    statusCode: 409,
+    response: {
+      ok: false,
+      status: "Failed / Not delivered",
+      error: getStaffSendFailureResponseMessage(sendResult),
+      result: sendResult
+    }
+  };
 }
 
 
@@ -7790,6 +7914,16 @@ app.post("/api/send", protectInbox, async (req, res) => {
 
     conversationPhoneNumberId[to] = phoneNumberId;
 
+    const staffSendGuard = await blockStaffSendIfNeeded({
+      to,
+      phoneNumberId,
+      originalBody: body
+    });
+
+    if (!staffSendGuard.ok) {
+      return res.status(staffSendGuard.statusCode || 409).json(staffSendGuard.response);
+    }
+
     const sendResult = await sendWhatsAppMessage(to, body, phoneNumberId);
     const sendError = getWhatsAppApiError(sendResult);
 
@@ -7908,6 +8042,16 @@ app.post("/api/send-image", protectInbox, async (req, res) => {
 
     conversationPhoneNumberId[to] = phoneNumberId;
 
+    const staffSendGuard = await blockStaffSendIfNeeded({
+      to,
+      phoneNumberId,
+      originalBody: `Image message: ${filename}`
+    });
+
+    if (!staffSendGuard.ok) {
+      return res.status(staffSendGuard.statusCode || 409).json(staffSendGuard.response);
+    }
+
     const sendResult = await sendWhatsAppImageMessage(to, imageDataUrl, caption, filename, phoneNumberId);
 
     if (!sendResult.ok) {
@@ -7983,6 +8127,16 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
     );
 
     conversationPhoneNumberId[to] = phoneNumberId;
+
+    const staffSendGuard = await blockStaffSendIfNeeded({
+      to,
+      phoneNumberId,
+      originalBody: `Voice message: ${filename}`
+    });
+
+    if (!staffSendGuard.ok) {
+      return res.status(staffSendGuard.statusCode || 409).json(staffSendGuard.response);
+    }
 
     const sendResult = await sendWhatsAppAudioMessage(to, audioDataUrl, filename, phoneNumberId);
 
