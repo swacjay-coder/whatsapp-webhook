@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-37-bot-typing-indicator";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-38-bot-typing-indicator-internal-test-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -2555,12 +2555,13 @@ function getCustomerChatLink(customerNumber) {
   return `https://wa.me/${customerNumber}`;
 }
 
-// V31.5.8.60.3.9.37 - Bot typing indicator:
+// V31.5.8.60.3.9.38 - Bot typing indicator internal-test fix:
 // Show WhatsApp "typing..." briefly before bot replies to customer messages.
 // This is intentionally used only for inbound customer webhook messages, not staff sends,
 // staff notifications, templates, reminders, or follow-up cron jobs.
+// Internal/staff test numbers are now allowed to see typing too, because they are often used for bot testing.
 const BOT_TYPING_INDICATOR_ENABLED = (process.env.BOT_TYPING_INDICATOR_ENABLED || "true").toString().toLowerCase() !== "false";
-const BOT_TYPING_DELAY_MS = Math.max(0, Math.min(2500, Number(process.env.BOT_TYPING_DELAY_MS || 900)));
+const BOT_TYPING_DELAY_MS = Math.max(0, Math.min(2500, Number(process.env.BOT_TYPING_DELAY_MS || 1400)));
 
 function sleep(ms = 0) {
   const delay = Number(ms || 0);
@@ -2611,8 +2612,14 @@ async function sendWhatsAppTypingIndicator(to, incomingMessageId = "", phoneNumb
 }
 
 async function showBotTypingBeforeReply({ to, incomingMessageId, phoneNumberId, fromInternalNumber = false } = {}) {
-  if (fromInternalNumber || !BOT_TYPING_INDICATOR_ENABLED) {
+  if (!BOT_TYPING_INDICATOR_ENABLED) {
     return;
+  }
+
+  // Do not skip internal/staff test numbers here.
+  // They are suppressed only from inbox live notifications, but should still see typing during tests.
+  if (fromInternalNumber) {
+    console.log("[Bot Typing] internal/test number allowed for typing indicator test", { to });
   }
 
   await sendWhatsAppTypingIndicator(to, incomingMessageId, phoneNumberId);
