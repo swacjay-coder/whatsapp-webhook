@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-40-1-safe-appointment-reminder-cron-endpoints";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-41-appointment-reminder-header-image-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -128,6 +128,12 @@ const APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE = (
 const APPOINTMENT_REMINDER_LEAD_MINUTES = Number(process.env.APPOINTMENT_REMINDER_LEAD_MINUTES || 60);
 const APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES = Number(process.env.APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES || 20);
 const APPOINTMENT_REMINDER_ENABLED = (process.env.APPOINTMENT_REMINDER_ENABLED || "true").toString().toLowerCase() !== "false";
+// Appointment reminder templates use their own header image so they do not inherit
+// the general bot/follow-up header by mistake. Keep this URL public and direct.
+const APPOINTMENT_REMINDER_HEADER_IMAGE_URL = (
+  process.env.APPOINTMENT_REMINDER_HEADER_IMAGE_URL ||
+  "https://iconichaircare.com/wp-content/uploads/2026/05/WhatsApp-Image-2026-05-12-at-12.30.27-PM.jpeg"
+).toString().trim();
 
 const FOLLOW_UP_HEADER_IMAGE_URL = process.env.FOLLOW_UP_HEADER_IMAGE_URL || "";
 const MAIN_MENU_HEADER_IMAGE_URL =
@@ -8578,6 +8584,7 @@ app.get("/api/reminders/preview", protectInbox, async (req, res) => {
         language: APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
         leadMinutes: APPOINTMENT_REMINDER_LEAD_MINUTES,
         dueWindowMinutes: APPOINTMENT_REMINDER_DUE_WINDOW_MINUTES,
+        headerImageConfigured: Boolean(APPOINTMENT_REMINDER_HEADER_IMAGE_URL),
         dueCount: appointmentDue.length,
         due: appointmentDue.map((record) => ({
           phone: record.phone,
@@ -8670,7 +8677,16 @@ app.get("/api/appointment-reminders/send-due", protectInbox, async (req, res) =>
 
     for (const record of appointmentDue) {
       const templateName = getAppointmentReminderTemplateName(record.phoneNumberId);
-      const sendResult = await sendWhatsAppTemplate(record.phone, templateName, record.phoneNumberId, APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE);
+      const sendResult = await sendWhatsAppTemplate(
+        record.phone,
+        templateName,
+        record.phoneNumberId,
+        APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE,
+        {
+          includeHeaderImage: Boolean(APPOINTMENT_REMINDER_HEADER_IMAGE_URL),
+          headerImageUrl: APPOINTMENT_REMINDER_HEADER_IMAGE_URL
+        }
+      );
 
       if (sendResult.ok) {
         addInboxMessage(
