@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-instagram-booking-loop-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-instagram-review-inbox";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -116,6 +116,16 @@ const staffSenderLockCache = new Map();
 const bookingFinalizationCache = new Map();
 const STAFF_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
 
+const INSTAGRAM_REVIEW_EVENT_LIMIT = Math.max(
+  5,
+  Math.min(Number(process.env.INSTAGRAM_REVIEW_EVENT_LIMIT || 25) || 25, 100)
+);
+const INSTAGRAM_REVIEW_SHOW_SENDER_ID = (
+  process.env.INSTAGRAM_REVIEW_SHOW_SENDER_ID || "false"
+).toString().toLowerCase() === "true";
+
+const instagramReviewEvents = [];
+
 const META_DM_DEBUG_LOGS_ENABLED = (process.env.META_DM_DEBUG_LOGS_ENABLED || "true").toString().toLowerCase() !== "false";
 
 function debugLog(label, data = {}) {
@@ -132,6 +142,236 @@ function previewText(value, maxLength = 220) {
   const text = (value || "").toString().replace(/\s+/g, " ").trim();
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}...`;
+}
+
+function maskReviewSenderId(senderId = "") {
+  const raw = (senderId || "").toString().trim();
+  if (!raw) return "";
+  if (INSTAGRAM_REVIEW_SHOW_SENDER_ID) return raw;
+  if (raw.length <= 6) return `${raw.slice(0, 2)}***`;
+  return `${raw.slice(0, 4)}...${raw.slice(-4)}`;
+}
+
+function summarizeReviewMessage(message = {}) {
+  const attachmentType = message?.attachment?.type || "";
+  const text = message?.text || "";
+  const quickReplies = Array.isArray(message?.quick_replies)
+    ? message.quick_replies.map((reply) => reply?.title || reply?.payload || "").filter(Boolean)
+    : [];
+
+  return {
+    type: attachmentType ? `attachment:${attachmentType}` : "text",
+    textPreview: previewText(text || (attachmentType ? `[${attachmentType} attachment]` : ""), 500),
+    quickReplies,
+    quickReplyCount: quickReplies.length
+  };
+}
+
+function rememberInstagramReviewEvent(event = {}) {
+  if (event.channel !== "instagram") return;
+
+  const safeEvent = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    time: new Date().toISOString(),
+    direction: event.direction || "unknown",
+    channel: "instagram",
+    senderIdMasked: maskReviewSenderId(event.senderId || event.recipientId || ""),
+    senderIdVisible: INSTAGRAM_REVIEW_SHOW_SENDER_ID ? (event.senderId || event.recipientId || "") : "",
+    eventType: event.eventType || "",
+    textPreview: previewText(event.text || event.textPreview || "", 500),
+    messageType: event.messageType || "",
+    quickReplies: Array.isArray(event.quickReplies) ? event.quickReplies.slice(0, 13) : [],
+    status: event.status || "",
+    lang: event.lang || "",
+    state: event.state || {},
+    resultPreview: event.resultPreview || "",
+    errorPreview: event.errorPreview || ""
+  };
+
+  instagramReviewEvents.unshift(safeEvent);
+  while (instagramReviewEvents.length > INSTAGRAM_REVIEW_EVENT_LIMIT) {
+    instagramReviewEvents.pop();
+  }
+}
+
+function rememberInstagramReviewIncoming({ channel, senderId, text, eventType, lang, state }) {
+  rememberInstagramReviewEvent({
+    direction: "incoming",
+    channel,
+    senderId,
+    eventType,
+    text,
+    status: "received",
+    lang,
+    state: summarizeState(state)
+  });
+}
+
+function rememberInstagramReviewOutgoing({ channel, recipientId, message, status, result = {} }) {
+  const summary = summarizeReviewMessage(message);
+  const error = result?.error || result?.data?.error || result?.result?.error || "";
+  const resultPreview = result?.reason || result?.status || (result?.data ? "Meta API response received" : "");
+
+  rememberInstagramReviewEvent({
+    direction: "outgoing",
+    channel,
+    recipientId,
+    eventType: "bot_reply",
+    textPreview: summary.textPreview,
+    messageType: summary.type,
+    quickReplies: summary.quickReplies,
+    status,
+    resultPreview: previewText(resultPreview, 220),
+    errorPreview: previewText(error?.message || error || "", 220)
+  });
+}
+
+function getInstagramReviewSnapshot() {
+  const latestIncoming = instagramReviewEvents.find((event) => event.direction === "incoming") || null;
+  const latestOutgoingForLatestIncoming = latestIncoming
+    ? instagramReviewEvents.find((event) => event.direction === "outgoing" && event.senderIdMasked === latestIncoming.senderIdMasked) || null
+    : null;
+  const latestOutgoing = instagramReviewEvents.find((event) => event.direction === "outgoing") || null;
+
+  return {
+    ok: true,
+    service: "iconic-meta-dm",
+    version: BOT_VERSION,
+    generatedAt: new Date().toISOString(),
+    instructions: {
+      purpose: "Meta App Review proof page for instagram_manage_messages",
+      testFlow: [
+        "Send a real Instagram DM to @iconichaircare from a tester account.",
+        "Confirm the incoming message appears on this page.",
+        "Confirm the bot reply status becomes sent.",
+        "Return to Instagram DM and show the same reply to the reviewer."
+      ]
+    },
+    latestIncoming,
+    latestOutgoing: latestOutgoingForLatestIncoming || latestOutgoing,
+    events: instagramReviewEvents
+  };
+}
+
+function escapeHtml(value = "") {
+  return (value || "").toString()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderReviewEventCard(event, label) {
+  if (!event) {
+    return `<section class="card muted"><h2>${escapeHtml(label)}</h2><p>No event captured yet.</p></section>`;
+  }
+
+  const quickReplies = event.quickReplies?.length
+    ? `<div class="chips">${event.quickReplies.map((reply) => `<span>${escapeHtml(reply)}</span>`).join("")}</div>`
+    : `<p class="small muted-text">No quick replies on this message.</p>`;
+
+  return `<section class="card">
+    <div class="card-title">
+      <h2>${escapeHtml(label)}</h2>
+      <span class="badge ${escapeHtml(event.direction)}">${escapeHtml(event.status || event.direction)}</span>
+    </div>
+    <dl>
+      <dt>Time</dt><dd>${escapeHtml(event.time || "")}</dd>
+      <dt>Channel</dt><dd>${escapeHtml(event.channel || "")}</dd>
+      <dt>Sender / Recipient ID</dt><dd>${escapeHtml(event.senderIdMasked || "")}</dd>
+      <dt>Event type</dt><dd>${escapeHtml(event.eventType || event.messageType || "")}</dd>
+      <dt>Message</dt><dd class="message">${escapeHtml(event.textPreview || "")}</dd>
+    </dl>
+    ${quickReplies}
+    ${event.errorPreview ? `<p class="error">Error: ${escapeHtml(event.errorPreview)}</p>` : ""}
+  </section>`;
+}
+
+function renderInstagramReviewPage() {
+  const snapshot = getInstagramReviewSnapshot();
+  const rows = snapshot.events.map((event) => `<tr>
+    <td>${escapeHtml(event.time || "")}</td>
+    <td>${escapeHtml(event.direction || "")}</td>
+    <td>${escapeHtml(event.status || "")}</td>
+    <td>${escapeHtml(event.senderIdMasked || "")}</td>
+    <td>${escapeHtml(event.eventType || event.messageType || "")}</td>
+    <td>${escapeHtml(event.textPreview || "")}</td>
+  </tr>`).join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="8">
+  <title>Iconic Instagram Review Inbox</title>
+  <style>
+    :root { color-scheme: light; font-family: Arial, sans-serif; background: #f6f7fb; color: #111827; }
+    body { margin: 0; padding: 24px; }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    header { background: #111827; color: white; padding: 22px; border-radius: 18px; margin-bottom: 18px; }
+    h1 { margin: 0 0 8px; font-size: 26px; }
+    h2 { margin: 0; font-size: 18px; }
+    p { line-height: 1.5; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 16px; margin: 18px 0; }
+    .card { background: white; border-radius: 18px; padding: 18px; box-shadow: 0 10px 25px rgba(0,0,0,.06); border: 1px solid #e5e7eb; }
+    .muted { opacity: .76; }
+    .muted-text { color: #6b7280; }
+    .card-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .badge { border-radius: 999px; padding: 6px 10px; font-size: 12px; background: #e5e7eb; text-transform: uppercase; }
+    .badge.incoming { background: #dbeafe; }
+    .badge.outgoing { background: #dcfce7; }
+    dl { display: grid; grid-template-columns: 140px 1fr; gap: 10px; margin: 0; }
+    dt { color: #6b7280; font-weight: 700; }
+    dd { margin: 0; word-break: break-word; }
+    .message { white-space: pre-wrap; background: #f9fafb; border-radius: 12px; padding: 10px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .chips span { background: #eef2ff; border-radius: 999px; padding: 7px 10px; font-size: 13px; }
+    .error { background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,.06); }
+    th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; font-size: 13px; }
+    th { background: #f3f4f6; font-size: 12px; text-transform: uppercase; color: #4b5563; }
+    .note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 16px; padding: 14px; margin-top: 16px; }
+    code { background: rgba(255,255,255,.16); padding: 2px 6px; border-radius: 7px; }
+    @media (max-width: 700px) { body { padding: 12px; } dl { grid-template-columns: 1fr; } th:nth-child(1), td:nth-child(1) { display:none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Iconic Instagram Review Inbox</h1>
+      <p>Purpose: prove the app receives Instagram messages and sends automated replies for <code>instagram_manage_messages</code> Meta App Review.</p>
+      <p>Version: ${escapeHtml(snapshot.version)} • Auto refresh: 8 seconds • Generated: ${escapeHtml(snapshot.generatedAt)}</p>
+    </header>
+
+    <div class="note">
+      <strong>Review test flow:</strong>
+      Send a real Instagram DM from a tester account, keep this page open, then show the incoming message and bot reply below before returning to Instagram DM.
+    </div>
+
+    <div class="grid">
+      ${renderReviewEventCard(snapshot.latestIncoming, "Latest incoming Instagram message")}
+      ${renderReviewEventCard(snapshot.latestOutgoing, "Latest bot reply sent by the app")}
+    </div>
+
+    <h2 style="margin: 22px 0 12px;">Recent Instagram review events</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Direction</th>
+          <th>Status</th>
+          <th>Sender</th>
+          <th>Type</th>
+          <th>Message preview</th>
+        </tr>
+      </thead>
+      <tbody>${rows || `<tr><td colspan="6">No Instagram review events captured yet.</td></tr>`}</tbody>
+    </table>
+  </div>
+</body>
+</html>`;
 }
 
 function getEventType(event = {}) {
@@ -1829,6 +2069,13 @@ async function sendMetaMessage(channel, recipientId, message) {
       hasAccessToken: Boolean(config.accessToken),
       senderId: config.senderId || ""
     });
+    rememberInstagramReviewOutgoing({
+      channel,
+      recipientId,
+      message,
+      status: "skipped_missing_env",
+      result: { reason: "missing_env" }
+    });
     return { ok: false, skipped: true, reason: "missing_env" };
   }
 
@@ -1885,6 +2132,13 @@ async function sendMetaMessage(channel, recipientId, message) {
         messageTextPreview: previewText(message?.text || ""),
         quickReplies: summarizeQuickReplies(message?.quick_replies || [])
       });
+      rememberInstagramReviewOutgoing({
+        channel,
+        recipientId,
+        message,
+        status: "failed",
+        result: { status: response.status, data, error: getMetaErrorSummary({ data }) }
+      });
       return { ok: false, status: response.status, data };
     }
 
@@ -1895,6 +2149,13 @@ async function sendMetaMessage(channel, recipientId, message) {
       data,
       messageTextPreview: previewText(message?.text || "")
     });
+    rememberInstagramReviewOutgoing({
+      channel,
+      recipientId,
+      message,
+      status: "sent",
+      result: { data }
+    });
     return { ok: true, data };
   } catch (error) {
     console.log(`[Meta Send] error ${channel}`, error.message);
@@ -1904,6 +2165,13 @@ async function sendMetaMessage(channel, recipientId, message) {
       senderId: config.senderId,
       error: error.message,
       messageTextPreview: previewText(message?.text || "")
+    });
+    rememberInstagramReviewOutgoing({
+      channel,
+      recipientId,
+      message,
+      status: "error",
+      result: { error: error.message }
     });
     return { ok: false, error: error.message };
   }
@@ -2174,6 +2442,15 @@ async function handleIncomingEvent(entry, event) {
   const lang = getTurnLanguage(text, state);
   state.lang = lang;
 
+  rememberInstagramReviewIncoming({
+    channel,
+    senderId,
+    text,
+    eventType: getEventType(event),
+    lang,
+    state
+  });
+
   debugLog("[Meta Incoming]", {
     channel,
     senderId,
@@ -2324,6 +2601,14 @@ function collectMessagingEvents(body) {
 
   return events;
 }
+
+app.get("/api/instagram-review", (req, res) => {
+  res.status(200).json(getInstagramReviewSnapshot());
+});
+
+app.get("/instagram-review", (req, res) => {
+  res.status(200).type("html").send(renderInstagramReviewPage());
+});
 
 app.get("/", (req, res) => {
   res.status(200).json({ ok: true, service: "iconic-meta-dm", version: BOT_VERSION });
