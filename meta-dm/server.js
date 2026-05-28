@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-instagram-review-inbox";
+const BOT_VERSION = "iconic-meta-dm-v1-instagram-review-inbox-booking-text-fix";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -1065,7 +1065,11 @@ function hasAnyBookingWord(value, words) {
 }
 
 function isCancelBookingText(value) {
-  return hasAnyBookingWord(value, ["الغاء", "إلغاء", "الغِ", "ما بدي", "وقف", "رجعني", "القائمة", "cancel", "main menu", "start over", "stop"]);
+  return hasAnyBookingWord(value, [
+    "الغاء", "إلغاء", "الغِ", "ما بدي", "وقف", "رجعني", "القائمة",
+    "cancel", "main menu", "start over", "stop",
+    "meta review test start", "review test start", "test start"
+  ]);
 }
 
 function isChangeTimeText(value) {
@@ -1082,6 +1086,24 @@ function isChangeStaffText(value) {
 
 function isChangeBranchText(value) {
   return hasAnyBookingWord(value, ["غير الفرع", "تغيير الفرع", "فرع تاني", "فرع ثاني", "change branch", "different branch", "another branch"]);
+}
+
+function shouldPrioritizeBookingContextText(text, state = {}) {
+  if (!isBookingStateActive(state)) return false;
+
+  const value = normalizeText(text);
+
+  return Boolean(
+    isCancelBookingText(value) ||
+    isChangeBranchText(value) ||
+    isChangeStaffText(value) ||
+    isChangeDayText(value) ||
+    isChangeTimeText(value) ||
+    findBranchFromText(text) ||
+    findStaffFromText(text) ||
+    findDayFromText(text) ||
+    findTimeFromText(text)
+  );
 }
 
 function directAppointmentTextLooksRelevant(text) {
@@ -2481,6 +2503,11 @@ async function handleIncomingEvent(entry, event) {
 
   const handledDirectAppointment = await handleDirectAppointmentRequest({ channel, senderId, text: intentText, state, lang });
   if (handledDirectAppointment) return;
+
+  if (shouldPrioritizeBookingContextText(intentText, state)) {
+    const handledBookingContext = await handleBookingContextText({ channel, senderId, text: intentText, state, lang });
+    if (handledBookingContext) return;
+  }
 
   if (isLocation(intentText)) {
     const requestedBranch = findBranchFromText(intentText);
